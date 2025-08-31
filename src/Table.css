@@ -1,0 +1,43 @@
+/* src/Table.css */
+
+.a4-wrapper {
+  max-width: 21cm;
+  min-height: 29.7cm;
+  margin: 1cm auto;
+  background: white;
+  box-shadow: 0 0 0.5cm rgba(0, 0, 0, 0.1);
+  padding: 2cm;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+td, th {
+  padding: 0.5cm;
+  margin: 0;
+  border: 1px solid #ddd;
+}
+
+td.sticky, th.sticky {
+  position: sticky;
+  z-index: 10;
+  background-color: #007bff;
+  color: white;
+}
+
+td.sticky.left-0, th.sticky.left-0 {
+  left: 0;
+}
+
+td.description {
+  position: relative;
+  z-index: 1;
+  background-color: white;
+  padding-left: 0.5cm;
+  padding-right: 0.5cm;
+  word-wrap: break-word;
+  max-width: 100%;
+  white-space: normal;
+}

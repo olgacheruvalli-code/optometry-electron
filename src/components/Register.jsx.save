@@ -1,0 +1,92 @@
+import React, { useState } from "react";
+import { districtInstitutions } from "../data/districtInstitutions";
+
+export default function Register({ onRegister }) {
+  const [district, setDistrict] = useState("");
+  const [institution, setInstitution] = useState("");
+  const [phone, setPhone] = useState("");
+  const [message, setMessage] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const res = await fetch("/api/
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ district, institution, phone }),
+    });
+
+    if (res.ok) {
+      setMessage("✅ Registered successfully. You can now log in.");
+      onRegister?.(); // go to login screen if passed
+    } else {
+      const data = await res.json();
+      setMessage("❌ " + (data.error || "Registration failed."));
+    }
+  };
+
+  return (
+    <div className="max-w-md mx-auto mt-16 p-6 bg-white rounded-xl shadow-lg font-serif">
+      <h2 className="text-2xl font-bold text-center mb-4 text-[#134074]">Optometrist Registration</h2>
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div>
+          <label className="block mb-1 text-sm font-medium">District</label>
+          <select
+            value={district}
+            onChange={(e) => {
+              setDistrict(e.target.value);
+              setInstitution("");
+            }}
+            className="w-full border rounded p-2"
+            required
+          >
+            <option value="">Select District</option>
+            {Object.keys(districtInstitutions).map((dist) => (
+              <option key={dist} value={dist}>{dist}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block mb-1 text-sm font-medium">Institution</label>
+          <select
+            value={institution}
+            onChange={(e) => setInstitution(e.target.value)}
+            className="w-full border rounded p-2"
+            required
+            disabled={!district}
+          >
+            <option value="">Select Institution</option>
+            {district && districtInstitutions[district]?.map((inst, i) => (
+              <option key={i} value={inst}>{inst}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block mb-1 text-sm font-medium">Phone Number (used as password)</label>
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full border rounded p-2"
+            required
+            pattern="[0-9]{10}"
+            placeholder="10-digit phone number"
+          />
+        </div>
+
+        <button
+          type="submit"
+          className="bg-[#134074] hover:bg-[#0c2f59] text-white py-2 px-4 rounded-lg"
+        >
+          Register
+        </button>
+
+        {message && <div className="text-center text-sm mt-2">{message}</div>}
+      </form>
+    </div>
+  );
+}
+

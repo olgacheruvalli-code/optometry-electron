@@ -1,0 +1,136 @@
+/* Tailwind CSS Directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Remove default margins and padding from html and body */
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+/* Force Times New Roman everywhere */
+body, input, select, button {
+  font-family: 'Times New Roman', Times, serif;
+}
+
+/* A4 Page Styling (for individual reports) */
+.a4-wrapper {
+  max-width: 21cm;
+  min-height: 29.7cm;
+  margin: 1cm auto;
+  background: white;
+  box-shadow: 0 0 0.5cm rgba(0, 0, 0, 0.1);
+  padding: 2cm;
+}
+
+/* Legal Landscape Styling (for district/eye bank reports) */
+.legal-landscape {
+  max-width: 35.56cm;
+  min-height: 21.59cm;
+  margin: 1cm auto;
+  background: white;
+  box-shadow: 0 0 0.5cm rgba(0, 0, 0, 0.1);
+  padding: 2cm;
+}
+
+/* Sticky column support for tables */
+td.sticky, th.sticky {
+  position: sticky;
+  z-index: 10;
+  background-color: #007bff;
+  color: white;
+}
+
+td.sticky.left-0, th.sticky.left-0 {
+  left: 0;
+}
+
+td.sticky.left-60, th.sticky.left-60 {
+  left: 60px;
+}
+
+th.sticky.top-0 {
+  top: 0;
+}
+
+th.sticky.top-40 {
+  top: 40px;
+}
+
+.table-auto th.sticky,
+.table-auto td.sticky {
+  position: sticky;
+  z-index: 100;
+}
+
+/* Debug mode for ViewReports */
+.view-report-debug,
+.view-report-debug * {
+  color: black !important;
+  background-color: white !important;
+  border-color: #666 !important;
+}
+
+/* Print-friendly tweaks */
+@media print {
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    font-size: 12pt !important;
+    font-family: "Times New Roman", Times, serif !important;
+  }
+
+  /* Utility to hide elements from print output (print ONLY!) */
+  .no-print, .non-print,
+  .menu-bar, .menu-bar *, header, nav, .top-banner,
+  .logout-button, .report-controls, .month-year-selector,
+  .print-preview-clean .menu-bar,
+  .print-preview-clean .logout-button,
+  .print-preview-clean .report-controls {
+    display: none !important;
+  }
+
+  /* Inputs for clean print */
+  input, select {
+    background: white !important;
+    border: none !important;
+    border-bottom: 1px solid #888 !important;
+    color: black !important;
+  }
+
+  /* A4 portrait for individual reports */
+  .a4-wrapper {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    max-width: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    /* For Chrome/Egde: suggest A4 portrait size */
+    size: A4 portrait;
+    page-break-after: avoid;
+  }
+
+  /* Legal landscape for district/eye bank reports */
+  .legal-landscape {
+    width: 355.6mm !important;
+    min-height: 215.9mm !important;
+    max-width: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    /* For Chrome/Egde: suggest Legal landscape size */
+    size: legal landscape;
+    page-break-after: avoid;
+  }
+
+  /* Set the default print page size and margin (A4 portrait by default) */
+  @page {
+    size: A4 portrait;
+    margin: 1cm;
+  }
+}

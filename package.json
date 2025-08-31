@@ -1,0 +1,88 @@
+{
+  "name": "optometry-electron",
+  "version": "1.0.0",
+  "private": true,
+  "proxy": "http://localhost:5000",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "//": "────── Frontend (CRA) ──────",
+    "start": "react-app-rewired start",
+    "build": "react-app-rewired build",
+    "test": "react-app-rewired test",
+    "//2": "────── Frontend (webpack dev @ 8080, optional) ──────",
+    "web:webpack": "webpack serve --config webpack.config.js --mode development",
+    "//3": "────── Backend API ──────",
+    "api": "node server.js",
+    "api:dev": "nodemon server.js",
+    "//4": "────── Combined Dev (API + CRA @ 3000) ──────",
+    "web": "react-app-rewired start",
+    "dev": "concurrently -k -n API,WEB -c green,cyan \"npm:api:dev\" \"npm:web\"",
+    "//5": "────── Combined Dev (API + webpack @ 8080) ──────",
+    "dev:webpack": "concurrently -k -n API,WEB -c green,cyan \"npm:api:dev\" \"npm:web:webpack\"",
+    "//6": "────── Electron (waits for CRA @ 3000) ──────",
+    "electron": "electron .",
+    "electron:wait:3000": "wait-on http://localhost:3000 && electron .",
+    "electron-dev": "concurrently -k -n API,WEB,ELEC -c green,cyan,magenta \"npm:api:dev\" \"npm:web\" \"npm:electron:wait:3000\"",
+    "//7": "────── Electron (waits for webpack @ 8080) ──────",
+    "electron:wait:8080": "wait-on http://localhost:8080 && electron .",
+    "electron-dev:webpack": "concurrently -k -n API,WEB,ELEC -c green,cyan,magenta \"npm:api:dev\" \"npm:web:webpack\" \"npm:electron:wait:8080\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^5.1.0",
+    "global": "^4.4.0",
+    "lucide-react": "^0.525.0",
+    "mongoose": "^8.7.0",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "react-router-dom": "^5.3.4",
+    "react-scripts": "^5.0.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "babel-loader": "^10.0.0",
+    "concurrently": "^9.1.2",
+    "css-loader": "^7.1.2",
+    "customize-cra": "^1.0.0",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "file-loader": "^6.2.0",
+    "html-webpack-plugin": "^5.6.3",
+    "nodemon": "^3.1.10",
+    "postcss": "^8.5.6",
+    "postcss-loader": "^8.1.1",
+    "react-app-rewired": "^2.2.1",
+    "style-loader": "^4.0.0",
+    "tailwindcss": "^3.4.17",
+    "wait-on": "^8.0.3",
+    "webpack": "^5.100.2"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ],
+    "rules": {
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn"
+    }
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

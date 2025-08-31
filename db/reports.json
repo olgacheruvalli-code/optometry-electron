@@ -1,0 +1,16 @@
+[
+    {
+      "id": 1,
+      "year": 2025,
+      "month": "April",
+      "institution": "DOC Kozhikode",
+      "district": "Kozhikode"
+    },
+    {
+      "id": 2,
+      "year": 2024,
+      "month": "October",
+      "institution": "Taluk Hospital Perambra",
+      "district": "Thiruvananthapuram"
+    }
+  ]
