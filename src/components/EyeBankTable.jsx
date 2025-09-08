@@ -1,74 +1,77 @@
-import React from "react";
-import { sections } from "../data/questions";
+import React, { useMemo } from "react";
 
-export default function EyeBankTable({ data, onChange, disabled = false }) {
-  const cfg = sections.find(s => s.table && (s.title || "").includes("EYE BANK"));
-  if (!cfg || !cfg.rows || !cfg.columns) {
-    return <div className="text-red-600 p-2">⚠️ Eye Bank section not found in questions</div>;
-  }
+const toStr = (v) => (v == null ? "" : String(v));
+const digits = (s) => String(s ?? "").replace(/[^\d]/g, "");
 
-  const rowCount = cfg.rows.length;
+const DEFAULT_COLUMNS = [
+  "Status",
+  "No of Eyes collected during the month",
+  "No of Eyes utilized for Keratoplasty",
+  "No of Eyes used for Research purpose",
+  "No of Eyes distributed to other Institutions",
+  "No of Eye Donation Pledge forms received",
+];
+
+const KEYS = ["collected", "keratoplasty", "research", "distributed", "pledges"];
+
+const DEFAULT_ROWS = [
+  { status: "Eye Bank", collected: "", keratoplasty: "", research: "", distributed: "", pledges: "" },
+  { status: "Eye Collection Centre", collected: "", keratoplasty: "", research: "", distributed: "", pledges: "" },
+];
+
+export default function EyeBankTable({
+  data = [],
+  onChange = () => {},
+  disabled = false,
+  columns,
+}) {
+  // Accept multiple historical key shapes when reading existing docs
+  const rows = useMemo(() => {
+    if (!Array.isArray(data) || data.length === 0) return DEFAULT_ROWS;
+    return data.map((r, idx) => ({
+      status: r?.status ?? DEFAULT_ROWS[idx]?.status ?? "",
+      collected: r?.collected ?? r?.eye_bank_collected ?? r?.eb_collected ?? "",
+      keratoplasty: r?.keratoplasty ?? r?.eye_bank_keratoplasty ?? r?.eb_keratoplasty ?? "",
+      research: r?.research ?? r?.eye_bank_research ?? r?.eb_research ?? "",
+      distributed: r?.distributed ?? r?.eye_bank_distributed ?? r?.eb_distributed ?? "",
+      pledges: r?.pledges ?? r?.eye_bank_pledges ?? r?.eb_pledges ?? "",
+    }));
+  }, [data]);
+
+  const cols = Array.isArray(columns) && columns.length >= 6 ? columns : DEFAULT_COLUMNS;
+
+  const write = (rowIdx, key, val) => onChange(rowIdx, key, digits(val));
 
   return (
     <div className="overflow-x-auto mb-6 font-serif">
-      <table className="min-w-full border-collapse border">
-        <thead className="bg-gray-200 text-xs text-[#134074]">
+      <table className="min-w-full border-collapse border border-gray-300 text-[12pt]">
+        <thead className="bg-gray-50 text-[#134074]">
           <tr>
-            {cfg.columns.map(col => (
-              <th key={col} className="border p-1 text-left">{col}</th>
+            <th className="border px-2 py-1 text-left">{cols[0]}</th>
+            {cols.slice(1).map((c, i) => (
+              <th key={i} className="border px-2 py-1 text-center">{c}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {cfg.rows.map((row, rowIdx) => (
-            <tr key={rowIdx} className="even:bg-gray-50">
-              <td className="border p-1 font-semibold bg-gray-50">{row.status}</td>
-              {row.data.map((key) => {
-                const val = data?.[rowIdx]?.[key];
-                return (
-                  <td key={key} className="border p-1">
-                    <input
-                      type="text"
-                      className="w-full px-1 py-0.5 border rounded text-right"
-                      disabled={disabled}
-                      value={val !== undefined ? val : "0"}
-                      onChange={(e) => {
-                        if (onChange && !disabled) {
-                          onChange(rowIdx, key, e.target.value);
-                        }
-                      }}
-                    />
-                  </td>
-                );
-              })}
+          {rows.map((row, ri) => (
+            <tr key={ri} className="even:bg-gray-50">
+              <td className="border px-2 py-1 font-semibold bg-gray-50">{row.status}</td>
+              {KEYS.map((k) => (
+                <td key={k} className="border px-2 py-1">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    className="w-full px-2 py-1 bg-gray-100 rounded text-right"
+                    disabled={disabled}
+                    value={toStr(row[k])}
+                    onChange={(e) => write(ri, k, e.target.value)}
+                  />
+                </td>
+              ))}
             </tr>
           ))}
-
-          {/* Total for the Month */}
-          {data?.length > rowCount && (
-            <tr className="bg-yellow-100 font-semibold">
-              <td className="border p-1">Total for the month</td>
-              {cfg.rows[0].data.map((key, colIdx) => {
-                const val = data?.[rowCount]?.[key] ?? "0";
-                return (
-                  <td key={colIdx} className="border p-1 text-right">{val}</td>
-                );
-              })}
-            </tr>
-          )}
-
-          {/* Cumulative Total */}
-          {data?.length > rowCount + 1 && (
-            <tr className="bg-green-100 font-bold">
-              <td className="border p-1">Cumulative Total</td>
-              {cfg.rows[0].data.map((key, colIdx) => {
-                const val = data?.[rowCount + 1]?.[key] ?? "0";
-                return (
-                  <td key={colIdx} className="border p-1 text-right">{val}</td>
-                );
-              })}
-            </tr>
-          )}
         </tbody>
       </table>
     </div>

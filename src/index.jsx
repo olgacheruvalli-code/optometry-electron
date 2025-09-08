@@ -3,11 +3,21 @@ import React from "react";
 import ReactDOM from "react-dom";
 import App from "./App";
 import "./index.css";
+import API_BASE from "./apiBase";
 
-// If some libs expect `global`, map it to `window` in the browser.
-window.global = window;
+// Some libs expect `global` in the browser
+if (typeof window !== "undefined" && !window.global) window.global = window;
 
-console.log("🔥 Renderer bootstrapping…");
+// Auto-prefix any relative "/api/..." calls with your API base
+const _fetch = window.fetch.bind(window);
+window.fetch = (input, init) => {
+  if (typeof input === "string" && input.startsWith("/api/")) {
+    return _fetch(`${API_BASE}${input}`, init);
+  }
+  return _fetch(input, init);
+};
+
+console.log("Boot — API_BASE =", API_BASE);
 
 ReactDOM.render(
   <React.StrictMode>

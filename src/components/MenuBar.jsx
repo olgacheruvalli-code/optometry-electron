@@ -1,35 +1,31 @@
+// src/components/MenuBar.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 export default function MenuBar({ onMenu, onLogout, active, user }) {
-  const isDistrictCoordinator = user?.institution?.startsWith("DOC ");
-  const [openSubmenuKey, setOpenSubmenuKey] = useState(null);
-  const submenuRefs = useRef({});
+  const isCoordinator = /^doc\s|^dc\s/i.test(String(user?.institution || ""));
+  const [open, setOpen] = useState(null);
+  const refs = useRef({});
 
   useEffect(() => {
-    function handleClickOutside(event) {
-      const isClickInsideAny = Object.values(submenuRefs.current).some(
-        (ref) => ref && ref.contains(event.target)
-      );
-      if (!isClickInsideAny) {
-        setOpenSubmenuKey(null);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    const onClick = (e) => {
+      const inside = Object.values(refs.current).some((r) => r && r.contains(e.target));
+      if (!inside) setOpen(null);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
-  // Only show "View/Edit Reports" if NOT DOC
-  const menuItems = [
+  const items = [
     { key: "entry", label: "Report Entry" },
-    ...(!isDistrictCoordinator ? [{ key: "view", label: "View/Edit Reports" }] : []),
-    { key: "search", label: "Search Reports" },
+    ...(!isCoordinator ? [{ key: "view", label: "View/Edit Reports" }] : []),
+    { key: "search-proxy", label: "Search Reports", onClick: () => onMenu?.("view") },
     { key: "print", label: "Print Reports" },
     { key: "edit", label: "Edit Report" },
   ];
 
-  if (isDistrictCoordinator) {
-    menuItems.push({
+  if (isCoordinator) {
+    items.push({
       key: "district",
       label: "District Report",
       sub: [
@@ -41,16 +37,13 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
         { key: "other-diseases", label: "Details of Other Eye Diseases" },
         { key: "identified-cataract", label: "Number of Cataract Cases Identified" },
         { key: "test-vc", label: "Test VC Table" },
-
-        // ── NEW DOWNLOAD ITEMS (appended at the end) ─────────────────────────────
         { key: "district-dl-inst", label: "Download Institution-wise (.xlsx)" },
         { key: "district-dl-ebvc", label: "Download Eye Bank & Vision Center (.xlsx)" },
-        // ─────────────────────────────────────────────────────────────────────────
       ],
     });
   }
 
-  menuItems.push({
+  items.push({
     key: "others-connected",
     label: "connected Link",
     sub: [
@@ -60,58 +53,52 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     ],
   });
 
+  const parentActive = (it) =>
+    it.sub && (active?.startsWith?.(it.key) || it.sub.some((s) => s.key === active));
+
   return (
-    <div className="w-full border-b border-gray-200">
-      {/* Top white bar with title and user info */}
+    <div className="menu-bar w-full border-b border-gray-200">
+      {/* top white strip */}
       <div className="bg-white flex justify-between items-center px-6 py-4">
-        <h1 className="text-2xl font-bold text-gray-900">OPTOMETRY</h1>
+        <h1 className="text-2xl font-bold tracking-wide uppercase">OPTOMETRY</h1>
         <div className="flex items-center gap-4">
-          <div className="text-right text-sm text-gray-700 leading-tight font-medium">
+          <div className="text-right text-sm leading-tight">
             <div>District: <b>{user?.district}</b></div>
             <div>Institution: <b>{user?.institution}</b></div>
           </div>
-          <div className="w-9 h-9 bg-[#3b6e8f] rounded-full flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 12c2.7 0 4.5-1.8 4.5-4.5S14.7 3 12 3 7.5 4.8 7.5 7.5 9.3 12 12 12Zm0 1.5c-3 0-9 1.5-9 4.5V21h18v-3c0-3-6-4.5-9-4.5Z" />
-            </svg>
-          </div>
+          <div className="w-9 h-9 bg-[#3b6e8f] rounded-full" />
+          <button
+            onClick={onLogout}
+            className="bg-white hover:bg-gray-100 px-4 py-2 rounded-md font-semibold text-[#dc2626] border"
+          >
+            Logout
+          </button>
         </div>
       </div>
 
-      {/* Flat blue menu bar */}
-      <div className="bg-[#396b84] flex items-center px-10 py-2 font-serif text-sm text-white">
-        <div className="flex space-x-6 relative">
-          {menuItems.map((item) =>
-            item.sub ? (
-              <div
-                key={item.key}
-                className="relative"
-                ref={(el) => (submenuRefs.current[item.key] = el)}
-              >
+      {/* blue menu bar */}
+      <div className="bg-[#396b84] text-white font-serif text-sm px-10 py-2">
+        <div className="flex items-center gap-3 relative">
+          {items.map((it) =>
+            it.sub ? (
+              <div key={it.key} className="relative" ref={(el) => (refs.current[it.key] = el)}>
                 <button
-                  onClick={() =>
-                    setOpenSubmenuKey(openSubmenuKey === item.key ? null : item.key)
-                  }
-                  className={`px-4 py-2 rounded-md flex items-center gap-2 font-semibold tracking-wide transition ${
-                    active?.startsWith?.(item.key) ? "bg-[#2f5a70]" : "hover:bg-[#2f5a70]"
-                  }`}
+                  onClick={() => setOpen(open === it.key ? null : it.key)}
+                  className={`px-4 py-2 rounded-md flex items-center gap-2 font-semibold transition
+                    ${parentActive(it) ? "bg-[#2f5a70]" : "hover:bg-[#2f5a70]"}`}
                 >
-                  {item.label}
-                  <ChevronDown className="w-4 h-4" />
+                  {it.label} <ChevronDown className="w-4 h-4" />
                 </button>
-
-                {openSubmenuKey === item.key && (
-                  <div className="absolute top-full mt-1 left-0 flex flex-col bg-[#396b84] text-white rounded-md shadow-lg z-50 min-w-[280px]">
-                    {item.sub.map((subItem) => (
+                {open === it.key && (
+                  <div className="absolute top-full left-0 mt-1 min-w-[280px] rounded-md bg-[#396b84] shadow-lg z-50">
+                    {it.sub.map((s) => (
                       <button
-                        key={subItem.key}
-                        onClick={() => {
-                          setOpenSubmenuKey(null);
-                          onMenu(subItem.key);
-                        }}
-                        className="px-6 py-2 text-left hover:bg-[#2f5a70] whitespace-nowrap"
+                        key={s.key}
+                        onClick={() => { setOpen(null); onMenu?.(s.key); }}
+                        className={`block w-full text-left px-6 py-2 hover:bg-[#2f5a70] whitespace-nowrap
+                          ${active === s.key ? "bg-[#2f5a70]" : ""}`}
                       >
-                        {subItem.label}
+                        {s.label}
                       </button>
                     ))}
                   </div>
@@ -119,25 +106,15 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
               </div>
             ) : (
               <button
-                key={item.key}
-                onClick={() => onMenu(item.key)}
-                className={`px-4 py-2 rounded-md font-semibold tracking-wide transition ${
-                  active === item.key ? "bg-[#2f5a70]" : "hover:bg-[#2f5a70]"
-                }`}
+                key={it.key}
+                onClick={() => (it.onClick ? it.onClick() : onMenu?.(it.key))}
+                className={`px-4 py-2 rounded-md font-semibold transition
+                  ${active === it.key ? "bg-[#2f5a70]" : "hover:bg-[#2f5a70]"}`}
               >
-                {item.label}
+                {it.label}
               </button>
             )
           )}
-        </div>
-
-        <div className="ml-auto">
-          <button
-            onClick={onLogout}
-            className="bg-white hover:bg-gray-100 px-6 py-2 rounded-md font-semibold text-[#dc2626] transition"
-          >
-            Logout
-          </button>
         </div>
       </div>
     </div>

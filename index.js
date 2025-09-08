@@ -1,31 +1,27 @@
-const { app, BrowserWindow } = require('electron');
-const path = require('path');
+// src/index.js
+import React from "react";
+import ReactDOM from "react-dom";
+import App from "./App";
+import "./index.css";
+import API_BASE from "./apiBase";
 
-function createWindow() {
-  const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    webPreferences: {
-      contextIsolation: false,
-      nodeIntegration: true,
-    },
-  });
+// Some libs expect `global` in the browser
+if (typeof window !== "undefined" && !window.global) window.global = window;
 
-  win.loadURL('http://localhost:8080'); // React Dev Server
+// Auto-prefix any relative "/api/..." calls with your API base
+const _fetch = window.fetch.bind(window);
+window.fetch = (input, init) => {
+  if (typeof input === "string" && input.startsWith("/api/")) {
+    return _fetch(`${API_BASE}${input}`, init);
+  }
+  return _fetch(input, init);
+};
 
-  // Optional: Open DevTools automatically
-  // win.webContents.openDevTools();
-}
+console.log("🔥 Boot (React 17) — API_BASE =", API_BASE);
 
-app.whenReady().then(() => {
-  createWindow();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
-});
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
-
+ReactDOM.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+  document.getElementById("root")
+);

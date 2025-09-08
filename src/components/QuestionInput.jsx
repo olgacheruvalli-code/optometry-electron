@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 
-const onlyDigits = (s) => String(s ?? "").replace(/[^\d-]/g, "");
+const onlyDigits = (s) => String(s ?? "").replace(/[^\d]/g, "");
 const toStr = (v) => (v == null ? "" : String(v));
 
 /**
@@ -10,7 +10,6 @@ const toStr = (v) => (v == null ? "" : String(v));
  *  - { question, value, cumulativeValue, onChange, onCumulativeChange, disabled }
  *
  * If onCumulativeChange/cumulativeValue is present => renders dual inputs (Month + Cumulative).
- * Works for simple and sub-question forms safely (no crashes when q/question/sub is missing).
  */
 export default function QuestionInput(props) {
   const {
@@ -23,23 +22,26 @@ export default function QuestionInput(props) {
     disabled = false,
   } = props;
 
-  // Normalize to one object
+  // Normalize to one object; accept either {id,label} or {key,label}
   const item = question || q || {};
-  const { key: qkey = "", label = "", sub = null } = item || {};
+  const {
+    key: keyFromItem,
+    id: idFromItem,
+    label = "",
+    sub = null,
+  } = item || {};
+  const primaryKey = keyFromItem || idFromItem || ""; // <- IMPORTANT: support id
 
-  // If nothing meaningful to render, bail safely
-  if (!qkey && !Array.isArray(sub)) return null;
-
-  // Dual mode: render cumulative input if provided
+  const hasSub = Array.isArray(sub) && sub.length > 0;
   const dual =
     typeof onCumulativeChange === "function" || cumulativeValue !== undefined;
 
-  // Simple handlers (no sub)
+  // Handlers for simple rows
   const handleMainChange = (e) => onChange(onlyDigits(e.target.value));
   const handleMainCumChange = (e) =>
     onCumulativeChange && onCumulativeChange(onlyDigits(e.target.value));
 
-  // Sub handlers (value/cumulativeValue are objects keyed by sub.key)
+  // Handlers for sub-rows
   const ensureObj = (v) => (v && typeof v === "object" ? v : {});
   const handleSubChange = (subKey, e) => {
     const next = { ...ensureObj(value) };
@@ -53,8 +55,8 @@ export default function QuestionInput(props) {
     onCumulativeChange(next);
   };
 
-  // No sub-questions => single row
-  if (!Array.isArray(sub) || sub.length === 0) {
+  // SIMPLE ROW (most of your questions)
+  if (!hasSub) {
     return (
       <div className="font-serif">
         <div
@@ -72,6 +74,7 @@ export default function QuestionInput(props) {
             value={toStr(value)}
             onChange={handleMainChange}
             disabled={disabled}
+            aria-label={primaryKey || label}
             className="w-[8ch] bg-gray-100 rounded px-2 py-1 text-right"
           />
           {dual && (
@@ -83,6 +86,7 @@ export default function QuestionInput(props) {
               value={toStr(cumulativeValue)}
               onChange={handleMainCumChange}
               disabled={disabled}
+              aria-label={(primaryKey || label) + " cumulative"}
               className="w-[8ch] bg-gray-100 rounded px-2 py-1 text-right"
             />
           )}
@@ -91,7 +95,7 @@ export default function QuestionInput(props) {
     );
   }
 
-  // With sub-questions
+  // WITH SUB-QUESTIONS (still supported)
   const monthMap = ensureObj(value);
   const cumMap = ensureObj(cumulativeValue);
 
@@ -100,7 +104,7 @@ export default function QuestionInput(props) {
       <div className="text-[#134074] font-medium mb-2">{label}</div>
       <div className="space-y-6 pl-10">
         {sub.filter(Boolean).map((subq, index) => {
-          const skey = subq?.key;
+          const skey = subq?.key || subq?.id;
           if (!skey) return null;
           return (
             <div

@@ -1,5 +1,11 @@
 // src/data/questions.js
 
+// Keep the shape your App expects:
+// - sections[].questions => single numeric inputs (becomes q1..qN in order)
+// - Eye Bank & Vision Center sections have table: true
+// - For Eye Bank, we only need rows length for initial shape
+// - For Vision Center, rows need the *Key fields (nameKey, examinedKey, etc.)
+
 export const sections = [
   {
     title: "I. GENERAL SERVICES",
@@ -24,9 +30,10 @@ export const sections = [
       { id: "cases_examined_mini_phc", label: "No of cases examined in mini PHC" },
       { id: "health_education_classes", label: "No of Health education classes conducted" },
       { id: "tonometry_done", label: "No of Tonometry done (Hospital/CHC/ PHC/Mini PHC/Vision centre)" },
-      { id: "retinopathy_camps", label: "No.of Retinopathy camp Conducted" }
-    ]
+      { id: "retinopathy_camps", label: "No.of Retinopathy camp Conducted" },
+    ],
   },
+
   {
     title: "II. SCHOOL EYE HEALTH",
     questions: [
@@ -40,44 +47,18 @@ export const sections = [
       { id: "low_vision", label: "↳ Low vision" },
       { id: "squint", label: "↳ Squint" },
       { id: "vitamin_a_deficiency", label: "↳ Vitamin A deficiency" },
-      { id: "teachers_trained", label: "No of Teachers trained" }
-    ]
+      { id: "teachers_trained", label: "No of Teachers trained" },
+    ],
   },
+
+  // Eye Bank table marker — the form only needs `rows.length` for init
   {
     title: "III. EYE BANK PERFORMANCE",
     table: true,
-    columns: [
-      "Status",
-      "No of Eyes collected during the month",
-      "No of Eyes utilized for Keratoplasty",
-      "No of Eyes used for Research purpose",
-      "No of Eyes distributed to other Institutions",
-      "No of Eye Donation Pledge forms received"
-    ],
-    rows: [
-      {
-        status: "Eye Bank",
-        data: [
-          "eye_bank_collected",
-          "eye_bank_keratoplasty",
-          "eye_bank_research",
-          "eye_bank_distributed",
-          "eye_bank_pledges"
-        ]
-      },
-      {
-        status: "Eye Collection Centre",
-        data: [
-          "eye_cc_collected",
-          "eye_cc_keratoplasty",
-          "eye_cc_research",
-          "eye_cc_distributed",
-          "eye_cc_pledges"
-        ]
-      }
-    ]
+    rows: [{}, {}], // Eye Bank, Eye Collection Centre
   },
-   {
+
+  {
     title: "IV. OTHER EYE DISEASES",
     questions: [
       { id: "glaucoma_cases", label: "No.Of glaucoma cases" },
@@ -103,19 +84,20 @@ export const sections = [
       { id: "dacryocystitis", label: "Dacryocystitis" },
       { id: "retinoblastoma", label: "Retinoblastoma" },
       { id: "blinds_detected", label: "No of Blinds detected (Vision < CF 3 Meters BE)" },
-      { id: "corneal_blind", label: "↳ Corneal Blind among them" }
-    ]
+      { id: "corneal_blind", label: "↳ Corneal Blind among them" },
+    ],
   },
+
   {
     title: "ADDL. REPORTS",
     subsections: [
       {
-        title: "OLD AGED‑SPECTACLES",
+        title: "OLD AGED-SPECTACLES",
         questions: [
           { id: "specs_old_male", label: "No of specs given to male old aged" },
           { id: "specs_old_female", label: "No of specs given to female old aged" },
-          { id: "old_presc_sent_state", label: "Total of no of old age prescriptions sent to state" }
-        ]
+          { id: "old_presc_sent_state", label: "Total of no of old age prescriptions sent to state" },
+        ],
       },
       {
         title: "SCHOOL EYE HEALTH PROGRAM",
@@ -127,8 +109,8 @@ export const sections = [
           { id: "school_glasses_prescribed", label: "Total number of glasses prescribed for school children" },
           { id: "school_specs_male", label: "Total number of specs supplied to male" },
           { id: "school_specs_female", label: "Total number of specs supplied to female" },
-          { id: "school_presc_sent_state", label: "Total no of prescriptions sent to state" }
-        ]
+          { id: "school_presc_sent_state", label: "Total no of prescriptions sent to state" },
+        ],
       },
       {
         title: "GLAUCOMA",
@@ -139,8 +121,8 @@ export const sections = [
           { id: "addl_glaucoma_treated_male", label: "Glaucoma treated in male" },
           { id: "addl_glaucoma_treated_female", label: "Glaucoma treated in female" },
           { id: "addl_glaucoma_laser_male", label: "Glaucoma laser treated male" },
-          { id: "addl_glaucoma_laser_female", label: "Glaucoma laser treated female" }
-        ]
+          { id: "addl_glaucoma_laser_female", label: "Glaucoma laser treated female" },
+        ],
       },
       {
         title: "DIABETIC RETINOPATHY",
@@ -149,39 +131,30 @@ export const sections = [
           { id: "addl_dr_detected_female", label: "DR detected in female" },
           { id: "addl_dr_treated_male", label: "DR treated in male" },
           { id: "addl_dr_treated_female", label: "DR treated in female" },
-          { id: "addl_dr_laser_male", label: "DR‑laser treated in male" },
-          { id: "addl_dr_laser_female", label: "DR‑laser treated in female" },
+          { id: "addl_dr_laser_male", label: "DR-laser treated in male" },
+          { id: "addl_dr_laser_female", label: "DR-laser treated in female" },
           { id: "addl_fundus_photos", label: "No of Fundus photo taken" },
           { id: "addl_fundus_cases_detected", label: "No of cases detected from the fundus photos" },
           { id: "addl_tribal_cataract_cases", label: "No of cataract cases detected in tribal population" },
-          { id: "addl_tribal_cataract_surgery", label: "No of cases undergone for cataract surgery in tribal population" }
-        ]
-      }
-    ]
-  }
+          { id: "addl_tribal_cataract_surgery", label: "No of cases undergone for cataract surgery in tribal population" },
+        ],
+      },
+    ],
+  },
 ];
 
+// Vision Center table marker — must include *Key fields so App builds initial rows
 const visionCenter = {
   title: "V. VISION CENTER",
   table: true,
-  columns: [
-    "SL NO",
-    "Name of Vision Centre",
-    "No of patients examined",
-    "No of Cataract cases detected",
-    "No of other eye diseases",
-    "No of Refractive errors",
-    "No of Spectacles Prescribed"
-  ],
-  rows: Array.from({ length: 10 }, (_, i) => ({
-    slNo: i + 1,
-    nameKey: `vc_${i + 1}_name`,
-    examinedKey: `vc_${i + 1}_examined`,
-    cataractKey: `vc_${i + 1}_cataract`,
-    otherDiseasesKey: `vc_${i + 1}_other_diseases`,
-    refractiveErrorsKey: `vc_${i + 1}_refractive_errors`,
-    spectaclesPrescribedKey: `vc_${i + 1}_spectacles_prescribed`
-  }))
+  rows: Array.from({ length: 10 }, () => ({
+    nameKey: "name",
+    examinedKey: "examined",
+    cataractKey: "cataract",
+    otherDiseasesKey: "other_diseases",
+    refractiveErrorsKey: "refractive_errors",
+    spectaclesPrescribedKey: "spectacles_prescribed",
+  })),
 };
 
 sections.push(visionCenter);
