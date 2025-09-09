@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import sections from "../data/questions";
 import { EyeBankTable } from "./EyeBankTable";
-import { VisionCenterTable } from "./VisionCenterTable";
+import VisionCenterTable from "./VisionCenterTable";
 
 const questionSections = sections.filter(s => !s.table);
 

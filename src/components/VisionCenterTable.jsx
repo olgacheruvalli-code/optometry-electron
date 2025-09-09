@@ -1,83 +1,114 @@
-import React from "react";
-import { sections } from "../data/questions";
+// src/components/VisionCenterTable.jsx
+import React, { useMemo } from "react";
 
-export default function VisionCenterTable({ data, onChange, disabled = false }) {
-  const cfg = sections.find(s => s.table && s.title?.toUpperCase().includes("VISION CENTER"));
-  if (!cfg || !cfg.rows || !cfg.columns) {
-    return <div className="text-red-600 p-2">⚠️ Vision Center section not found in questions</div>;
-  }
+const toStr = (v) => (v == null ? "" : String(v));
+const digits = (s) => String(s ?? "").replace(/[^\d]/g, "");
 
-  const keys = [
-    "nameKey",
-    "examinedKey",
-    "cataractKey",
-    "otherDiseasesKey",
-    "refractiveErrorsKey",
-    "spectaclesPrescribedKey"
-  ];
+const VC_COLUMNS = [
+  "SL NO",
+  "Name of Vision Centre",
+  "No of patients examined",
+  "No of Cataract cases detected",
+  "No of other eye diseases",
+  "No of Refractive errors",
+  "No of Spectacles Prescribed",
+];
+
+const makeKeys = (idx) => ({
+  nameKey: `vc_${idx}_name`,
+  examinedKey: `vc_${idx}_examined`,
+  cataractKey: `vc_${idx}_cataract`,
+  otherDiseasesKey: `vc_${idx}_other_diseases`,
+  refractiveErrorsKey: `vc_${idx}_refractive_errors`,
+  spectaclesPrescribedKey: `vc_${idx}_spectacles_prescribed`,
+});
+
+export default function VisionCenterTable({
+  data = [],
+  onChange = () => {},
+  disabled = false,
+  columns,
+  rowsCount = 10,
+}) {
+  const rows = useMemo(() => {
+    const count = Math.max(rowsCount, Array.isArray(data) ? data.length : 0, 10);
+    return Array.from({ length: count }, (_, i) => {
+      const idx = i + 1;
+      const keys = makeKeys(idx);
+      const src = (Array.isArray(data) && data[i]) || {};
+      return {
+        slNo: idx,
+        keys,
+        name: toStr(src[keys.nameKey] ?? src.name ?? ""),
+        examined: toStr(src[keys.examinedKey] ?? src.examined ?? ""),
+        cataract: toStr(src[keys.cataractKey] ?? src.cataract ?? ""),
+        otherDiseases: toStr(src[keys.otherDiseasesKey] ?? src.otherDiseases ?? ""),
+        refractiveErrors: toStr(src[keys.refractiveErrorsKey] ?? src.refractiveErrors ?? ""),
+        spectaclesPrescribed: toStr(src[keys.spectaclesPrescribedKey] ?? src.spectaclesPrescribed ?? ""),
+      };
+    });
+  }, [data, rowsCount]);
+
+  const cols = Array.isArray(columns) && columns.length >= 7 ? columns : VC_COLUMNS;
+
+  const writeText = (rowIdx, key, val) => onChange(rowIdx, key, val);
+  const writeNum  = (rowIdx, key, val) => onChange(rowIdx, key, digits(val));
 
   return (
     <div className="overflow-x-auto mb-6 font-serif">
-      <table className="min-w-full border-collapse border">
-        <thead className="bg-gray-200 text-xs text-[#134074]">
-          <tr>
-            {cfg.columns.map((col) => (
-              <th key={col} className="border p-1 text-left">{col}</th>
-            ))}
-          </tr>
+      <table className="min-w-full border-collapse border border-gray-300 text-[12pt]">
+        <thead className="bg-gray-50 text-[#134074]">
+          <tr>{cols.map((c, i) => <th key={i} className="border px-2 py-1 text-left">{c}</th>)}</tr>
         </thead>
         <tbody>
-          {cfg.rows.map((row, rowIdx) => (
-            <tr key={rowIdx} className="even:bg-gray-50">
-              <td className="border p-1 text-center">{row.slNo}</td>
-              {keys.map((fieldKey, colIdx) => {
-                const key = row[fieldKey];
-                const val = data?.[rowIdx]?.[key];
-
-                // Only for the Name column (the very first key)
-                if (colIdx === 0) {
-                  return (
-                    <td key={key} className="border p-1">
-                      <input
-                        type="text"
-                        className="w-full px-1 py-0.5 border rounded text-left"
-                        disabled={disabled}
-                        value={typeof val === "string" ? val : ""}
-                        placeholder="Enter name"
-                        onChange={e => {
-                          if (onChange && !disabled) {
-                            const inputVal = e.target.value;
-                            // Allow only letters and spaces
-                            if (!/^[a-zA-Z\s]*$/.test(inputVal)) return;
-                            onChange(rowIdx, key, inputVal);
-                          }
-                        }}
-                        autoComplete="off"
-                      />
-                    </td>
-                  );
-                }
-
-                // All other columns: keep as before (numbers only)
-                return (
-                  <td key={key} className="border p-1">
-                    <input
-                      type="text"
-                      className="w-full px-1 py-0.5 border rounded text-right"
-                      disabled={disabled}
-                      value={val !== undefined && !isNaN(val) ? String(val) : "0"}
-                      onChange={e => {
-                        if (onChange && !disabled) {
-                          // Only allow digits
-                          const inputVal = e.target.value.replace(/\D/g, "");
-                          onChange(rowIdx, key, inputVal);
-                        }
-                      }}
-                      autoComplete="off"
-                    />
-                  </td>
-                );
-              })}
+          {rows.map((row, ri) => (
+            <tr key={ri} className="even:bg-gray-50">
+              <td className="border px-2 py-1 text-center font-semibold bg-gray-50">{row.slNo}</td>
+              <td className="border px-2 py-1">
+                <input
+                  type="text"
+                  className="w-full px-2 py-1 bg-gray-100 rounded text-left"
+                  disabled={disabled}
+                  value={row.name}
+                  placeholder="Enter name"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!/^[a-zA-Z\s]*$/.test(v)) return;
+                    writeText(ri, rows[ri].keys.nameKey, v);
+                  }}
+                  autoComplete="off"
+                />
+              </td>
+              <td className="border px-2 py-1">
+                <input type="text" inputMode="numeric" pattern="[0-9]*"
+                  className="w-full px-2 py-1 bg-gray-100 rounded text-right"
+                  disabled={disabled} value={row.examined}
+                  onChange={(e) => writeNum(ri, rows[ri].keys.examinedKey, e.target.value)} />
+              </td>
+              <td className="border px-2 py-1">
+                <input type="text" inputMode="numeric" pattern="[0-9]*"
+                  className="w-full px-2 py-1 bg-gray-100 rounded text-right"
+                  disabled={disabled} value={row.cataract}
+                  onChange={(e) => writeNum(ri, rows[ri].keys.cataractKey, e.target.value)} />
+              </td>
+              <td className="border px-2 py-1">
+                <input type="text" inputMode="numeric" pattern="[0-9]*"
+                  className="w-full px-2 py-1 bg-gray-100 rounded text-right"
+                  disabled={disabled} value={row.otherDiseases}
+                  onChange={(e) => writeNum(ri, rows[ri].keys.otherDiseasesKey, e.target.value)} />
+              </td>
+              <td className="border px-2 py-1">
+                <input type="text" inputMode="numeric" pattern="[0-9]*"
+                  className="w-full px-2 py-1 bg-gray-100 rounded text-right"
+                  disabled={disabled} value={row.refractiveErrors}
+                  onChange={(e) => writeNum(ri, rows[ri].keys.refractiveErrorsKey, e.target.value)} />
+              </td>
+              <td className="border px-2 py-1">
+                <input type="text" inputMode="numeric" pattern="[0-9]*"
+                  className="w-full px-2 py-1 bg-gray-100 rounded text-right"
+                  disabled={disabled} value={row.spectaclesPrescribed}
+                  onChange={(e) => writeNum(ri, rows[ri].keys.spectaclesPrescribedKey, e.target.value)} />
+              </td>
             </tr>
           ))}
         </tbody>

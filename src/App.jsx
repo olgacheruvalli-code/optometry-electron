@@ -7,7 +7,7 @@ import "./index.css";
 
 import MonthYearSelector from "./components/MonthYearSelector";
 import EyeBankTable from "./components/EyeBankTable";
-import VisionCenterTable from "./components/VisionCenterTable";
+import VisionCenterTable from "./components/VisionCenterTable.jsx";
 import QuestionInput from "./components/QuestionInput";
 import Login from "./components/Login";
 import MenuBar from "./components/MenuBar";
