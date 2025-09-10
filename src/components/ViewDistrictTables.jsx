@@ -28,7 +28,7 @@ function addRowInto(targetRow, sourceRow, numericOnlyKeys = null) {
 }
 const fixedLengthArray = (len) => Array.from({ length: len }, () => ({}));
 
-/* Make human labels for VC metric keys */
+/* Make human labels for VC metric keys/suffixes */
 function prettyMetric(k = "") {
   const s = String(k).replace(/[_\-]+/g, " ").toLowerCase();
   if (/(patients.*examined|examined)/i.test(s)) return "No of patients examined";
@@ -52,16 +52,45 @@ function metricRank(k = "") {
 
 /* Find the actual VC name field present in data rows */
 function findNameKeyInData(rows) {
-  // pick the first key whose name suggests a VC name
   for (const r of rows) {
     if (!r || typeof r !== "object") continue;
     for (const k of Object.keys(r)) {
       if (/(name|centre|center)/i.test(k)) return k;
     }
   }
-  // fallback: common guesses
   return "name";
 }
+
+/* -------- NEW: suffix-based metric lookup that works for vc_1_, vc_2_, … --- */
+
+const VC_SUFFIXES = [
+  ["_examined", ["examined", "patientsExamined", "patients_examined"]],
+  ["_cataract", ["cataract", "cataractDetected", "cataract_cases"]],
+  ["_other_diseases", ["otherDiseases", "other_diseases"]],
+  ["_refractive_errors", ["refractiveErrors", "refractive_errors"]],
+  ["_spectacles_prescribed", ["spectaclesPrescribed", "spectacles_prescribed"]],
+];
+
+// find a value by suffix (e.g. “…_examined”), ignoring row index prefixes
+function findBySuffix(obj, suffix) {
+  if (!obj) return undefined;
+  const suf = String(suffix).toLowerCase();
+  for (const k of Object.keys(obj)) {
+    if (k.toLowerCase().endsWith(suf)) return obj[k];
+  }
+  return undefined;
+}
+
+// get numeric metric by trying legacy names first, then suffix
+function getMetric(row, suffix, legacy = []) {
+  for (const key of legacy) {
+    if (row[key] !== undefined) return num(row[key]);
+  }
+  const v = findBySuffix(row, suffix);
+  return num(v);
+}
+
+/* ========================================================================== */
 
 export default function ViewDistrictTables({ user, month, year }) {
   const district = user?.district || "";
@@ -78,33 +107,6 @@ export default function ViewDistrictTables({ user, month, year }) {
 
   // numeric keys by row for eyebank totals
   const ebRowKeys = useMemo(() => extractRowKeyMatrix(eyeBankSection), [eyeBankSection]);
-
-  // Metric keys for VC (ordered by template, excluding any *name* keys)
-  const vcMetricKeysFromTemplate = useMemo(() => {
-    const rows = Array.isArray(visionCenterSection?.rows) ? visionCenterSection.rows : [];
-    const first = rows[0] || {};
-    const keys = [];
-    for (const [k, v] of Object.entries(first)) {
-      if (!k.endsWith("Key")) continue;
-      const val = String(v || "");
-      if (!val) continue;
-      if (/name/i.test(val)) continue; // exclude any name-ish template key
-      keys.push(val);
-    }
-    // If template gave nothing, collect from all rows and still exclude any 'name'
-    if (!keys.length) {
-      rows.forEach((r) => {
-        Object.entries(r || {}).forEach(([k, v]) => {
-          if (k.endsWith("Key")) {
-            const val = String(v || "");
-            if (val && !/name/i.test(val) && !keys.includes(val)) keys.push(val);
-          }
-        });
-      });
-    }
-    // Sort by preferred order
-    return keys.sort((a, b) => metricRank(a) - metricRank(b));
-  }, [visionCenterSection]);
 
   // outputs
   const [ebTotals, setEbTotals] = useState(() =>
@@ -154,7 +156,6 @@ export default function ViewDistrictTables({ user, month, year }) {
         let list = await fetchList(filteredURL);
         if (!list.length) list = await fetchList(`${API_BASE}/api/reports`);
 
-        // strict filter to this district/month/year
         const filtered = list.filter(
           (d) =>
             String(d?.district || "").trim().toLowerCase() ===
@@ -164,7 +165,6 @@ export default function ViewDistrictTables({ user, month, year }) {
             String(d?.year || "") === String(year)
         );
 
-        // load full docs for tables
         const hydrated = await Promise.all(filtered.map(hydrate));
         if (cancelled) return;
 
@@ -186,20 +186,16 @@ export default function ViewDistrictTables({ user, month, year }) {
           const vc = rep?.visionCenter || rep?.visioncentre || rep?.vision_centre || [];
           if (!Array.isArray(vc) || !vc.length) return;
 
-          // detect the real name key from data once per institution’s set
           const nameKey = findNameKeyInData(vc);
 
           vc.forEach((row) => {
             const r = row || {};
             const vcName = String(r[nameKey] || "").trim();
 
-            // metrics present?
-            const hasAnyMetric =
-              vcMetricKeysFromTemplate.some((k) => num(r[k]) > 0) ||
-              // safety: if template keys miss something, treat any numeric value as a metric
-              Object.entries(r).some(([kk, vv]) => !/(name|centre|center)/i.test(kk) && num(vv) > 0);
+            // detect if any metric is present (>0) using suffix/legacy mapping
+            const hasAnyMetric = VC_SUFFIXES.some(([suf, legacy]) => getMetric(r, suf, legacy) > 0);
 
-            // Include only if a *real* row (has a name OR any metric > 0)
+            // Include only real rows (has a name OR any metric > 0)
             if (!vcName && !hasAnyMetric) return;
 
             vcOut.push({
@@ -239,16 +235,11 @@ export default function ViewDistrictTables({ user, month, year }) {
       }
     })();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [district, month, year, eyeBankSection, visionCenterSection, vcMetricKeysFromTemplate]);
+    return () => { cancelled = true; };
+  }, [district, month, year, eyeBankSection, visionCenterSection]);
 
   /* ------------------------------ RENDER VC LIST ----------------------------- */
   const renderDistrictVisionCenterTable = () => {
-    // columns: SL NO | Institution | Name of Vision Centre | metrics...
-    const metricKeys = vcMetricKeysFromTemplate;
-
     return (
       <div className="overflow-x-auto">
         <table className="min-w-full border">
@@ -257,11 +248,14 @@ export default function ViewDistrictTables({ user, month, year }) {
               <th className="border px-2 py-1 text-left w-14">SL. NO</th>
               <th className="border px-2 py-1 text-left">Institution</th>
               <th className="border px-2 py-1 text-left">Name of Vision Centre</th>
-              {metricKeys.map((k) => (
-                <th key={k} className="border px-2 py-1 text-center">
-                  {prettyMetric(k)}
-                </th>
-              ))}
+              {VC_SUFFIXES
+                .slice() // keep preferred order
+                .sort((a, b) => metricRank(a[0]) - metricRank(b[0]))
+                .map(([suf]) => (
+                  <th key={suf} className="border px-2 py-1 text-center">
+                    {prettyMetric(suf)}
+                  </th>
+                ))}
             </tr>
           </thead>
           <tbody>
@@ -273,17 +267,20 @@ export default function ViewDistrictTables({ user, month, year }) {
                   <td className="border px-2 py-1 text-center">{idx + 1}</td>
                   <td className="border px-2 py-1">{row.__institution || ""}</td>
                   <td className="border px-2 py-1">{String(data[nameKey] || "")}</td>
-                  {metricKeys.map((k) => (
-                    <td key={k} className="border px-2 py-1 text-right">
-                      {num(data[k])}
-                    </td>
-                  ))}
+                  {VC_SUFFIXES
+                    .slice()
+                    .sort((a, b) => metricRank(a[0]) - metricRank(b[0]))
+                    .map(([suf, legacy]) => (
+                      <td key={suf} className="border px-2 py-1 text-right">
+                        {getMetric(data, suf, legacy)}
+                      </td>
+                    ))}
                 </tr>
               );
             })}
             {!vcRows.length && (
               <tr>
-                <td className="border px-2 py-3 text-center text-gray-500" colSpan={3 + metricKeys.length}>
+                <td className="border px-2 py-3 text-center text-gray-500" colSpan={3 + VC_SUFFIXES.length}>
                   No Vision Centre data for this month.
                 </td>
               </tr>
@@ -303,13 +300,13 @@ export default function ViewDistrictTables({ user, month, year }) {
       {loading && <div className="text-center text-sm text-gray-600">Loading district tables…</div>}
       {errText && <div className="text-center text-sm text-red-600">{errText}</div>}
 
-      {/* Eye Bank: district total */}
+      {/* Eye Bank: district total (unchanged) */}
       <section>
         <h3 className="text-base font-semibold mb-2">III. EYE BANK — District Total</h3>
         <EyeBankTable data={ebTotals} disabled cumulative />
       </section>
 
-      {/* Vision Center: each real centre row (no blanks, no totals) */}
+      {/* Vision Center: each real centre row */}
       <section>
         <h3 className="text-base font-semibold mb-2">V. VISION CENTER — District Total</h3>
         {renderDistrictVisionCenterTable()}
