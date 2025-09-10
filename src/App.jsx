@@ -17,7 +17,6 @@ import ViewDistrictTables from "./components/ViewDistrictTables";
 import EditReport from "./components/EditReport";
 import Register from "./components/Register";
 import EditGate from "./components/EditGate";
-import TestVisionCenter from "./components/TestVisionCenter";
 
 /* ----------------------------- Month constants ---------------------------- */
 const MONTHS = [
@@ -38,10 +37,13 @@ function buildFlatRows(secs) {
   for (const sec of secs) {
     if (typeof sec.title === "string") out.push({ kind: "header", label: sec.title });
 
-    // direct questions in this section
+    // direct questions in this section (skip Vision Center table rows)
+  const titleLower = String(sec.title || "").toLowerCase();
+  const isVisionCenter = sec.table && titleLower.includes("vision center");
+  if (!isVisionCenter) {
     for (const q of getQs(sec)) out.push({ kind: "q", row: q });
-
-    // subsections
+  }
+  // subsections
     if (Array.isArray(sec.subsections)) {
       for (const sub of sec.subsections) {
         if (sub.title) out.push({ kind: "subheader", label: sub.title });
@@ -293,7 +295,7 @@ function ReportEntry({
 
   // Vision Center table state (fallback rows)
   const visionSection = sections.find((s) => (s.title || "").toUpperCase().includes("VISION CENTER"));
-  const visionRowsDef = getQs(visionSection);
+  const visionRowsDef = Array.isArray(visionSection?.rows) ? visionSection.rows : [];
   const [visionCenter, setVisionCenter] = useState(
     initialVisionCenter.length
       ? initialVisionCenter
@@ -863,13 +865,6 @@ function App() {
           </EditGate>
         )}
 
-        {menu === "test-vc" && <TestVisionCenter />}
-
-        {menu === "" && (
-          <div className="text-center text-gray-500 mt-10 text-lg italic">
-            🔹 Please select a menu option to begin.
-          </div>
-        )}
       </div>
     </div>
   );

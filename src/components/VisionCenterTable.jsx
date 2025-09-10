@@ -1,4 +1,3 @@
-// src/components/VisionCenterTable.jsx
 import React, { useMemo } from "react";
 
 const toStr = (v) => (v == null ? "" : String(v));
@@ -52,13 +51,17 @@ export default function VisionCenterTable({
   const cols = Array.isArray(columns) && columns.length >= 7 ? columns : VC_COLUMNS;
 
   const writeText = (rowIdx, key, val) => onChange(rowIdx, key, val);
-  const writeNum  = (rowIdx, key, val) => onChange(rowIdx, key, digits(val));
+  const writeNum = (rowIdx, key, val) => onChange(rowIdx, key, digits(val));
 
   return (
     <div className="overflow-x-auto mb-6 font-serif">
       <table className="min-w-full border-collapse border border-gray-300 text-[12pt]">
         <thead className="bg-gray-50 text-[#134074]">
-          <tr>{cols.map((c, i) => <th key={i} className="border px-2 py-1 text-left">{c}</th>)}</tr>
+          <tr>
+            {cols.map((c, i) => (
+              <th key={i} className="border px-2 py-1 text-left">{c}</th>
+            ))}
+          </tr>
         </thead>
         <tbody>
           {rows.map((row, ri) => (
@@ -80,34 +83,64 @@ export default function VisionCenterTable({
                 />
               </td>
               <td className="border px-2 py-1">
-                <input type="text" inputMode="numeric" pattern="[0-9]*"
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   className="w-full px-2 py-1 bg-gray-100 rounded text-right"
-                  disabled={disabled} value={row.examined}
-                  onChange={(e) => writeNum(ri, rows[ri].keys.examinedKey, e.target.value)} />
+                  disabled={disabled}
+                  value={row.examined}
+                  onChange={(e) => writeNum(ri, rows[ri].keys.examinedKey, e.target.value)}
+                  autoComplete="off"
+                />
               </td>
               <td className="border px-2 py-1">
-                <input type="text" inputMode="numeric" pattern="[0-9]*"
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   className="w-full px-2 py-1 bg-gray-100 rounded text-right"
-                  disabled={disabled} value={row.cataract}
-                  onChange={(e) => writeNum(ri, rows[ri].keys.cataractKey, e.target.value)} />
+                  disabled={disabled}
+                  value={row.cataract}
+                  onChange={(e) => writeNum(ri, rows[ri].keys.cataractKey, e.target.value)}
+                  autoComplete="off"
+                />
               </td>
               <td className="border px-2 py-1">
-                <input type="text" inputMode="numeric" pattern="[0-9]*"
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   className="w-full px-2 py-1 bg-gray-100 rounded text-right"
-                  disabled={disabled} value={row.otherDiseases}
-                  onChange={(e) => writeNum(ri, rows[ri].keys.otherDiseasesKey, e.target.value)} />
+                  disabled={disabled}
+                  value={row.otherDiseases}
+                  onChange={(e) => writeNum(ri, rows[ri].keys.otherDiseasesKey, e.target.value)}
+                  autoComplete="off"
+                />
               </td>
               <td className="border px-2 py-1">
-                <input type="text" inputMode="numeric" pattern="[0-9]*"
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   className="w-full px-2 py-1 bg-gray-100 rounded text-right"
-                  disabled={disabled} value={row.refractiveErrors}
-                  onChange={(e) => writeNum(ri, rows[ri].keys.refractiveErrorsKey, e.target.value)} />
+                  disabled={disabled}
+                  value={row.refractiveErrors}
+                  onChange={(e) => writeNum(ri, rows[ri].keys.refractiveErrorsKey, e.target.value)}
+                  autoComplete="off"
+                />
               </td>
               <td className="border px-2 py-1">
-                <input type="text" inputMode="numeric" pattern="[0-9]*"
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   className="w-full px-2 py-1 bg-gray-100 rounded text-right"
-                  disabled={disabled} value={row.spectaclesPrescribed}
-                  onChange={(e) => writeNum(ri, rows[ri].keys.spectaclesPrescribedKey, e.target.value)} />
+                  disabled={disabled}
+                  value={row.spectaclesPrescribed}
+                  onChange={(e) => writeNum(ri, rows[ri].keys.spectaclesPrescribedKey, e.target.value)}
+                  autoComplete="off"
+                />
               </td>
             </tr>
           ))}

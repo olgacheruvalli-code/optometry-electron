@@ -24,3 +24,7 @@ node_modules/
 build/
 .vercel/
 .env*
+
+# backups
+*.bak
+*.bak.*
