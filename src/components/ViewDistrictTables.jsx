@@ -163,21 +163,10 @@ export default function ViewDistrictTables({ user, month, year }) {
         const r = await fetch(url);
         if (!r.ok) return [];
         const j = await r.json().catch(() => ({}));
-        return Array.isArray(j?.docs) ? j.docs : Array.isArray(j) ? j : [];
+        // Accept both array responses and {docs: []}
+        return Array.isArray(j) ? j : Array.isArray(j?.docs) ? j.docs : [];
       } catch {
         return [];
-      }
-    };
-    const hydrate = async (doc) => {
-      const id = doc?._id || doc?.id;
-      if (!id) return doc;
-      try {
-        const r = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(id)}`);
-        if (!r.ok) return doc;
-        const j = await r.json().catch(() => ({}));
-        return j?.doc || j || doc;
-      } catch {
-        return doc;
       }
     };
 
@@ -215,7 +204,8 @@ export default function ViewDistrictTables({ user, month, year }) {
             String(d?.year || "") === String(year)
         );
 
-        const hydrated = await Promise.all(filtered.map(hydrate));
+        // No per-id hydrate: use the filtered array as-is (avoids 404)
+        const hydrated = filtered;
         if (cancelled) return;
 
         /* --------------------------- Eye Bank: TOTALS --------------------------- */
