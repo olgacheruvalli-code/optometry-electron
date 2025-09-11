@@ -6,7 +6,6 @@ import EyeBankTable from "./EyeBankTable";
 
 /* ----------------------------- small helpers ------------------------------ */
 
-// For Eye Bank totals: collect numeric keys per template row
 function extractRowKeyMatrix(section) {
   const rows = Array.isArray(section?.rows) ? section.rows : [];
   return rows.map((row) => {
@@ -30,7 +29,6 @@ function addRowInto(targetRow, sourceRow, numericOnlyKeys = null) {
 }
 const fixedLengthArray = (len) => Array.from({ length: len }, () => ({}));
 
-/* Make human labels for VC metric keys/suffixes */
 function prettyMetric(k = "") {
   const s = String(k).replace(/[_\-]+/g, " ").toLowerCase();
   if (/(patients.*examined|examined)/i.test(s)) return "No of patients examined";
@@ -41,7 +39,6 @@ function prettyMetric(k = "") {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/* Preferred order for VC metric columns */
 function metricRank(k = "") {
   const s = String(k).toLowerCase();
   if (s.includes("examined") || /patients/.test(s)) return 1;
@@ -52,7 +49,7 @@ function metricRank(k = "") {
   return 99;
 }
 
-/* -------- Suffix-based helpers (kept for compatibility) ------------------- */
+/* -------- Suffix helpers -------------------------------------------------- */
 
 const VC_SUFFIXES = [
   ["_examined", ["examined", "patientsExamined", "patients_examined"]],
@@ -62,7 +59,6 @@ const VC_SUFFIXES = [
   ["_spectacles_prescribed", ["spectaclesPrescribed", "spectacles_prescribed"]],
 ];
 
-// find a value by suffix (e.g. “…_examined”), ignoring row index prefixes
 function findBySuffix(obj, suffix) {
   if (!obj) return undefined;
   const suf = String(suffix).toLowerCase();
@@ -74,18 +70,13 @@ function findBySuffix(obj, suffix) {
 
 // SMART getMetric: legacy-if-real → suffix → alt-suffix variants
 function getMetric(row, suffix, legacy = []) {
-  // 1) legacy keys only if they carry a real value (not "", null, undefined)
   for (const key of legacy) {
     const val = row?.[key];
     if (val !== undefined && val !== null && String(val) !== "") {
       return num(val);
     }
   }
-
-  // 2) primary suffix
   let v = findBySuffix(row, suffix);
-
-  // 3) alt suffixes commonly seen in data
   if (v === undefined) {
     if (suffix === "_refractive_errors") {
       v = findBySuffix(row, "_refractive_error") ?? findBySuffix(row, "_refraction");
@@ -93,7 +84,6 @@ function getMetric(row, suffix, legacy = []) {
       v = findBySuffix(row, "_spectacle_prescribed") ?? findBySuffix(row, "_spectacles");
     }
   }
-
   return num(v);
 }
 
@@ -127,7 +117,6 @@ function buildVcRowsFromAnswers(answers = {}, max = 25) {
 export default function ViewDistrictTables({ user, month, year }) {
   const district = user?.district || "";
 
-  // locate sections
   const eyeBankSection = useMemo(
     () => sections.find((s) => s?.title?.toLowerCase().includes("eye bank")),
     []
@@ -141,15 +130,12 @@ export default function ViewDistrictTables({ user, month, year }) {
     []
   );
 
-  // numeric keys by row for eyebank totals
   const ebRowKeys = useMemo(() => extractRowKeyMatrix(eyeBankSection), [eyeBankSection]);
 
-  // outputs
   const [ebTotals, setEbTotals] = useState(() =>
     fixedLengthArray((eyeBankSection?.rows || []).length)
   );
-  const [vcRows, setVcRows] = useState([]); // every VALID VC row across all institutions
-
+  const [vcRows, setVcRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errText, setErrText] = useState("");
 
@@ -163,14 +149,12 @@ export default function ViewDistrictTables({ user, month, year }) {
         const r = await fetch(url);
         if (!r.ok) return [];
         const j = await r.json().catch(() => ({}));
-        // Accept both array responses and {docs: []}
         return Array.isArray(j) ? j : Array.isArray(j?.docs) ? j.docs : [];
       } catch {
         return [];
       }
     };
 
-    // build the keyset for VC row i (0-based) using questions.js, fallback to vc_* keys
     const vcKeyset = (i) => {
       const idx = i + 1;
       const cfg = Array.isArray(visionCenterSection?.rows) ? visionCenterSection.rows[i] : null;
@@ -204,8 +188,7 @@ export default function ViewDistrictTables({ user, month, year }) {
             String(d?.year || "") === String(year)
         );
 
-        // No per-id hydrate: use the filtered array as-is (avoids 404)
-        const hydrated = filtered;
+        const hydrated = filtered; // no per-ID hydrate (avoids 404)
         if (cancelled) return;
 
         /* --------------------------- Eye Bank: TOTALS --------------------------- */
@@ -224,7 +207,6 @@ export default function ViewDistrictTables({ user, month, year }) {
         hydrated.forEach((rep) => {
           const instName = String(rep?.institution || "").trim();
 
-          // tolerate both spellings and shapes
           let vc =
             rep?.visionCenter ||
             rep?.visionCentre ||
@@ -232,7 +214,6 @@ export default function ViewDistrictTables({ user, month, year }) {
             rep?.visioncentre ||
             [];
 
-          // Fallback: some prod saves VC inside `answers` with vc_* keys
           if (!Array.isArray(vc) || !vc.length) {
             vc = buildVcRowsFromAnswers(rep?.answers || {}, 25);
           }
@@ -242,12 +223,10 @@ export default function ViewDistrictTables({ user, month, year }) {
             const r = row || {};
             const ks = vcKeyset(i);
 
-            // name needs suffix fallback to hit vc_#_name
             const name = String(
               r?.[ks.nameKey] ?? r?.name ?? findBySuffix(r, "_name") ?? ""
             ).trim();
 
-            // numbers: prefer cfg keys; fallback to suffix/alt-suffix
             const examined = num(r?.[ks.examinedKey] ?? findBySuffix(r, "_examined"));
             const cataract = num(r?.[ks.cataractKey] ?? findBySuffix(r, "_cataract"));
             const other = num(r?.[ks.otherDiseasesKey] ?? findBySuffix(r, "_other_diseases"));
@@ -264,10 +243,8 @@ export default function ViewDistrictTables({ user, month, year }) {
                 findBySuffix(r, "_spectacles")
             );
 
-            // keep only real rows
             if (!name && !examined && !cataract && !other && !refr && !specs) return;
 
-            // normalize so renderer (getMetric by suffix) shows values reliably
             const normalized = {
               name,
               norm_examined: examined,
@@ -280,11 +257,11 @@ export default function ViewDistrictTables({ user, month, year }) {
             vcOut.push({
               __institution: instName || "Unknown Institution",
               __data: normalized,
+              __raw: r, // <— keep original row for render-time fallback
             });
           });
         });
 
-        // sort by Institution then VC name
         vcOut.sort((a, b) => {
           const ai = (a.__institution || "").toLowerCase();
           const bi = (b.__institution || "").toLowerCase();
@@ -316,7 +293,7 @@ export default function ViewDistrictTables({ user, month, year }) {
     };
   }, [district, month, year, eyeBankSection, visionCenterSection]);
 
-  /* ------------------------------ RENDER VC LIST ----------------------------- */
+  /* ------------------------------ RENDER VC LIST --------------------------- */
   const renderDistrictVisionCenterTable = () => {
     return (
       <div className="overflow-x-auto">
@@ -339,11 +316,17 @@ export default function ViewDistrictTables({ user, month, year }) {
           <tbody>
             {vcRows.map((row, idx) => {
               const data = row.__data || {};
+              // Render-time fallback ensures col 3 always resolves from raw vc_#_name
+              const nameCell =
+                data.name ??
+                findBySuffix(data, "_name") ??
+                findBySuffix(row.__raw, "_name") ??
+                "";
               return (
                 <tr key={idx}>
                   <td className="border px-2 py-1 text-center">{idx + 1}</td>
                   <td className="border px-2 py-1">{row.__institution || ""}</td>
-                  <td className="border px-2 py-1">{String(data.name || "")}</td>
+                  <td className="border px-2 py-1">{String(nameCell)}</td>
                   {VC_SUFFIXES
                     .slice()
                     .sort((a, b) => metricRank(a[0]) - metricRank(b[0]))
