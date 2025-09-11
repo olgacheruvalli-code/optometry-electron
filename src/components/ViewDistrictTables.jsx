@@ -1,3 +1,4 @@
+// src/components/ViewDistrictTables.jsx (or your current path)
 import React, { useEffect, useMemo, useState } from "react";
 import API_BASE from "../apiBase";
 import sections from "../data/questions";
@@ -17,13 +18,14 @@ function extractRowKeyMatrix(section) {
   });
 }
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
 function addRowInto(targetRow, sourceRow, numericOnlyKeys = null) {
   if (!sourceRow || typeof sourceRow !== "object") return;
   for (const [k, v] of Object.entries(sourceRow)) {
     if (Array.isArray(numericOnlyKeys) && numericOnlyKeys.length && !numericOnlyKeys.includes(k))
       continue;
     const n = num(v);
-    if (n || n === 0) targetRow[k] = (num(targetRow[k]) + n);
+    if (n || n === 0) targetRow[k] = num(targetRow[k]) + n;
   }
 }
 const fixedLengthArray = (len) => Array.from({ length: len }, () => ({}));
@@ -50,18 +52,7 @@ function metricRank(k = "") {
   return 99;
 }
 
-/* Find the actual VC name field present in data rows */
-function findNameKeyInData(rows) {
-  for (const r of rows) {
-    if (!r || typeof r !== "object") continue;
-    for (const k of Object.keys(r)) {
-      if (/(name|centre|center)/i.test(k)) return k;
-    }
-  }
-  return "name";
-}
-
-/* -------- NEW: suffix-based metric lookup that works for vc_1_, vc_2_, … --- */
+/* -------- Suffix-based helpers (kept for compatibility) ------------------- */
 
 const VC_SUFFIXES = [
   ["_examined", ["examined", "patientsExamined", "patients_examined"]],
@@ -90,6 +81,31 @@ function getMetric(row, suffix, legacy = []) {
   return num(v);
 }
 
+/* -------- Rebuild VC rows from answers when no array is present ----------- */
+function buildVcRowsFromAnswers(answers = {}, max = 25) {
+  const out = [];
+  const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  for (let i = 1; i <= max; i++) {
+    const name = (answers[`vc_${i}_name`] ?? "").toString().trim();
+    const examined = n(answers[`vc_${i}_examined`]);
+    const cataract = n(answers[`vc_${i}_cataract`]);
+    const other = n(answers[`vc_${i}_other_diseases`]);
+    const refr = n(answers[`vc_${i}_refractive_errors`]);
+    const specs = n(answers[`vc_${i}_spectacles_prescribed`]);
+    if (name || examined || cataract || other || refr || specs) {
+      out.push({
+        [`vc_${i}_name`]: name,
+        [`vc_${i}_examined`]: examined,
+        [`vc_${i}_cataract`]: cataract,
+        [`vc_${i}_other_diseases`]: other,
+        [`vc_${i}_refractive_errors`]: refr,
+        [`vc_${i}_spectacles_prescribed`]: specs,
+      });
+    }
+  }
+  return out;
+}
+
 /* ========================================================================== */
 
 export default function ViewDistrictTables({ user, month, year }) {
@@ -101,7 +117,11 @@ export default function ViewDistrictTables({ user, month, year }) {
     []
   );
   const visionCenterSection = useMemo(
-    () => sections.find((s) => s?.title?.toLowerCase().includes("vision center")),
+    () =>
+      sections.find((s) => {
+        const t = (s?.title || "").toLowerCase();
+        return t.includes("vision center") || t.includes("vision centre");
+      }),
     []
   );
 
@@ -145,6 +165,20 @@ export default function ViewDistrictTables({ user, month, year }) {
       }
     };
 
+    // build the keyset for VC row i (0-based) using questions.js, fallback to vc_* keys
+    const vcKeyset = (i) => {
+      const idx = i + 1;
+      const cfg = Array.isArray(visionCenterSection?.rows) ? visionCenterSection.rows[i] : null;
+      return {
+        nameKey: cfg?.nameKey ?? cfg?.NameKey ?? `vc_${idx}_name`,
+        examinedKey: cfg?.patientsExaminedKey ?? `vc_${idx}_examined`,
+        cataractKey: cfg?.cataractDetectedKey ?? `vc_${idx}_cataract`,
+        otherDiseasesKey: cfg?.otherEyeDiseasesKey ?? `vc_${idx}_other_diseases`,
+        refractiveErrorsKey: cfg?.refractiveErrorsKey ?? `vc_${idx}_refractive_errors`,
+        spectaclesPrescribedKey: cfg?.spectaclesPrescribedKey ?? `vc_${idx}_spectacles_prescribed`,
+      };
+    };
+
     (async () => {
       setLoading(true);
       setErrText("");
@@ -179,29 +213,54 @@ export default function ViewDistrictTables({ user, month, year }) {
           }
         });
 
-        /* --------------- Vision Center: LIST ONLY FILLED ROWS ------------------- */
+        /* -------------------- Vision Center: normalize rows -------------------- */
         const vcOut = [];
         hydrated.forEach((rep) => {
           const instName = String(rep?.institution || "").trim();
-          const vc = rep?.visionCenter || rep?.visioncentre || rep?.vision_centre || [];
+
+          // tolerate both spellings and shapes
+          let vc =
+            rep?.visionCenter ||
+            rep?.visionCentre ||
+            rep?.vision_centre ||
+            rep?.visioncentre ||
+            [];
+
+          // Fallback: some prod saves VC inside `answers` with vc_* keys
+          if (!Array.isArray(vc) || !vc.length) {
+            vc = buildVcRowsFromAnswers(rep?.answers || {}, 25);
+          }
           if (!Array.isArray(vc) || !vc.length) return;
 
-          const nameKey = findNameKeyInData(vc);
-
-          vc.forEach((row) => {
+          vc.forEach((row, i) => {
             const r = row || {};
-            const vcName = String(r[nameKey] || "").trim();
+            const ks = vcKeyset(i);
 
-            // detect if any metric is present (>0) using suffix/legacy mapping
-            const hasAnyMetric = VC_SUFFIXES.some(([suf, legacy]) => getMetric(r, suf, legacy) > 0);
+            // prefer questions.js keys; fall back to suffix check
+            const name = String(r?.[ks.nameKey] ?? r?.name ?? "").trim();
+            const examined = num(r?.[ks.examinedKey] ?? findBySuffix(r, "_examined"));
+            const cataract = num(r?.[ks.cataractKey] ?? findBySuffix(r, "_cataract"));
+            const other = num(r?.[ks.otherDiseasesKey] ?? findBySuffix(r, "_other_diseases"));
+            const refr = num(r?.[ks.refractiveErrorsKey] ?? findBySuffix(r, "_refractive_errors"));
+            const specs =
+              num(r?.[ks.spectaclesPrescribedKey] ?? findBySuffix(r, "_spectacles_prescribed"));
 
-            // Include only real rows (has a name OR any metric > 0)
-            if (!vcName && !hasAnyMetric) return;
+            // keep only real rows
+            if (!name && !examined && !cataract && !other && !refr && !specs) return;
+
+            // normalize so renderer (getMetric by suffix) shows values reliably
+            const normalized = {
+              name,
+              norm_examined: examined,
+              norm_cataract: cataract,
+              norm_other_diseases: other,
+              norm_refractive_errors: refr,
+              norm_spectacles_prescribed: specs,
+            };
 
             vcOut.push({
               __institution: instName || "Unknown Institution",
-              __vcNameKey: nameKey,
-              __data: r,
+              __data: normalized,
             });
           });
         });
@@ -212,10 +271,8 @@ export default function ViewDistrictTables({ user, month, year }) {
           const bi = (b.__institution || "").toLowerCase();
           if (ai < bi) return -1;
           if (ai > bi) return 1;
-          const ak = a.__vcNameKey || "name";
-          const bk = b.__vcNameKey || "name";
-          const an = String(a.__data?.[ak] || "").toLowerCase();
-          const bn = String(b.__data?.[bk] || "").toLowerCase();
+          const an = String(a.__data?.name || "").toLowerCase();
+          const bn = String(b.__data?.name || "").toLowerCase();
           return an.localeCompare(bn, undefined, { numeric: true });
         });
 
@@ -235,7 +292,9 @@ export default function ViewDistrictTables({ user, month, year }) {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [district, month, year, eyeBankSection, visionCenterSection]);
 
   /* ------------------------------ RENDER VC LIST ----------------------------- */
@@ -249,7 +308,7 @@ export default function ViewDistrictTables({ user, month, year }) {
               <th className="border px-2 py-1 text-left">Institution</th>
               <th className="border px-2 py-1 text-left">Name of Vision Centre</th>
               {VC_SUFFIXES
-                .slice() // keep preferred order
+                .slice()
                 .sort((a, b) => metricRank(a[0]) - metricRank(b[0]))
                 .map(([suf]) => (
                   <th key={suf} className="border px-2 py-1 text-center">
@@ -260,13 +319,12 @@ export default function ViewDistrictTables({ user, month, year }) {
           </thead>
           <tbody>
             {vcRows.map((row, idx) => {
-              const nameKey = row.__vcNameKey || "name";
               const data = row.__data || {};
               return (
                 <tr key={idx}>
                   <td className="border px-2 py-1 text-center">{idx + 1}</td>
                   <td className="border px-2 py-1">{row.__institution || ""}</td>
-                  <td className="border px-2 py-1">{String(data[nameKey] || "")}</td>
+                  <td className="border px-2 py-1">{String(data.name || "")}</td>
                   {VC_SUFFIXES
                     .slice()
                     .sort((a, b) => metricRank(a[0]) - metricRank(b[0]))
@@ -280,7 +338,10 @@ export default function ViewDistrictTables({ user, month, year }) {
             })}
             {!vcRows.length && (
               <tr>
-                <td className="border px-2 py-3 text-center text-gray-500" colSpan={3 + VC_SUFFIXES.length}>
+                <td
+                  className="border px-2 py-3 text-center text-gray-500"
+                  colSpan={3 + VC_SUFFIXES.length}
+                >
                   No Vision Centre data for this month.
                 </td>
               </tr>
@@ -297,10 +358,12 @@ export default function ViewDistrictTables({ user, month, year }) {
         District Tables — {district} ({month} {year})
       </div>
 
-      {loading && <div className="text-center text-sm text-gray-600">Loading district tables…</div>}
+      {loading && (
+        <div className="text-center text-sm text-gray-600">Loading district tables…</div>
+      )}
       {errText && <div className="text-center text-sm text-red-600">{errText}</div>}
 
-      {/* Eye Bank: district total (unchanged) */}
+      {/* Eye Bank: district total */}
       <section>
         <h3 className="text-base font-semibold mb-2">III. EYE BANK — District Total</h3>
         <EyeBankTable data={ebTotals} disabled cumulative />
