@@ -1,4 +1,4 @@
-// src/components/ViewDistrictTables.jsx (or your current path)
+// src/components/ViewDistrictTables.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import API_BASE from "../apiBase";
 import sections from "../data/questions";
@@ -72,12 +72,28 @@ function findBySuffix(obj, suffix) {
   return undefined;
 }
 
-// get numeric metric by trying legacy names first, then suffix
+// SMART getMetric: legacy-if-real → suffix → alt-suffix variants
 function getMetric(row, suffix, legacy = []) {
+  // 1) legacy keys only if they carry a real value (not "", null, undefined)
   for (const key of legacy) {
-    if (row[key] !== undefined) return num(row[key]);
+    const val = row?.[key];
+    if (val !== undefined && val !== null && String(val) !== "") {
+      return num(val);
+    }
   }
-  const v = findBySuffix(row, suffix);
+
+  // 2) primary suffix
+  let v = findBySuffix(row, suffix);
+
+  // 3) alt suffixes commonly seen in data
+  if (v === undefined) {
+    if (suffix === "_refractive_errors") {
+      v = findBySuffix(row, "_refractive_error") ?? findBySuffix(row, "_refraction");
+    } else if (suffix === "_spectacles_prescribed") {
+      v = findBySuffix(row, "_spectacle_prescribed") ?? findBySuffix(row, "_spectacles");
+    }
+  }
+
   return num(v);
 }
 
@@ -236,14 +252,27 @@ export default function ViewDistrictTables({ user, month, year }) {
             const r = row || {};
             const ks = vcKeyset(i);
 
-            // prefer questions.js keys; fall back to suffix check
-            const name = String(r?.[ks.nameKey] ?? r?.name ?? "").trim();
+            // name needs suffix fallback to hit vc_#_name
+            const name = String(
+              r?.[ks.nameKey] ?? r?.name ?? findBySuffix(r, "_name") ?? ""
+            ).trim();
+
+            // numbers: prefer cfg keys; fallback to suffix/alt-suffix
             const examined = num(r?.[ks.examinedKey] ?? findBySuffix(r, "_examined"));
             const cataract = num(r?.[ks.cataractKey] ?? findBySuffix(r, "_cataract"));
             const other = num(r?.[ks.otherDiseasesKey] ?? findBySuffix(r, "_other_diseases"));
-            const refr = num(r?.[ks.refractiveErrorsKey] ?? findBySuffix(r, "_refractive_errors"));
-            const specs =
-              num(r?.[ks.spectaclesPrescribedKey] ?? findBySuffix(r, "_spectacles_prescribed"));
+            const refr = num(
+              r?.[ks.refractiveErrorsKey] ??
+                findBySuffix(r, "_refractive_errors") ??
+                findBySuffix(r, "_refractive_error") ??
+                findBySuffix(r, "_refraction")
+            );
+            const specs = num(
+              r?.[ks.spectaclesPrescribedKey] ??
+                findBySuffix(r, "_spectacles_prescribed") ??
+                findBySuffix(r, "_spectacle_prescribed") ??
+                findBySuffix(r, "_spectacles")
+            );
 
             // keep only real rows
             if (!name && !examined && !cataract && !other && !refr && !specs) return;
