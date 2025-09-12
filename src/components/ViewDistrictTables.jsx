@@ -48,7 +48,7 @@ function metricRank(k = "") {
   return 99;
 }
 
-/* Canonical metric keys we render */
+/* Canonical VC metric keys we render */
 const VC_METRIC_KEYS = [
   "examined",
   "cataract",
@@ -56,118 +56,6 @@ const VC_METRIC_KEYS = [
   "refractive_errors",
   "spectacles_prescribed",
 ];
-
-/* Value pickers */
-const isNonEmpty = (v) => v !== undefined && v !== null && String(v).trim() !== "";
-const pickStr = (...vals) => {
-  for (const v of vals) if (isNonEmpty(v)) return String(v).trim();
-  return "";
-};
-const pickNum = (...vals) => {
-  for (const v of vals) {
-    if (v !== undefined && v !== null && String(v) !== "" && Number.isFinite(Number(v))) {
-      return Number(v);
-    }
-  }
-  return 0;
-};
-
-/* ----------------- render-time resolvers (use RAW row first) --------------- */
-
-const getNameFromRow = (rowObj) => {
-  const raw = rowObj?.__raw || {};
-  const data = rowObj?.__data || {};
-  const idx = rowObj?.__idx;
-
-  // 1) exact vc_{i}_name if we know the row index
-  if (idx != null) {
-    const v = raw[`vc_${idx}_name`];
-    if (isNonEmpty(v)) return String(v).trim();
-  }
-
-  // 2) any vc_*_name
-  for (const k of Object.keys(raw)) {
-    const kl = k.toLowerCase();
-    if (/^vc_\d+_name$/.test(kl) && isNonEmpty(raw[k])) return String(raw[k]).trim();
-  }
-
-  // 3) other *_name OR *centre/*center keys with non-empty values
-  for (const k of Object.keys(raw)) {
-    const kl = k.toLowerCase();
-    if ((/_name$/.test(kl) || /(centre|center)$/.test(kl)) && isNonEmpty(raw[k])) {
-      return String(raw[k]).trim();
-    }
-  }
-
-  // 4) fallbacks from normalized data
-  return pickStr(data.name);
-};
-
-const getMetricFromRow = (rowObj, which /* "refractive" | "spectacles" */) => {
-  const raw = rowObj?.__raw || {};
-  const data = rowObj?.__data || {};
-  const idx = rowObj?.__idx;
-
-  const tryKeys = (obj, keys) => {
-    for (const k of keys) {
-      const v = Number(obj[k]);
-      if (Number.isFinite(v)) return v;
-    }
-    return 0;
-  };
-
-  if (which === "refractive") {
-    // 1) prefer vc_{i}_refractive_errors
-    if (idx != null) {
-      const v = tryKeys(raw, [
-        `vc_${idx}_refractive_errors`,
-        `vc_${idx}_refractive_error`,
-        `vc_${idx}_refraction`,
-      ]);
-      if (v) return v;
-    }
-    // 2) any vc_* matches
-    const vcKeys = Object.keys(raw).filter((k) =>
-      /^vc_\d+_/.test(k) && /(refract|refraction)/i.test(k)
-    );
-    const v2 = tryKeys(raw, vcKeys);
-    if (v2) return v2;
-
-    // 3) generic/raw fallbacks
-    const v3 = tryKeys(raw, ["refractive_errors", "refractive_error", "refraction"]);
-    if (v3) return v3;
-
-    // 4) normalized
-    return Number(data.refractive_errors) || 0;
-  }
-
-  if (which === "spectacles") {
-    // 1) prefer vc_{i}_spectacles_prescribed
-    if (idx != null) {
-      const v = tryKeys(raw, [
-        `vc_${idx}_spectacles_prescribed`,
-        `vc_${idx}_spectacle_prescribed`,
-        `vc_${idx}_spectacles`,
-      ]);
-      if (v) return v;
-    }
-    // 2) any vc_* matches
-    const vcKeys = Object.keys(raw).filter((k) =>
-      /^vc_\d+_/.test(k) && /(spectacle|spectacles)/i.test(k) && /(prescrib|scribe)?/i.test(k)
-    );
-    const v2 = tryKeys(raw, vcKeys);
-    if (v2) return v2;
-
-    // 3) generic/raw fallbacks
-    const v3 = tryKeys(raw, ["spectacles_prescribed", "spectacle_prescribed", "spectacles"]);
-    if (v3) return v3;
-
-    // 4) normalized
-    return Number(data.spectacles_prescribed) || 0;
-  }
-
-  return 0;
-};
 
 /* ===================================================================== */
 
@@ -222,7 +110,15 @@ export default function ViewDistrictTables({ user, month, year }) {
       };
     };
 
-    // Map any VC row to canonical fields; keep RAW + 1-based index for render
+    const pickStr = (...vals) => {
+      for (const v of vals) if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
+      return "";
+    };
+    const pickNum = (...vals) => {
+      for (const v of vals) if (v !== undefined && v !== null && String(v) !== "" && Number.isFinite(Number(v))) return Number(v);
+      return 0;
+    };
+
     const mapRowToCanonical = (row, i) => {
       const r = row || {};
       const ks = vcKeyset(i);
@@ -230,43 +126,12 @@ export default function ViewDistrictTables({ user, month, year }) {
 
       return {
         name: pickStr(r[ks.nameKey], r[`vc_${idx}_name`], r.name),
-        examined: pickNum(
-          r[ks.examinedKey],
-          r[`vc_${idx}_examined`],
-          r.examined,
-          r.patients_examined,
-          r.patientsExamined
-        ),
-        cataract: pickNum(
-          r[ks.cataractKey],
-          r[`vc_${idx}_cataract`],
-          r.cataract,
-          r.cataractDetected,
-          r.cataract_cases
-        ),
-        other_diseases: pickNum(
-          r[ks.otherDiseasesKey],
-          r[`vc_${idx}_other_diseases`],
-          r.other_diseases,
-          r.otherDiseases
-        ),
-        // leave refractive/spectacles to render-time resolver as well
-        refractive_errors: pickNum(
-          r[ks.refractiveErrorsKey],
-          r[`vc_${idx}_refractive_errors`],
-          r.refractive_errors,
-          r.refractive_error,
-          r.refraction
-        ),
-        spectacles_prescribed: pickNum(
-          r[ks.spectaclesPrescribedKey],
-          r[`vc_${idx}_spectacles_prescribed`],
-          r.spectacles_prescribed,
-          r.spectacle_prescribed,
-          r.spectacles
-        ),
+        examined: pickNum(r[ks.examinedKey], r[`vc_${idx}_examined`], r.examined, r.patients_examined, r.patientsExamined),
+        cataract: pickNum(r[ks.cataractKey], r[`vc_${idx}_cataract`], r.cataract, r.cataractDetected, r.cataract_cases),
+        other_diseases: pickNum(r[ks.otherDiseasesKey], r[`vc_${idx}_other_diseases`], r.other_diseases, r.otherDiseases),
+        refractive_errors: pickNum(r[ks.refractiveErrorsKey], r[`vc_${idx}_refractive_errors`], r.refractive_errors, r.refractive_error, r.refraction),
+        spectacles_prescribed: pickNum(r[ks.spectaclesPrescribedKey], r[`vc_${idx}_spectacles_prescribed`], r.spectacles_prescribed, r.spectacle_prescribed, r.spectacles),
         __raw: r,
-        __idx: idx,
       };
     };
 
@@ -283,10 +148,8 @@ export default function ViewDistrictTables({ user, month, year }) {
 
         const filtered = list.filter(
           (d) =>
-            String(d?.district || "").trim().toLowerCase() ===
-              String(district).trim().toLowerCase() &&
-            String(d?.month || "").trim().toLowerCase() ===
-              String(month).trim().toLowerCase() &&
+            String(d?.district || "").trim().toLowerCase() === String(district).trim().toLowerCase() &&
+            String(d?.month || "").trim().toLowerCase() === String(month).trim().toLowerCase() &&
             String(d?.year || "") === String(year)
         );
         const source = filtered.length ? filtered : list;
@@ -334,9 +197,7 @@ export default function ViewDistrictTables({ user, month, year }) {
                 [`vc_${j}_refractive_errors`]: a[`vc_${j}_refractive_errors`],
                 [`vc_${j}_spectacles_prescribed`]: a[`vc_${j}_spectacles_prescribed`],
               };
-              const anyNum = Object.values(rowObj).some(
-                (v) => Number.isFinite(Number(v)) && Number(v) !== 0
-              );
+              const anyNum = Object.values(rowObj).some((v) => Number.isFinite(Number(v)) && Number(v) !== 0);
               if (String(rowObj[`vc_${j}_name`] || "").trim() !== "" || anyNum) rebuilt.push(rowObj);
             }
             vc = rebuilt;
@@ -346,16 +207,9 @@ export default function ViewDistrictTables({ user, month, year }) {
 
           vc.forEach((row, i) => {
             const canon = mapRowToCanonical(row, i);
-            const hasAny =
-              String(canon.name || "").trim() !== "" ||
-              VC_METRIC_KEYS.some((k) => num(canon[k]) !== 0);
+            const hasAny = String(canon.name || "").trim() !== "" || VC_METRIC_KEYS.some((k) => num(canon[k]) !== 0);
             if (hasAny) {
-              vcOut.push({
-                __institution: instName || "Unknown Institution",
-                __data: canon,
-                __raw: canon.__raw,
-                __idx: canon.__idx, // 1-based index in that report
-              });
+              vcOut.push({ __institution: instName || "Unknown Institution", __data: canon });
             }
           });
         });
@@ -365,8 +219,8 @@ export default function ViewDistrictTables({ user, month, year }) {
           const bi = (b.__institution || "").toLowerCase();
           if (ai < bi) return -1;
           if (ai > bi) return 1;
-          const an = String(getNameFromRow(a) || "").toLowerCase();
-          const bn = String(getNameFromRow(b) || "").toLowerCase();
+          const an = String(a.__data?.name || "").toLowerCase();
+          const bn = String(b.__data?.name || "").toLowerCase();
           return an.localeCompare(bn, undefined, { numeric: true });
         });
 
@@ -389,21 +243,135 @@ export default function ViewDistrictTables({ user, month, year }) {
     return () => { cancelled = true; };
   }, [district, month, year, eyeBankSection, visionCenterSection]);
 
-  /* ------------------------------ renderers ------------------------------ */
+  /* --------------------------- XLSX exporters --------------------------- */
+  const handleDownloadEyeBank = async () => {
+    const XLSX = await import("xlsx");
+
+    // Column headers (match on-screen labels)
+    const EB_HEADERS = [
+      "Status",
+      "No of Eyes collected during the month",
+      "No of Eyes utilized for Keratoplasty",
+      "No of Eyes used for Research purpose",
+      "No of Eyes distributed to other Institutions",
+      "No of Eye Donation Pledge forms received",
+    ];
+
+    // Try to derive row labels from the section config, else sensible fallbacks.
+    const rowLabel = (i) => {
+      const cfg = eyeBankSection?.rows?.[i] || {};
+      return (
+        cfg.status ||
+        cfg.label ||
+        cfg.name ||
+        (i === 0 ? "Eye Bank" : i === 1 ? "Eye Collection Centre" : `Row ${i + 1}`)
+      );
+    };
+
+    // Keys per row (already in correct order from questions.js)
+    const aoa = [EB_HEADERS];
+    for (let i = 0; i < ebTotals.length; i++) {
+      const keys = ebRowKeys[i] || [];
+      if (!keys.length) continue;
+      const row = [rowLabel(i)];
+      for (const k of keys) row.push(num(ebTotals[i]?.[k]));
+      // ensure col count matches header length
+      while (row.length < EB_HEADERS.length) row.push(0);
+      aoa.push(row);
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = EB_HEADERS.map((h, idx) =>
+      idx === 0 ? { wch: 24 } : { wch: Math.min(Math.max(h.length, 10), 42) }
+    );
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Eye Bank");
+    const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    const blob = new Blob(
+      [wbout],
+      { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
+    );
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `EyeBank_${district || "District"}_${month}_${year}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  const handleDownloadVisionCenter = async () => {
+    const XLSX = await import("xlsx");
+
+    const VC_HEADERS = [
+      "SL. NO",
+      "Institution",
+      "Name of Vision Centre",
+      "No of patients examined",
+      "No of Cataract cases detected",
+      "No of other eye diseases",
+      "No of Refractive errors",
+      "No of Spectacles Prescribed",
+    ];
+
+    const aoa = [VC_HEADERS];
+    vcRows.forEach((row, idx) => {
+      const d = row.__data || {};
+      aoa.push([
+        idx + 1,
+        row.__institution || "",
+        String(d.name || ""),
+        num(d.examined),
+        num(d.cataract),
+        num(d.other_diseases),
+        num(d.refractive_errors),
+        num(d.spectacles_prescribed),
+      ]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = VC_HEADERS.map((h, i) =>
+      i <= 2 ? { wch: Math.max(18, h.length + 2) } : { wch: 16 }
+    );
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Vision Center");
+    const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    const blob = new Blob(
+      [wbout],
+      { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
+    );
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `VisionCenter_${district || "District"}_${month}_${year}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  /* ------------------------------ RENDER VC LIST ----------------------------- */
   const renderDistrictVisionCenterTable = () => {
     return (
       <div className="overflow-x-auto">
+        <div className="flex justify-end mb-2">
+          <button
+            type="button"
+            className="px-3 py-1.5 bg-green-600 text-white rounded disabled:opacity-50"
+            onClick={handleDownloadVisionCenter}
+            disabled={!vcRows.length}
+          >
+            Download Vision Center (XLSX)
+          </button>
+        </div>
+
         <table className="min-w-full border">
           <thead>
             <tr className="bg-gray-50">
               <th className="border px-2 py-1 text-left w-14">SL. NO</th>
               <th className="border px-2 py-1 text-left">Institution</th>
               <th className="border px-2 py-1 text-left">Name of Vision Centre</th>
-              {VC_METRIC_KEYS.slice().sort((a, b) => metricRank(a) - metricRank(b)).map((key) => (
-                <th key={key} className="border px-2 py-1 text-center">
-                  {prettyMetric(key)}
-                </th>
-              ))}
+              {VC_METRIC_KEYS
+                .slice()
+                .sort((a, b) => metricRank(a) - metricRank(b))
+                .map((key) => (
+                  <th key={key} className="border px-2 py-1 text-center">
+                    {prettyMetric(key)}
+                  </th>
+                ))}
             </tr>
           </thead>
           <tbody>
@@ -413,16 +381,15 @@ export default function ViewDistrictTables({ user, month, year }) {
                 <tr key={idx}>
                   <td className="border px-2 py-1 text-center">{idx + 1}</td>
                   <td className="border px-2 py-1">{row.__institution || ""}</td>
-
-                  {/* Column 3 — resolve from RAW first */}
-                  <td className="border px-2 py-1">{getNameFromRow(row)}</td>
-
-                  {/* Cols 4–6 from canonical; 7–8 via RAW-first resolvers */}
-                  <td className="border px-2 py-1 text-right">{num(d.examined)}</td>
-                  <td className="border px-2 py-1 text-right">{num(d.cataract)}</td>
-                  <td className="border px-2 py-1 text-right">{num(d.other_diseases)}</td>
-                  <td className="border px-2 py-1 text-right">{getMetricFromRow(row, "refractive")}</td>
-                  <td className="border px-2 py-1 text-right">{getMetricFromRow(row, "spectacles")}</td>
+                  <td className="border px-2 py-1">{String(d.name || "")}</td>
+                  {VC_METRIC_KEYS
+                    .slice()
+                    .sort((a, b) => metricRank(a) - metricRank(b))
+                    .map((key) => (
+                      <td key={key} className="border px-2 py-1 text-right">
+                        {num(d[key])}
+                      </td>
+                    ))}
                 </tr>
               );
             })}
@@ -448,11 +415,23 @@ export default function ViewDistrictTables({ user, month, year }) {
       {loading && <div className="text-center text-sm text-gray-600">Loading district tables…</div>}
       {errText && <div className="text-center text-sm text-red-600">{errText}</div>}
 
+      {/* Eye Bank: district total */}
       <section>
-        <h3 className="text-base font-semibold mb-2">III. EYE BANK — District Total</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-base font-semibold">III. EYE BANK — District Total</h3>
+          <button
+            type="button"
+            className="px-3 py-1.5 bg-green-600 text-white rounded disabled:opacity-50"
+            onClick={handleDownloadEyeBank}
+            disabled={!ebTotals?.length}
+          >
+            Download Eye Bank (XLSX)
+          </button>
+        </div>
         <EyeBankTable data={ebTotals} disabled cumulative />
       </section>
 
+      {/* Vision Center: each real centre row */}
       <section>
         <h3 className="text-base font-semibold mb-2">V. VISION CENTER — District Total</h3>
         {renderDistrictVisionCenterTable()}
