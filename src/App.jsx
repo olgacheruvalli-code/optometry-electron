@@ -15,6 +15,7 @@ import ReportsList from "./components/ReportsList";
 import ViewInstitutionWiseReport from "./components/ViewInstitutionWiseReport";
 import ViewDistrictTables from "./components/ViewDistrictTables";
 import EditReport from "./components/EditReport";
+import ConnectedLinks from "./components/ConnectedLinks";
 import Register from "./components/Register";
 import EditGate from "./components/EditGate";
 
@@ -934,6 +935,9 @@ function App() {
     disabled={user?.isGuest}
     onOpenExisting={(rep) => { setCurrent(rep); setMenu("view"); }} // <-- add this
   />
+)}
+{menu === "connected-links" && (
+  <ConnectedLinks user={user} />
 )}
 
 
