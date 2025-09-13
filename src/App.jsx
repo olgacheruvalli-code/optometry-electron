@@ -386,7 +386,7 @@ function ViewReports({ reportData, month, year }) {
 
 
 
-/* -------------------------------------------------------------------------- */
+//* -------------------------------------------------------------------------- */
 /* ReportEntry                                                                 */
 /* -------------------------------------------------------------------------- */
 function ReportEntry({
@@ -397,6 +397,7 @@ function ReportEntry({
   initialMonth = "",
   initialYear = "",
   disabled = false,
+  onOpenExisting, // optional: navigate to existing doc
 }) {
   const [answers, setAnswers] = useState(initialAnswers);
 
@@ -429,12 +430,93 @@ function ReportEntry({
   const [mode, setMode] = useState("edit");
   const [locked, setLocked] = useState(false);
 
-  const isDoc = user?.institution?.startsWith("DOC ");
-  const canSave = month && year;
+  // ---------- Prevent duplicate report for same Institution+District+Month+Year ----------
+  const [existingForPeriod, setExistingForPeriod] = useState(null);
+  const [checkingExisting, setCheckingExisting] = useState(false);
 
-  const confirm = async () => {
+  const norm = (s) => String(s || "").trim().toLowerCase();
+  const eq = (a, b) => norm(a) === norm(b);
+
+  const district = String(user?.district || "").trim();
+  const institution = String(user?.institution || "").trim();
+
+  // Your original DOC detection:
+  const isDoc = user?.institution?.startsWith("DOC ");
+
+  useEffect(() => {
+    // Only check for optometrists (non-DOC) and when month/year are selected
+    if (isDoc) { setExistingForPeriod(null); return; }
+    if (!district || !institution || !month || !year) {
+      setExistingForPeriod(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchList = async (url) => {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) return [];
+        const j = await r.json().catch(() => ({}));
+        return Array.isArray(j?.docs) ? j.docs : Array.isArray(j) ? j : [];
+      } catch {
+        return [];
+      }
+    };
+
+    (async () => {
+      setCheckingExisting(true);
+      try {
+        const q =
+          `district=${encodeURIComponent(district)}` +
+          `&institution=${encodeURIComponent(institution)}` +
+          `&month=${encodeURIComponent(month)}` +
+          `&year=${encodeURIComponent(year)}`;
+
+        let list = await fetchList(`${API_BASE}/api/reports?${q}`);
+        if (!list.length) {
+          // broader fallback (institution only) then filter locally
+          const q2 =
+            `district=${encodeURIComponent(district)}` +
+            `&institution=${encodeURIComponent(institution)}`;
+          list = await fetchList(`${API_BASE}/api/reports?${q2}`);
+          if (!list.length) list = await fetchList(`${API_BASE}/api/reports`);
+        }
+
+        const exact = list.find(
+          (d) =>
+            eq(d?.district, district) &&
+            eq(d?.institution, institution) &&
+            eq(d?.month, month) &&
+            String(d?.year) === String(year)
+        );
+
+        if (!cancelled) setExistingForPeriod(exact || null);
+      } finally {
+        if (!cancelled) setCheckingExisting(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [district, institution, month, year, isDoc]);
+
+  const canSave = !!month && !!year && !existingForPeriod; // block when duplicate exists
+
+  // renamed to avoid shadowing window.confirm
+  const handleSubmitSave = async () => {
     if (!month || !year) {
       alert("Please select both Month and Year before saving.");
+      return;
+    }
+    if (!isDoc && existingForPeriod) {
+      // block duplicate for optometrist
+      if (onOpenExisting) {
+        if (window.confirm(`A report for ${institution} — ${month} ${year} already exists.\nOpen it now?`)) {
+          onOpenExisting(existingForPeriod);
+        }
+      } else {
+        alert(`A report for ${institution} — ${month} ${year} already exists. Please open and edit that report.`);
+      }
       return;
     }
 
@@ -470,6 +552,11 @@ function ReportEntry({
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data?.ok === false) {
         console.error("Save failed:", data);
+        // If backend returns 409 duplicate, surface a friendly message
+        if (res.status === 409 || data?.code === "DUPLICATE_MONTH") {
+          alert(`❌ A report for ${institution} — ${month} ${year} already exists.`);
+          return;
+        }
         alert(`❌ Save failed: ${data?.error || res.status}`);
         return;
       }
@@ -518,6 +605,28 @@ function ReportEntry({
             disabled={disabled}
           />
         </div>
+
+        {/* Duplicate guard banner */}
+        {!isDoc && existingForPeriod && !checkingExisting && (
+          <div className="no-print mb-4 px-3 py-2 rounded bg-red-100 text-red-800">
+            A report for <b>{institution}</b> — <b>{month} {year}</b> already exists.
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded bg-indigo-600 text-white"
+                onClick={() => {
+                  if (onOpenExisting) onOpenExisting(existingForPeriod);
+                  else alert("Please open the existing report from the View menu.");
+                }}
+              >
+                Open Existing
+              </button>
+              <span className="text-xs text-red-700 self-center">
+                (Saving another one is disabled.)
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Question Sections */}
         {sections.filter((s) => !s.table).map((s) => (
@@ -582,16 +691,27 @@ function ReportEntry({
 
         {!disabled && !isDoc && (
           <div className="text-center mt-8">
-            {!canSave && (
+            {!month || !year ? (
               <div className="text-red-600 font-medium mb-4">
                 Please select both <b>Month</b> and <b>Year</b> before saving.
               </div>
-            )}
+            ) : null}
             <button
-              onClick={() => (canSave ? setMode("confirm") : alert("❌ Please select both Month and Year before saving."))}
+              onClick={() => {
+                if (!month || !year) return alert("❌ Please select both Month and Year before saving.");
+                if (existingForPeriod) {
+                  if (onOpenExisting) onOpenExisting(existingForPeriod);
+                  else alert(`A report for ${institution} — ${month} ${year} already exists.`);
+                  return;
+                }
+                setMode("confirm");
+              }}
               className={`px-8 py-3 rounded-lg text-white transition ${
-                canSave ? "bg-green-600 hover:bg-green-700" : "bg-gray-400 cursor-not-allowed"
+                !month || !year || !!existingForPeriod
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-green-600 hover:bg-green-700"
               }`}
+              disabled={!month || !year || !!existingForPeriod}
             >
               Save All
             </button>
@@ -600,10 +720,16 @@ function ReportEntry({
 
         {mode === "confirm" && (
           <div className="text-center mt-6">
-            <button className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700" onClick={confirm}>
+            <button
+              className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              onClick={handleSubmitSave}
+            >
               ✅ Confirm and Submit
             </button>
-            <button className="ml-4 px-6 py-2 bg-gray-400 text-white rounded hover:bg-gray-500" onClick={() => setMode("edit")}>
+            <button
+              className="ml-4 px-6 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
+              onClick={() => setMode("edit")}
+            >
               ✏️ Edit Report
             </button>
           </div>
@@ -612,6 +738,7 @@ function ReportEntry({
     </div>
   );
 }
+
 
 /* ========================================================================== */
 /* App                                                                         */
@@ -797,16 +924,18 @@ function App() {
       <div className="p-4 font-serif text-[12pt]">
         {/* Report Entry */}
         {menu === "entry" && (
-          <ReportEntry
-            user={user}
-            initialAnswers={answers}
-            initialEyeBank={eyeBank}
-            initialVisionCenter={visionCenter}
-            initialMonth={month}
-            initialYear={year}
-            disabled={user?.isGuest}
-          />
-        )}
+  <ReportEntry
+    user={user}
+    initialAnswers={answers}
+    initialEyeBank={eyeBank}
+    initialVisionCenter={visionCenter}
+    initialMonth={month}
+    initialYear={year}
+    disabled={user?.isGuest}
+    onOpenExisting={(rep) => { setCurrent(rep); setMenu("view"); }} // <-- add this
+  />
+)}
+
 
         {/* View / Edit */}
         {menu === "view" && (

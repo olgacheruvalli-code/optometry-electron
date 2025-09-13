@@ -49,7 +49,9 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     sub: [
       { key: "blind-register", label: "Blind Register" },
       { key: "cataract-backlog", label: "Cataract Backlog" },
-      { key: "vc-issues", label: "Vision Center Related Issues" },
+      { key: "old aged-spectacles", label: "Old aged Spectacles" },
+      { key: "school children-spectacles", label: "School Children Spectacles" },
+      { key: "vc-issues", label: "Vision Center status" },
     ],
   });
 
