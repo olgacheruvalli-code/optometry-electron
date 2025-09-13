@@ -122,29 +122,131 @@ const normalizeTextNameFields = (rows) =>
 /* ViewReports                                                                 */
 /* ========================================================================== */
 function ViewReports({ reportData, month, year }) {
-  const [doc, setDoc] = useState(reportData);
+  const [doc, setDoc] = useState(reportData || null);
   const [hydrating, setHydrating] = useState(false);
-  const flatRows = useMemo(() => buildFlatRows(sections), []);
-  const id = reportData?._id || reportData?.id;
+  const [errText, setErrText] = useState("");
 
+  const flatRows = useMemo(() => buildFlatRows(sections), []);
+
+  // helpers
+  const norm = (s) => String(s || "").trim().toLowerCase();
+  const eq = (a, b) => norm(a) === norm(b);
+
+  // identity we filter by: always from the selected card/report
+  const baseDistrict = reportData?.district || "";
+  const baseInstitution = reportData?.institution || "";
+
+  /* -------- EXACT selection whenever month/year (or identity) change -------- */
   useEffect(() => {
-    if (!id) return;
+    const hasSel =
+      !!norm(baseDistrict) && !!norm(baseInstitution) && !!norm(month) && String(year);
+
+    // If there's no selection (e.g., initial cards view), keep whatever came in
+    if (!hasSel) {
+      setErrText("");
+      setDoc(reportData || null);
+      return;
+    }
+
     let cancelled = false;
-    (async () => {
+
+    const fetchList = async (url) => {
       try {
-        setHydrating(true);
-        const res = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(id)}`);
-        const data = await res.json().catch(() => ({}));
-        if (!cancelled && res.ok && data && typeof data === "object") {
-          setDoc(data.doc || data);
+        const r = await fetch(url);
+        if (!r.ok) return [];
+        const j = await r.json().catch(() => ({}));
+        return Array.isArray(j) ? j : Array.isArray(j?.docs) ? j.docs : [];
+      } catch {
+        return [];
+      }
+    };
+
+    (async () => {
+      setHydrating(true);
+      setErrText("");
+      setDoc(null); // IMPORTANT: clear stale doc so UI can't show June under July header
+
+      try {
+        // Ask backend for the narrowest set first
+        const q =
+          `district=${encodeURIComponent(baseDistrict)}` +
+          `&institution=${encodeURIComponent(baseInstitution)}` +
+          `&month=${encodeURIComponent(month)}` +
+          `&year=${encodeURIComponent(year)}`;
+
+        let list = await fetchList(`${API_BASE}/api/reports?${q}`);
+        if (!list.length) {
+          // broader fallback (institution only), then filter locally
+          const q2 =
+            `district=${encodeURIComponent(baseDistrict)}` +
+            `&institution=${encodeURIComponent(baseInstitution)}`;
+          list = await fetchList(`${API_BASE}/api/reports?${q2}`);
+          if (!list.length) list = await fetchList(`${API_BASE}/api/reports`);
+        }
+
+        // strict match – NEVER silently fall back to a different month
+        const exact = list.find(
+          (d) =>
+            eq(d?.district, baseDistrict) &&
+            eq(d?.institution, baseInstitution) &&
+            eq(d?.month, month) &&
+            String(d?.year) === String(year)
+        );
+
+        if (cancelled) return;
+
+        if (!exact) {
+          setDoc(null);
+          setErrText(`No report found for ${baseInstitution} — ${month} ${year}.`);
+        } else {
+          setDoc(exact);
+          setErrText("");
         }
       } finally {
         if (!cancelled) setHydrating(false);
       }
     })();
-    return () => { cancelled = true; };
-  }, [id]);
 
+    return () => {
+      cancelled = true;
+    };
+  }, [baseDistrict, baseInstitution, month, year, reportData]);
+
+  /* ---- optional hydration by id; keep only if identity & month/year still match ---- */
+  useEffect(() => {
+    const id = doc?._id || doc?.id;
+    if (!id) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        setHydrating(true);
+        const res = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(id)}`);
+        if (!res.ok) return; // backend may 404; it's fine to skip
+        const data = await res.json().catch(() => ({}));
+        const hydrated = data?.doc || data;
+
+        if (!cancelled && hydrated && typeof hydrated === "object") {
+          if (
+            eq(hydrated?.district, doc?.district) &&
+            eq(hydrated?.institution, doc?.institution) &&
+            eq(hydrated?.month, doc?.month) &&
+            String(hydrated?.year) === String(doc?.year)
+          ) {
+            setDoc(hydrated);
+          }
+        }
+      } finally {
+        if (!cancelled) setHydrating(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [doc?._id, doc?.id]);
+
+  // Pull fields **from the selected doc** so header always matches table content
   const {
     answers: answersRaw = {},
     cumulative: cumulativeFromServer = {},
@@ -165,7 +267,11 @@ function ViewReports({ reportData, month, year }) {
       ? cumulativeFromServer
       : answersRaw;
 
-  if (!reportData) return null;
+  // Header uses the DOC's month/year; falls back to props only if doc missing
+  const headerMonth = doc?.month ?? month;
+  const headerYear = doc?.year ?? year;
+
+  if (!reportData && !doc) return null;
 
   return (
     <div className="a4-wrapper text-[12pt] font-serif">
@@ -177,16 +283,17 @@ function ViewReports({ reportData, month, year }) {
       </div>
 
       <div className="mb-4">
-        <p><strong>District:</strong> {district}</p>
-        <p><strong>Institution:</strong> {institution}</p>
+        <p><strong>District:</strong> {district || reportData?.district || ""}</p>
+        <p><strong>Institution:</strong> {institution || reportData?.institution || ""}</p>
         <p>
-          <strong>Month:</strong> {month} {year}
+          <strong>Month:</strong> {headerMonth} {headerYear}
           {updatedAt ? (
             <span className="ml-2 text-gray-500 no-print">
               (updated {new Date(updatedAt).toLocaleString()})
             </span>
           ) : null}
         </p>
+        {errText && <p className="text-red-600 text-sm mt-1">{errText}</p>}
       </div>
 
       {hydrating && (
@@ -195,82 +302,89 @@ function ViewReports({ reportData, month, year }) {
         </div>
       )}
 
-      <table className="table-auto w-full text-sm border border-black">
-        <thead>
-          <tr>
-            <th className="border p-1 text-left">Description</th>
-            <th className="border p-1 text-right">During the Month</th>
-            <th className="border p-1 text-right">Cumulative</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(() => {
-            let qNumber = 0;
-            return flatRows.map((item, idx) => {
-              if (item.kind === "header") {
-                return (
-                  <tr key={`h-${idx}`}>
-                    <td colSpan={3} className="border p-1 font-bold bg-gray-100">{item.label}</td>
-                  </tr>
-                );
-              }
-              if (item.kind === "subheader") {
-                return (
-                  <tr key={`sh-${idx}`}>
-                    <td colSpan={3} className="border p-1 font-semibold bg-gray-50">{item.label}</td>
-                  </tr>
-                );
-              }
-              if (item.kind === "eyeBankTable") {
-                return (
-                  <tr key={`eb-${idx}`}>
-                    <td colSpan={3} className="border p-1">
-                      <EyeBankTable data={eyeBankData} disabled cumulative />
-                    </td>
-                  </tr>
-                );
-              }
-              if (item.kind === "visionCenterTable") {
-                return (
-                  <tr key={`vc-${idx}`}>
-                    <td colSpan={3} className="border p-1">
-                      <VisionCenterTable data={visionCenterData} disabled cumulative />
-                    </td>
-                  </tr>
-                );
-              }
-              if (item.kind === "q") {
-                qNumber += 1;
-                const key = `q${qNumber}`;
-                const monthVal = Number(answersRaw[key] ?? 0);
-                const cumVal = Number(cumSrc[key] ?? 0);
-                return (
-                  <tr key={`r-${idx}`}>
-                    <td className="border p-1">{item.row.label}</td>
-                    <td className="border p-1 text-right">{monthVal}</td>
-                    <td className="border p-1 text-right">{cumVal}</td>
-                  </tr>
-                );
-              }
-              return null;
-            });
-          })()}
-        </tbody>
-      </table>
+      {!doc ? null : (
+        <table className="table-auto w-full text-sm border border-black">
+          <thead>
+            <tr>
+              <th className="border p-1 text-left">Description</th>
+              <th className="border p-1 text-right">During the Month</th>
+              <th className="border p-1 text-right">Cumulative</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(() => {
+              let qNumber = 0;
+              return flatRows.map((item, idx) => {
+                if (item.kind === "header") {
+                  return (
+                    <tr key={`h-${idx}`}>
+                      <td colSpan={3} className="border p-1 font-bold bg-gray-100">{item.label}</td>
+                    </tr>
+                  );
+                }
+                if (item.kind === "subheader") {
+                  return (
+                    <tr key={`sh-${idx}`}>
+                      <td colSpan={3} className="border p-1 font-semibold bg-gray-50">{item.label}</td>
+                    </tr>
+                  );
+                }
+                if (item.kind === "eyeBankTable") {
+                  return (
+                    <tr key={`eb-${idx}`}>
+                      <td colSpan={3} className="border p-1">
+                        <EyeBankTable data={eyeBankData} disabled cumulative />
+                      </td>
+                    </tr>
+                  );
+                }
+                if (item.kind === "visionCenterTable") {
+                  return (
+                    <tr key={`vc-${idx}`}>
+                      <td colSpan={3} className="border p-1">
+                        <VisionCenterTable data={visionCenterData} disabled cumulative />
+                      </td>
+                    </tr>
+                  );
+                }
+                if (item.kind === "q") {
+                  qNumber += 1;
+                  const key = `q${qNumber}`;
+                  const monthVal = Number(answersRaw[key] ?? 0);
+                  const cumVal  = Number(cumSrc[key] ?? 0);
+                  return (
+                    <tr key={`r-${idx}`}>
+                      <td className="border p-1">{item.row.label}</td>
+                      <td className="border p-1 text-right">{monthVal}</td>
+                      <td className="border p-1 text-right">{cumVal}</td>
+                    </tr>
+                  );
+                }
+                return null;
+              });
+            })()}
+          </tbody>
+        </table>
+      )}
 
-      <div className="flex justify-between mt-8">
-        <div>
-          Signature of Senior Optometrist / Optometrist
-          <br />.........................................
+      {doc && (
+        <div className="flex justify-between mt-8">
+          <div>
+            Signature of Senior Optometrist / Optometrist
+            <br />.........................................
+          </div>
+          <div>
+            Signature of Superintendent / Medical Officer
+            <br />.........................................
+          </div>
         </div>
-        <div>
-          Signature of Superintendent / Medical Officer
-          <br />.........................................
-        </div>
-      </div>
+      )}
     </div>
   );
 }
+
+
+
 
 /* -------------------------------------------------------------------------- */
 /* ReportEntry                                                                 */
@@ -589,7 +703,7 @@ function App() {
     if (window.__FORCE_VIEW__) { window.__FORCE_VIEW__ = false; setMenu("view"); }
   }, []);
 
-  // Auto-select current user's latest report for month/year (non-DOC)
+  // Auto-select current user's report for chosen month/year (non-DOC)
   useEffect(() => {
     if (!(menu === "view" || menu === "print")) return;
     if (!month || !year) { setCurrent(null); return; }
@@ -708,6 +822,7 @@ function App() {
               </select>
             </div>
 
+            {/* Reports list & selection */}
             <ReportsList
               filterMonth={month}
               filterYear={year}
@@ -716,14 +831,21 @@ function App() {
               onSelect={(report) => setCurrent(report || null)}
             />
 
+            {/* Selection status */}
             <div className="text-center mt-4 text-sm text-black no-print">
               {currentReport
                 ? `✅ Selected: ${currentReport.institution}, ${currentReport.month} ${currentReport.year}`
                 : "❌ No report selected"}
             </div>
 
+            {/* Single detail view — keyed so it remounts on selection change */}
             {currentReport && (
-              <ViewReports reportData={currentReport} month={currentReport.month} year={currentReport.year} />
+              <ViewReports
+                key={`${currentReport.district}|${currentReport.institution}|${currentReport.month}|${currentReport.year}`}
+                reportData={currentReport}
+                month={currentReport.month}
+                year={currentReport.year}
+              />
             )}
           </div>
         )}
@@ -828,7 +950,12 @@ function App() {
                 <button className="no-print mb-4 px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700" onClick={handlePrintA4}>
                   🖨️ Print (A4 portrait)
                 </button>
-                <ViewReports reportData={currentReport} month={currentReport.month} year={currentReport.year} />
+                <ViewReports
+                  key={`${currentReport.district}|${currentReport.institution}|${currentReport.month}|${currentReport.year}`}
+                  reportData={currentReport}
+                  month={currentReport.month}
+                  year={currentReport.year}
+                />
               </>
             )}
 
@@ -864,7 +991,6 @@ function App() {
             <EditReport user={user} />
           </EditGate>
         )}
-
       </div>
     </div>
   );
