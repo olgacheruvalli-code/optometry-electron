@@ -1,6 +1,5 @@
 // src/App.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { startFlute, stopFlute } from "./utils/sound";
 import API_BASE from "./apiBase";
 import sections from "./data/questions";
 import { districtInstitutions } from "./data/districtInstitutions";
@@ -14,7 +13,7 @@ import MenuBar from "./components/MenuBar";
 import ReportsList from "./components/ReportsList";
 import ViewInstitutionWiseReport from "./components/ViewInstitutionWiseReport";
 import ViewDistrictTables from "./components/ViewDistrictTables";
-import { startFlute, pauseFlute, stopFlute } from "./utils/audio";
+import { startFlute, pauseFlute, stopFlute } from "./utils/sound";
 import EditReport from "./components/EditReport";
 import ConnectedLinks from "./components/ConnectedLinks";
 import Register from "./components/Register";
