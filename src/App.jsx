@@ -4,7 +4,6 @@ import API_BASE from "./apiBase";
 import sections from "./data/questions";
 import { districtInstitutions } from "./data/districtInstitutions";
 import "./index.css";
-
 import MonthYearSelector from "./components/MonthYearSelector";
 import EyeBankTable from "./components/EyeBankTable";
 import VisionCenterTable from "./components/VisionCenterTable.jsx";
@@ -923,23 +922,25 @@ function App() {
       )}
 
       <div className="p-4 font-serif text-[12pt]">
+
         {/* Report Entry */}
         {menu === "entry" && (
-  <ReportEntry
-    user={user}
-    initialAnswers={answers}
-    initialEyeBank={eyeBank}
-    initialVisionCenter={visionCenter}
-    initialMonth={month}
-    initialYear={year}
-    disabled={user?.isGuest}
-    onOpenExisting={(rep) => { setCurrent(rep); setMenu("view"); }} // <-- add this
-  />
-)}
-{menu === "connected-links" && (
-  <ConnectedLinks user={user} />
-)}
+          <ReportEntry
+            user={user}
+            initialAnswers={answers}
+            initialEyeBank={eyeBank}
+            initialVisionCenter={visionCenter}
+            initialMonth={month}
+            initialYear={year}
+            disabled={user?.isGuest}
+            onOpenExisting={(rep) => { setCurrent(rep); setMenu("view"); }}
+          />
+        )}
 
+        {/* Connected Links (accepts connected-links or connected-links:<Tab Label>) */}
+        {menu?.startsWith?.("connected-links") && (
+          <ConnectedLinks user={user} initialTab={menu.split(":")[1] || ""} />
+        )}
 
         {/* View / Edit */}
         {menu === "view" && (
