@@ -1,13 +1,11 @@
 import React, { useMemo, useState } from "react";
 import LINKS_CONFIG, { SUBMENUS } from "../data/connectedLinks";
 
-export default function ConnectedLinks({ user }) {
+export default function ConnectedLinks({ user, initialTab = "" }) {
   const district = String(user?.district || "").trim();
   const institution = String(user?.institution || "").trim();
 
-  // Allow only Optometrists (block DOC / DC)
-  const isDocOrDc = /^doc\s/i.test(institution) || /^dc\s/i.test(institution) || user?.isDoc === true;
-  const isOptometrist = !isDocOrDc;
+  // Everyone can access now (DOC/DC included)
 
   const districtLinks = LINKS_CONFIG[district] || {};
 
@@ -19,7 +17,11 @@ export default function ConnectedLinks({ user }) {
     );
   }, [districtLinks]);
 
-  const firstCat = categories[0] || null;
+  const firstCat =
+    initialTab && categories.includes(initialTab)
+      ? initialTab
+      : categories[0] || null;
+
   const [active, setActive] = useState(firstCat);
 
   const normalizeItems = (value) => {
@@ -34,19 +36,6 @@ export default function ConnectedLinks({ user }) {
     }
     return [];
   };
-
-  if (!isOptometrist) {
-    return (
-      <div className="max-w-3xl mx-auto p-6 bg-white rounded-xl shadow font-serif">
-        <div className="text-lg font-semibold text-red-700">
-          Connected Links are available only to Optometrists.
-        </div>
-        <div className="text-sm text-gray-600 mt-1">
-          Your account ({institution || "Unknown Institution"}) does not have access.
-        </div>
-      </div>
-    );
-  }
 
   if (!district || categories.length === 0) {
     return (
@@ -119,7 +108,7 @@ export default function ConnectedLinks({ user }) {
       )}
 
       <div className="mt-6 text-xs text-gray-500">
-        Note: Client-side visibility is based on your district. For sensitive links, also restrict access in Google sharing and/or serve links from the backend per user.
+        Tip: also restrict access on the Google Sheets themselves if needed.
       </div>
     </div>
   );
