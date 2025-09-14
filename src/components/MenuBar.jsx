@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 export default function MenuBar({ onMenu, onLogout, active, user }) {
-  // Treat DOC/DC as coordinators
+  // Treat DOC/DC as coordinators for district menus
   const isCoordinator = /^doc\s|^dc\s/i.test(String(user?.institution || ""));
 
   const [open, setOpen] = useState(null);
@@ -45,7 +45,7 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     });
   }
 
-  // Connected Links
+  // Connected Links (visible to everyone; routes as connected-links:<Label>)
   items.push({
     key: "connected-links",
     label: "Connected Links",
@@ -57,7 +57,7 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     ],
   });
 
-  // NEW: Research / Deep Study (menu + submenus only)
+  // NEW: Research / Deep Study (visible to everyone; routes as research:<Label>)
   items.push({
     key: "research",
     label: "Research / Deep Study",
@@ -77,7 +77,7 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     if (groupKey === "connected-links") {
       onMenu?.(`connected-links:${subItem.label}`);
     } else if (groupKey === "research") {
-      onMenu?.(`research:${subItem.label}`); // route with label
+      onMenu?.(`research:${subItem.label}`);
     } else {
       onMenu?.(subItem.key);
     }
