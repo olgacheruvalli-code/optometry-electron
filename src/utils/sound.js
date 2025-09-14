@@ -3,7 +3,7 @@ let audio;
 
 function ensureFlute() {
   if (!audio) {
-    audio = new Audio();
+    audio = new Audio("/audio/flute.mp3?v=20250914-kkd1");
     audio.src = "/audio/flute.mp3";   // <— file at public/audio/flute.mp3
     audio.loop = true;
     audio.preload = "auto";
