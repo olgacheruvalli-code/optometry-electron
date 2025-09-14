@@ -1,5 +1,6 @@
 // src/App.jsx
 import React, { useEffect, useMemo, useState } from "react";
+import { startFlute, stopFlute } from "./utils/sound";
 import API_BASE from "./apiBase";
 import sections from "./data/questions";
 import { districtInstitutions } from "./data/districtInstitutions";
@@ -13,6 +14,7 @@ import MenuBar from "./components/MenuBar";
 import ReportsList from "./components/ReportsList";
 import ViewInstitutionWiseReport from "./components/ViewInstitutionWiseReport";
 import ViewDistrictTables from "./components/ViewDistrictTables";
+import { startFlute, pauseFlute, stopFlute } from "./utils/audio";
 import EditReport from "./components/EditReport";
 import ConnectedLinks from "./components/ConnectedLinks";
 import Register from "./components/Register";
@@ -405,7 +407,9 @@ function ReportEntry({
   const eyeBankSection = sections.find((s) => (s.title || "").toUpperCase().includes("EYE BANK"));
   const eyeBankRowsDef = getQs(eyeBankSection);
   const [eyeBank, setEyeBank] = useState(
-    initialEyeBank.length ? initialEyeBank : (eyeBankRowsDef.length ? eyeBankRowsDef.map(() => ({})) : [{}, {}])
+    initialEyeBank.length
+      ? initialEyeBank
+      : (eyeBankRowsDef.length ? eyeBankRowsDef.map(() => ({})) : [{}, {}])
   );
 
   // Vision Center table state (fallback rows)
@@ -430,6 +434,12 @@ function ReportEntry({
   const [mode, setMode] = useState("edit");
   const [locked, setLocked] = useState(false);
 
+  // Auto-play flute while in Report Entry; stop on exit
+  useEffect(() => {
+    startFlute();            // user clicked into Report Entry, counts as a gesture
+    return () => stopFlute();
+  }, []);
+
   // ---------- Prevent duplicate report for same Institution+District+Month+Year ----------
   const [existingForPeriod, setExistingForPeriod] = useState(null);
   const [checkingExisting, setCheckingExisting] = useState(false);
@@ -440,7 +450,7 @@ function ReportEntry({
   const district = String(user?.district || "").trim();
   const institution = String(user?.institution || "").trim();
 
-  // Your original DOC detection:
+  // DOC detection
   const isDoc = user?.institution?.startsWith("DOC ");
 
   useEffect(() => {
@@ -500,7 +510,7 @@ function ReportEntry({
     return () => { cancelled = true; };
   }, [district, institution, month, year, isDoc]);
 
-  const canSave = !!month && !!year && !existingForPeriod; // block when duplicate exists
+  const canSave = !!month && !!year && !existingForPeriod; // (kept for clarity)
 
   // renamed to avoid shadowing window.confirm
   const handleSubmitSave = async () => {
@@ -561,6 +571,7 @@ function ReportEntry({
         return;
       }
       setLocked(true);
+      stopFlute(); // stop after successful submit
       alert(`✅ Saved for ${user.institution}, ${user.district}`);
     } catch (err) {
       console.error("Save error:", err);

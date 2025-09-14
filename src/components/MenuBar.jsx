@@ -57,7 +57,7 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     ],
   });
 
-  // NEW: Research / Deep Study (visible to everyone; routes as research:<Label>)
+  // Research / Deep Study (visible to everyone; routes as research:<Label>)
   items.push({
     key: "research",
     label: "Research / Deep Study",
@@ -90,8 +90,12 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
         <h1 className="text-2xl font-bold tracking-wide uppercase">OPTOMETRY</h1>
         <div className="flex items-center gap-4">
           <div className="text-right text-sm leading-tight">
-            <div>District: <b>{user?.district}</b></div>
-            <div>Institution: <b>{user?.institution}</b></div>
+            <div>
+              District: <b>{user?.district}</b>
+            </div>
+            <div>
+              Institution: <b>{user?.institution}</b>
+            </div>
           </div>
           <div className="w-9 h-9 bg-[#3b6e8f] rounded-full" />
           <button
@@ -111,8 +115,9 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
               <div key={it.key} className="relative" ref={(el) => (refs.current[it.key] = el)}>
                 <button
                   onClick={() => setOpen(open === it.key ? null : it.key)}
-                  className={`px-4 py-2 rounded-md flex items-center gap-2 font-semibold transition
-                    ${parentActive(it) ? "bg-[#2f5a70]" : "hover:bg-[#2f5a70]"}`}
+                  className={`px-4 py-2 rounded-md flex items-center gap-2 font-semibold transition ${
+                    parentActive(it) ? "bg-[#2f5a70]" : "hover:bg-[#2f5a70]"
+                  }`}
                 >
                   {it.label} <ChevronDown className="w-4 h-4" />
                 </button>
@@ -122,14 +127,13 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
                       <button
                         key={s.key}
                         onClick={() => handleSubClick(it.key, s)}
-                        className={`block w-full text-left px-6 py-2 hover:bg-[#2f5a70] whitespace-nowrap
-                          ${
-                            active === s.key ||
-                            (active?.startsWith?.("connected-links") && it.key === "connected-links") ||
-                            (active?.startsWith?.("research") && it.key === "research")
-                              ? "bg-[#2f5a70]"
-                              : ""
-                          }`}
+                        className={`block w-full text-left px-6 py-2 hover:bg-[#2f5a70] whitespace-nowrap ${
+                          active === s.key ||
+                          (active?.startsWith?.("connected-links") && it.key === "connected-links") ||
+                          (active?.startsWith?.("research") && it.key === "research")
+                            ? "bg-[#2f5a70]"
+                            : ""
+                        }`}
                       >
                         {s.label}
                       </button>
@@ -141,8 +145,9 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
               <button
                 key={it.key}
                 onClick={() => (it.onClick ? it.onClick() : onMenu?.(it.key))}
-                className={`px-4 py-2 rounded-md font-semibold transition
-                  ${active === it.key ? "bg-[#2f5a70]" : "hover:bg-[#2f5a70]"}`}
+                className={`px-4 py-2 rounded-md font-semibold transition ${
+                  active === it.key ? "bg-[#2f5a70]" : "hover:bg-[#2f5a70]"
+                }`}
               >
                 {it.label}
               </button>
