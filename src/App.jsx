@@ -942,6 +942,17 @@ function App() {
           <ConnectedLinks user={user} initialTab={menu.split(":")[1] || ""} />
         )}
 
+        {/* NEW — Research / Deep Study (menu or research:<Tab Label>) */}
+        {menu?.startsWith?.("research") && (
+          <div className="max-w-3xl mx-auto p-6 bg-white rounded-xl shadow font-serif">
+            <h2 className="text-2xl font-bold text-[#134074] mb-2">Research / Deep Study</h2>
+            <div className="text-[#016eaa] mb-4">
+              Section: <b>{menu.split(":")[1] || "—"}</b>
+            </div>
+            <div className="text-gray-700">Coming soon.</div>
+          </div>
+        )}
+
         {/* View / Edit */}
         {menu === "view" && (
           <div className="p-4 font-serif text-[12pt]">

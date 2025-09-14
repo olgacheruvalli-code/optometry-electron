@@ -3,11 +3,11 @@ import React, { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 export default function MenuBar({ onMenu, onLogout, active, user }) {
-  // Treat DOC/DC as coordinators (cannot use View/Edit in the same way)
+  // Treat DOC/DC as coordinators
   const isCoordinator = /^doc\s|^dc\s/i.test(String(user?.institution || ""));
 
-  const [open, setOpen] = useState(null); // which dropdown is open
-  const refs = useRef({});               // refs for outside-click close
+  const [open, setOpen] = useState(null);
+  const refs = useRef({});
 
   useEffect(() => {
     const onClick = (e) => {
@@ -18,7 +18,6 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
-  // Base-level items
   const items = [
     { key: "entry", label: "Report Entry" },
     ...(!isCoordinator ? [{ key: "view", label: "View/Edit Reports" }] : []),
@@ -27,7 +26,6 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     { key: "edit", label: "Edit Report" },
   ];
 
-  // District group (for coordinators)
   if (isCoordinator) {
     items.push({
       key: "district",
@@ -47,7 +45,7 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     });
   }
 
-  // Connected Links group (always shown; the page itself restricts to optometrists)
+  // Connected Links
   items.push({
     key: "connected-links",
     label: "Connected Links",
@@ -56,19 +54,30 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
       { key: "cataract-backlog", label: "Cataract Backlog" },
       { key: "old-aged-spectacles", label: "Old aged Spectacles" },
       { key: "school-children-spectacles", label: "School Children Spectacles" },
-      // You can add more later; page will show "No links configured" until you add URLs.
     ],
   });
 
-  // Highlight parent if any of its subitems is active, or if active starts with the parent key
+  // NEW: Research / Deep Study (menu + submenus only)
+  items.push({
+    key: "research",
+    label: "Research / Deep Study",
+    sub: [
+      { key: "research-ssa", label: "School Screening Analysis" },
+      { key: "research-vt", label: "Vision Therapy" },
+      { key: "research-dr", label: "Diabetic Retinopathy" },
+      { key: "research-glaucoma", label: "Glaucoma" },
+    ],
+  });
+
   const parentActive = (it) =>
     it.sub && (active?.startsWith?.(it.key) || it.sub.some((s) => s.key === active));
 
-  // Handle submenu click (special-case connected-links to pass the tab label)
   const handleSubClick = (groupKey, subItem) => {
     setOpen(null);
     if (groupKey === "connected-links") {
       onMenu?.(`connected-links:${subItem.label}`);
+    } else if (groupKey === "research") {
+      onMenu?.(`research:${subItem.label}`); // route with label
     } else {
       onMenu?.(subItem.key);
     }
@@ -81,12 +90,8 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
         <h1 className="text-2xl font-bold tracking-wide uppercase">OPTOMETRY</h1>
         <div className="flex items-center gap-4">
           <div className="text-right text-sm leading-tight">
-            <div>
-              District: <b>{user?.district}</b>
-            </div>
-            <div>
-              Institution: <b>{user?.institution}</b>
-            </div>
+            <div>District: <b>{user?.district}</b></div>
+            <div>Institution: <b>{user?.institution}</b></div>
           </div>
           <div className="w-9 h-9 bg-[#3b6e8f] rounded-full" />
           <button
@@ -120,7 +125,8 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
                         className={`block w-full text-left px-6 py-2 hover:bg-[#2f5a70] whitespace-nowrap
                           ${
                             active === s.key ||
-                            (active?.startsWith?.("connected-links") && it.key === "connected-links")
+                            (active?.startsWith?.("connected-links") && it.key === "connected-links") ||
+                            (active?.startsWith?.("research") && it.key === "research")
                               ? "bg-[#2f5a70]"
                               : ""
                           }`}
