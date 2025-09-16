@@ -1,80 +1,75 @@
-import React, { useEffect, useState } from "react";
+// src/components/EditGate.jsx
+import React, { useMemo, useState } from "react";
 
-/** ONLY FOR EDIT MENU */
-const EDIT_PASSWORD = "amma@1970";              // shared password
-const STORAGE_KEY   = "edit_gate_ok_v1";        // localStorage key
-const SESSION_MS    = 8 * 60 * 60 * 1000;       // 8 hours
-
-function isSessionValid() {
-  try {
-    const until = parseInt(localStorage.getItem(STORAGE_KEY) || "0", 10);
-    return Number.isFinite(until) && Date.now() < until;
-  } catch { return false; }
-}
-
-export default function EditGate({ children }) {
-  const [unlocked, setUnlocked] = useState(isSessionValid());
-  const [pwd, setPwd] = useState("");
+/**
+ * Gate for the Edit page.
+ * Unlocks with:
+ *  - process.env.REACT_APP_EDIT_PASSWORD (if set at build time), OR
+ *  - "amma1970" (fallback), OR
+ *  - "amma@1970" (legacy fallback)
+ */
+export default function EditGate({ user, children }) {
+  const [pw, setPw] = useState("");
+  const [unlocked, setUnlocked] = useState(() => localStorage.getItem("__edit_unlocked") === "1");
   const [error, setError] = useState("");
 
-  const tryUnlock = (e) => {
-    e?.preventDefault();
-    if (pwd === EDIT_PASSWORD) {
-      localStorage.setItem(STORAGE_KEY, String(Date.now() + SESSION_MS));
+  const ACCEPT = useMemo(() => {
+    const env = (process.env.REACT_APP_EDIT_PASSWORD || "").trim();
+    const list = [env, "amma1970", "amma@1970"]
+      .filter(Boolean)
+      .map((s) => s.normalize("NFKC").trim());
+    return new Set(list);
+  }, []);
+
+  const handleUnlock = (e) => {
+    e.preventDefault();
+    const input = (pw || "").normalize("NFKC").trim();
+    if (ACCEPT.has(input)) {
+      localStorage.setItem("__edit_unlocked", "1");
       setUnlocked(true);
-      setPwd("");
       setError("");
     } else {
-      setError("Wrong password. Please try again.");
+      setError("Wrong password.");
     }
   };
 
-  const lock = () => {
-    localStorage.removeItem(STORAGE_KEY);
+  const handleClear = () => {
+    localStorage.removeItem("__edit_unlocked");
+    setPw("");
     setUnlocked(false);
-    setPwd("");
     setError("");
   };
 
   if (!unlocked) {
     return (
-      <div className="max-w-md mx-auto mt-16 p-6 rounded-xl bg-white shadow font-serif">
-        <h2 className="text-xl font-bold text-[#134074] mb-2">Enter Edit Password</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          Editing is restricted. Enter the shared password to continue.
-        </p>
-        <form onSubmit={tryUnlock} className="space-y-3">
+      <div className="max-w-3xl mx-auto p-6 bg-white rounded-xl shadow font-serif">
+        <h2 className="text-2xl font-bold text-[#134074] mb-4">Edit Saved Report</h2>
+
+        <form onSubmit={handleUnlock} className="flex gap-2 items-center">
           <input
             type="password"
-            className="w-full border rounded px-3 py-2"
-            value={pwd}
-            onChange={(e) => setPwd(e.target.value)}
-            placeholder="Password"
+            className="border rounded px-3 py-2 flex-1"
+            placeholder="Enter Edit Password"
+            value={pw}
+            onChange={(e) => setPw(e.target.value)}
             autoFocus
           />
-          {error && <div className="text-sm text-red-600">{error}</div>}
-          <button
-            type="submit"
-            className="px-4 py-2 rounded bg-[#396b84] text-white hover:bg-[#2f5a70]"
-          >
-            Unlock Edit
+          <button type="submit" className="px-4 py-2 rounded text-white bg-blue-600 hover:bg-blue-700">
+            Unlock
+          </button>
+          <button type="button" className="px-4 py-2 rounded border" onClick={handleClear}>
+            Clear / Change
           </button>
         </form>
+
+        {error && <div className="text-red-600 mt-2">🔒 {error}</div>}
+
+        <div className="text-sm text-gray-500 mt-3">
+          Hint: use the current edit password (env) or <code>amma1970</code>.
+        </div>
       </div>
     );
   }
 
-  return (
-    <div>
-      <div className="no-print mb-4 flex justify-end">
-        <button
-          onClick={lock}
-          className="px-3 py-1.5 rounded border text-sm hover:bg-gray-50"
-        >
-          Lock Edit
-        </button>
-      </div>
-      {children}
-    </div>
-  );
+  return <>{children}</>;
 }
