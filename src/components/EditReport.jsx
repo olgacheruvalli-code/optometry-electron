@@ -1,7 +1,41 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { API_BASE, MONTHS, sections, orderedQuestions } from "../data/schema";
+import API_BASE from "../apiBase";
+import sections from "../data/questions";
 import EyeBankTable from "./EyeBankTable";
 import VisionCenterTable from "./VisionCenterTable";
+import { updateReportById } from "../utils/apiFallback";
+
+/* Local months list for the dropdown */
+const MONTHS = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December"
+];
+
+/* Flatten questions from sections into [{id,label}, ...] */
+function orderedQuestions(allSections) {
+  const out = [];
+  const seen = new Set();
+
+  const pushQs = (arr=[]) => {
+    for (const q of arr) {
+      let id = String(q?.id || q?.key || "").trim();
+      if (!id) continue;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, label: q?.label || q?.title || id });
+    }
+  };
+
+  const walk = (node) => {
+    if (!node) return;
+    if (Array.isArray(node.questions)) pushQs(node.questions);
+    if (Array.isArray(node.rows))      pushQs(node.rows);
+    if (Array.isArray(node.subsections)) node.subsections.forEach(walk);
+  };
+
+  (allSections || []).forEach(walk);
+  return out;
+}
 
 export default function EditReport({ user }) {
   const [district, setDistrict] = useState(user?.district || "");
@@ -27,7 +61,7 @@ export default function EditReport({ user }) {
 
     if (!district || !institution || !month || !year) return;
 
-    const load = async () => {
+    (async () => {
       const qs =
         `district=${encodeURIComponent(district)}` +
         `&institution=${encodeURIComponent(institution)}` +
@@ -37,6 +71,8 @@ export default function EditReport({ user }) {
         const r = await fetch(`${API_BASE}/api/reports?${qs}`);
         const j = await r.json().catch(() => ({}));
         const list = Array.isArray(j?.docs) ? j.docs : Array.isArray(j) ? j : [];
+        // pick the most recently updated if multiple
+        list.sort((a,b) => new Date(b?.updatedAt||b?.createdAt||0) - new Date(a?.updatedAt||a?.createdAt||0));
         const picked = list[0] || null;
         setReport(picked);
         setAnswers(picked?.answers || {});
@@ -45,8 +81,7 @@ export default function EditReport({ user }) {
       } catch (e) {
         console.error("load report failed", e);
       }
-    };
-    load();
+    })();
   }, [district, institution, month, year]);
 
   const tryUnlock = () => {
@@ -60,19 +95,16 @@ export default function EditReport({ user }) {
     if (!unlocked) return alert("Unlock first.");
     if (!report?._id) return alert("No report loaded.");
     try {
-      const r = await fetch(`${API_BASE}/api/reports/${report._id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          answers,
-          eyeBank,
-          visionCenter,
-          month,
-          year
-        }),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || j?.ok === false) {
+      const payload = {
+        answers,
+        eyeBank,
+        visionCenter,
+        month,
+        year
+      };
+      // robust: tries multiple endpoints under the hood
+      const j = await updateReportById(report._id, payload);
+      if (j?.ok === false) {
         console.error("update failed", j);
         alert(`Failed to update report. ${JSON.stringify(j)}`);
         return;
@@ -167,7 +199,7 @@ export default function EditReport({ user }) {
         </table>
       </div>
 
-      {/* Eye Bank + Vision Center (now visible in Edit) */}
+      {/* Eye Bank + Vision Center */}
       <div className="mb-10">
         <h4 className="text-lg font-bold text-[#017d8a] mb-3">III. EYE BANK PERFORMANCE</h4>
         <EyeBankTable
@@ -195,8 +227,6 @@ export default function EditReport({ user }) {
           Save Changes
         </button>
       </div>
-
-      {/* The long, detailed form is intentionally hidden in Edit to avoid duplicates */}
     </div>
   );
 }
