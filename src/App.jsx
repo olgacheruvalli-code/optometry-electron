@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";nimport CrashCatcher from './components/CrashCatcher';
 import API_BASE from "./apiBase";
 import sections from "./data/questions";
 import { districtInstitutions } from "./data/districtInstitutions";
@@ -636,6 +636,7 @@ function ReportEntry({
               </span>
             </div>
           </div>
+          </CrashCatcher>
         )}
 
         {/* Question Sections */}
@@ -657,7 +658,8 @@ function ReportEntry({
                   </div>
                 ))}
               </div>
-            )}
+              </CrashCatcher>
+        )}
 
             {/* subsections */}
             {Array.isArray(s.subsections) && s.subsections.map((sub) => (
@@ -726,6 +728,7 @@ function ReportEntry({
               Save All
             </button>
           </div>
+          </CrashCatcher>
         )}
 
         {mode === "confirm" && (
@@ -743,6 +746,7 @@ function ReportEntry({
               ✏️ Edit Report
             </button>
           </div>
+          </CrashCatcher>
         )}
       </div>
     </div>
@@ -945,11 +949,13 @@ function App() {
             disabled={user?.isGuest}
             onOpenExisting={(rep) => { setCurrent(rep); setMenu("view"); }}
           />
+          </CrashCatcher>
         )}
 
         {/* Connected Links (accepts connected-links or connected-links:<Tab Label>) */}
         {menu?.startsWith?.("connected-links") && (
           <ConnectedLinks user={user} initialTab={menu.split(":")[1] || ""} />
+          </CrashCatcher>
         )}
 
         {/* NEW — Research / Deep Study (menu or research:<Tab Label>) */}
@@ -961,6 +967,7 @@ function App() {
             </div>
             <div className="text-gray-700">Coming soon.</div>
           </div>
+          </CrashCatcher>
         )}
 
         {/* View / Edit */}
@@ -1001,8 +1008,10 @@ function App() {
                 month={currentReport.month}
                 year={currentReport.year}
               />
-            )}
+              </CrashCatcher>
+        )}
           </div>
+          </CrashCatcher>
         )}
 
         {/* District → Institution-wise (table) */}
@@ -1035,7 +1044,8 @@ function App() {
                   ⬇️ Eye Bank & Vision Center
                 </button>
               </div>
-            )}
+              </CrashCatcher>
+        )}
             {month && year ? (
               <ViewInstitutionWiseReport
                 questions={qDefs.map((q) => q.label)}
@@ -1049,8 +1059,10 @@ function App() {
               <div className="text-center text-gray-600 mt-6 no-print">
                 Please select both <b>Month</b> and <b>Year</b> to view institution-wise report.
               </div>
-            )}
+              </CrashCatcher>
+        )}
           </>
+          </CrashCatcher>
         )}
 
         {/* Submenus */}
@@ -1061,6 +1073,7 @@ function App() {
               Select month & year, then click download from the District Institutions tab.
             </div>
           </>
+          </CrashCatcher>
         )}
 
         {menu === "district-dl-ebvc" && (
@@ -1070,6 +1083,7 @@ function App() {
               Select month & year, then click download.
             </div>
           </>
+          </CrashCatcher>
         )}
 
         {/* District Summary Tables */}
@@ -1082,8 +1096,10 @@ function App() {
               <div className="text-center text-gray-600 mt-6 no-print">
                 Please select both <b>Month</b> and <b>Year</b> to view district tables.
               </div>
-            )}
+              </CrashCatcher>
+        )}
           </>
+          </CrashCatcher>
         )}
 
         {/* PRINT */}
@@ -1112,13 +1128,15 @@ function App() {
                   year={currentReport.year}
                 />
               </>
-            )}
+              </CrashCatcher>
+        )}
 
             {userRole !== "DOC" && !currentReport && (
               <div className="text-center text-gray-600 mt-6 no-print">
                 Pick Month & Year to load your report, then print.
               </div>
-            )}
+              </CrashCatcher>
+        )}
 
             {userRole === "DOC" && (
               <>
@@ -1135,16 +1153,21 @@ function App() {
                   <div className="text-center text-gray-600 mt-6 no-print">
                     Please select both <b>Month</b> and <b>Year</b>.
                   </div>
-                )}
+                  </CrashCatcher>
+        )}
               </>
-            )}
+              </CrashCatcher>
+        )}
           </>
+          </CrashCatcher>
         )}
 
         {menu === "edit" && (
+          <CrashCatcher>
           <EditGate user={user}>
             <EditReport user={user} />
           </EditGate>
+          </CrashCatcher>
         )}
       </div>
     </div>
