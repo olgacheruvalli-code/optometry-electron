@@ -1,6 +1,5 @@
 // src/App.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import  CrashCatcher from './components/CrashCatcher';
 import API_BASE from "./apiBase";
 import sections from "./data/questions";
 import { districtInstitutions } from "./data/districtInstitutions";
@@ -1164,7 +1163,6 @@ function App() {
         )}
 
         {menu === "edit" && (
-          <CrashCatcher>
           <EditGate user={user}>
             <EditReport user={user} />
           </EditGate>
