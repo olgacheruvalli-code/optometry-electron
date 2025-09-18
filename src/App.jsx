@@ -39,12 +39,13 @@ function buildFlatRows(secs) {
     if (typeof sec.title === "string") out.push({ kind: "header", label: sec.title });
 
     // direct questions in this section (skip Vision Center table rows)
-  const titleLower = String(sec.title || "").toLowerCase();
-  const isVisionCenter = sec.table && titleLower.includes("vision center");
-  if (!isVisionCenter) {
-    for (const q of getQs(sec)) out.push({ kind: "q", row: q });
-  }
-  // subsections
+    const titleLower = String(sec.title || "").toLowerCase();
+    const isVisionCenter = sec.table && titleLower.includes("vision center");
+    if (!isVisionCenter) {
+      for (const q of getQs(sec)) out.push({ kind: "q", row: q });
+    }
+
+    // subsections
     if (Array.isArray(sec.subsections)) {
       for (const sub of sec.subsections) {
         if (sub.title) out.push({ kind: "subheader", label: sub.title });
@@ -165,7 +166,7 @@ function ViewReports({ reportData, month, year }) {
     (async () => {
       setHydrating(true);
       setErrText("");
-      setDoc(null); // IMPORTANT: clear stale doc so UI can't show June under July header
+      setDoc(null); // clear stale doc so UI can't show June under July header
 
       try {
         // Ask backend for the narrowest set first
@@ -384,10 +385,7 @@ function ViewReports({ reportData, month, year }) {
   );
 }
 
-
-
-
-//* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
 /* ReportEntry                                                                 */
 /* -------------------------------------------------------------------------- */
 function ReportEntry({
@@ -435,7 +433,7 @@ function ReportEntry({
 
   // Auto-play flute while in Report Entry; stop on exit
   useEffect(() => {
-    startFlute();            // user clicked into Report Entry, counts as a gesture
+    startFlute();
     return () => stopFlute();
   }, []);
 
@@ -453,7 +451,6 @@ function ReportEntry({
   const isDoc = user?.institution?.startsWith("DOC ");
 
   useEffect(() => {
-    // Only check for optometrists (non-DOC) and when month/year are selected
     if (isDoc) { setExistingForPeriod(null); return; }
     if (!district || !institution || !month || !year) {
       setExistingForPeriod(null);
@@ -484,7 +481,6 @@ function ReportEntry({
 
         let list = await fetchList(`${API_BASE}/api/reports?${q}`);
         if (!list.length) {
-          // broader fallback (institution only) then filter locally
           const q2 =
             `district=${encodeURIComponent(district)}` +
             `&institution=${encodeURIComponent(institution)}`;
@@ -509,16 +505,14 @@ function ReportEntry({
     return () => { cancelled = true; };
   }, [district, institution, month, year, isDoc]);
 
-  const canSave = !!month && !!year && !existingForPeriod; // (kept for clarity)
+  const canSave = !!month && !!year && !existingForPeriod;
 
-  // renamed to avoid shadowing window.confirm
   const handleSubmitSave = async () => {
     if (!month || !year) {
       alert("Please select both Month and Year before saving.");
       return;
     }
     if (!isDoc && existingForPeriod) {
-      // block duplicate for optometrist
       if (onOpenExisting) {
         if (window.confirm(`A report for ${institution} — ${month} ${year} already exists.\nOpen it now?`)) {
           onOpenExisting(existingForPeriod);
@@ -561,7 +555,6 @@ function ReportEntry({
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data?.ok === false) {
         console.error("Save failed:", data);
-        // If backend returns 409 duplicate, surface a friendly message
         if (res.status === 409 || data?.code === "DUPLICATE_MONTH") {
           alert(`❌ A report for ${institution} — ${month} ${year} already exists.`);
           return;
@@ -570,7 +563,7 @@ function ReportEntry({
         return;
       }
       setLocked(true);
-      stopFlute(); // stop after successful submit
+      stopFlute();
       alert(`✅ Saved for ${user.institution}, ${user.district}`);
     } catch (err) {
       console.error("Save error:", err);
@@ -595,7 +588,7 @@ function ReportEntry({
     );
   }
 
-  // Render all sections/questions (accepts .questions or .rows)
+  // Render all sections/questions
   return (
     <div className="a4-wrapper font-serif">
       <div className="p-6 bg-white rounded-xl shadow-lg">
@@ -636,7 +629,6 @@ function ReportEntry({
               </span>
             </div>
           </div>
-          </CrashCatcher>
         )}
 
         {/* Question Sections */}
@@ -658,8 +650,7 @@ function ReportEntry({
                   </div>
                 ))}
               </div>
-              </CrashCatcher>
-        )}
+            )}
 
             {/* subsections */}
             {Array.isArray(s.subsections) && s.subsections.map((sub) => (
@@ -728,7 +719,6 @@ function ReportEntry({
               Save All
             </button>
           </div>
-          </CrashCatcher>
         )}
 
         {mode === "confirm" && (
@@ -746,13 +736,11 @@ function ReportEntry({
               ✏️ Edit Report
             </button>
           </div>
-          </CrashCatcher>
         )}
       </div>
     </div>
   );
 }
-
 
 /* ========================================================================== */
 /* App                                                                         */
@@ -949,13 +937,11 @@ function App() {
             disabled={user?.isGuest}
             onOpenExisting={(rep) => { setCurrent(rep); setMenu("view"); }}
           />
-          </CrashCatcher>
         )}
 
         {/* Connected Links (accepts connected-links or connected-links:<Tab Label>) */}
         {menu?.startsWith?.("connected-links") && (
           <ConnectedLinks user={user} initialTab={menu.split(":")[1] || ""} />
-          </CrashCatcher>
         )}
 
         {/* NEW — Research / Deep Study (menu or research:<Tab Label>) */}
@@ -967,7 +953,6 @@ function App() {
             </div>
             <div className="text-gray-700">Coming soon.</div>
           </div>
-          </CrashCatcher>
         )}
 
         {/* View / Edit */}
@@ -1000,7 +985,7 @@ function App() {
                 : "❌ No report selected"}
             </div>
 
-            {/* Single detail view — keyed so it remounts on selection change */}
+            {/* Single detail view */}
             {currentReport && (
               <ViewReports
                 key={`${currentReport.district}|${currentReport.institution}|${currentReport.month}|${currentReport.year}`}
@@ -1008,10 +993,8 @@ function App() {
                 month={currentReport.month}
                 year={currentReport.year}
               />
-              </CrashCatcher>
-        )}
+            )}
           </div>
-          </CrashCatcher>
         )}
 
         {/* District → Institution-wise (table) */}
@@ -1044,8 +1027,7 @@ function App() {
                   ⬇️ Eye Bank & Vision Center
                 </button>
               </div>
-              </CrashCatcher>
-        )}
+            )}
             {month && year ? (
               <ViewInstitutionWiseReport
                 questions={qDefs.map((q) => q.label)}
@@ -1059,10 +1041,8 @@ function App() {
               <div className="text-center text-gray-600 mt-6 no-print">
                 Please select both <b>Month</b> and <b>Year</b> to view institution-wise report.
               </div>
-              </CrashCatcher>
-        )}
+            )}
           </>
-          </CrashCatcher>
         )}
 
         {/* Submenus */}
@@ -1073,7 +1053,6 @@ function App() {
               Select month & year, then click download from the District Institutions tab.
             </div>
           </>
-          </CrashCatcher>
         )}
 
         {menu === "district-dl-ebvc" && (
@@ -1083,7 +1062,6 @@ function App() {
               Select month & year, then click download.
             </div>
           </>
-          </CrashCatcher>
         )}
 
         {/* District Summary Tables */}
@@ -1096,10 +1074,8 @@ function App() {
               <div className="text-center text-gray-600 mt-6 no-print">
                 Please select both <b>Month</b> and <b>Year</b> to view district tables.
               </div>
-              </CrashCatcher>
-        )}
+            )}
           </>
-          </CrashCatcher>
         )}
 
         {/* PRINT */}
@@ -1128,15 +1104,13 @@ function App() {
                   year={currentReport.year}
                 />
               </>
-              </CrashCatcher>
-        )}
+            )}
 
             {userRole !== "DOC" && !currentReport && (
               <div className="text-center text-gray-600 mt-6 no-print">
                 Pick Month & Year to load your report, then print.
               </div>
-              </CrashCatcher>
-        )}
+            )}
 
             {userRole === "DOC" && (
               <>
@@ -1153,20 +1127,16 @@ function App() {
                   <div className="text-center text-gray-600 mt-6 no-print">
                     Please select both <b>Month</b> and <b>Year</b>.
                   </div>
-                  </CrashCatcher>
-        )}
+                )}
               </>
-              </CrashCatcher>
-        )}
+            )}
           </>
-          </CrashCatcher>
         )}
 
         {menu === "edit" && (
           <EditGate user={user}>
             <EditReport user={user} />
           </EditGate>
-          </CrashCatcher>
         )}
       </div>
     </div>
@@ -1174,3 +1144,4 @@ function App() {
 }
 
 export default App;
+
