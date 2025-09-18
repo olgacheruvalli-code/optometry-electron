@@ -1,5 +1,6 @@
 // src/App.jsx
-import React, { useEffect, useMemo, useState } from "react";nimport CrashCatcher from './components/CrashCatcher';
+import React, { useEffect, useMemo, useState } from "react";
+import  CrashCatcher from './components/CrashCatcher';
 import API_BASE from "./apiBase";
 import sections from "./data/questions";
 import { districtInstitutions } from "./data/districtInstitutions";
