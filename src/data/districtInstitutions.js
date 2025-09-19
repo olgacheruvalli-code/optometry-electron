@@ -36,14 +36,14 @@ const baseInstitutions = {
     "CHC Katampazhipuram", "CHC Chalissery", "District Hospital Palakkad"
   ],
   Malappuram: [
-    "CHC Chungathara", "CHC Edapal", "CHC Kalikavu", "District Hospital Nilambur", "THQH Tirurangadi"
+    "CHC Chungathara", "CHC Edapal", "CHC Kalikavu", "District Hospital Nilambur", "THQH Tirurangadi","CHC Thanur"
   ],
   Kozhikode: [
     "CHC Mukkam", "CHC orkkattery", "CHC Narikkuni", "District Hospital Vadakara", "Taluk Hospital Perambra",
     "CHC ulliery", "General Hospital Kozhikod", "CHC Thalakkulathur","CHC Thiruvallur" ,"CHC Olavanna",
-    "Taluk Hospital Farook", "CHC Cheruvannur", "CHC Thamarassery",
+    "Taluk Hospital Farook", "CHC Cheruvannur", "Taluk Hospital Thamarassery",
     "Taluk Hospital Koyilandy", "CHC Thiruvangoor", "Taluk Hospital Balussery", "PHC Meppayur",
-    "CHC Melady", "CHC Valayam", "Taluk Hospital Kuttiadi","Taluk Hospital Nadapuram","CHC Cheruvadi"
+    "CHC Melady", "CHC Valayam", "Taluk Hospital Kuttiadi","Taluk Hospital Nadapuram","CHC Cheruvadi","MCH Unit Cheroopa"
   ],
   Wayanad: [
     "CHC Meenangdi", "CHC Panamaram", "THQH Sulthan Bathery", "District Hospital Mananthavady"
