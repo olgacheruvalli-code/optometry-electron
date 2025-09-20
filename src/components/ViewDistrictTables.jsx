@@ -16,6 +16,7 @@ function extractRowKeyMatrix(section) {
     return keys;
   });
 }
+
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
 function addRowInto(targetRow, sourceRow, numericOnlyKeys = null) {
@@ -27,6 +28,7 @@ function addRowInto(targetRow, sourceRow, numericOnlyKeys = null) {
     if (n || n === 0) targetRow[k] = num(targetRow[k]) + n;
   }
 }
+
 const fixedLengthArray = (len) => Array.from({ length: len }, () => ({}));
 
 function prettyMetric(k = "") {
@@ -38,6 +40,7 @@ function prettyMetric(k = "") {
   if (/spectacle/i.test(s)) return "No of Spectacles Prescribed";
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
 function metricRank(k = "") {
   const s = String(k).toLowerCase();
   if (s.includes("examined") || /patients/.test(s)) return 1;
@@ -57,21 +60,13 @@ const VC_METRIC_KEYS = [
   "spectacles_prescribed",
 ];
 
-// map month name → number (April cycle)
-const MONTH_NUM = {
-  april: 4, may: 5, june: 6, july: 7, august: 8, september: 9,
-  october: 10, november: 11, december: 12, january: 1, february: 2, march: 3,
-};
-
-const norm = (s) => String(s || "").trim().toLowerCase();
-
 /* ===================================================================== */
 
 export default function ViewDistrictTables({ user, month, year }) {
   const district = user?.district || "";
 
   const eyeBankSection = useMemo(
-    () => sections.find((s) => s?.title?.toLowerCase().includes("eye bank")),
+    () => sections.find((s) => (s?.title || "").toLowerCase().includes("eye bank")),
     []
   );
   const visionCenterSection = useMemo(
@@ -119,23 +114,15 @@ export default function ViewDistrictTables({ user, month, year }) {
     };
 
     const pickStr = (...vals) => {
-      for (const v of vals) if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
+      for (const v of vals)
+        if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
       return "";
     };
     const pickNum = (...vals) => {
-      for (const v of vals) if (v !== undefined && v !== null && String(v) !== "" && Number.isFinite(Number(v))) return Number(v);
+      for (const v of vals)
+        if (v !== undefined && v !== null && String(v) !== "" && Number.isFinite(Number(v)))
+          return Number(v);
       return 0;
-    };
-
-    const monthNumWanted = MONTH_NUM[norm(month)] ?? null;
-
-    const isExactRecord = (d) => {
-      if (norm(d?.district) !== norm(district)) return false;
-      if (String(d?.year) !== String(year)) return false;
-      const byName = norm(d?.month) === norm(month);
-      const mNum = Number(d?.monthNum ?? d?.monthIndex ?? d?.month_number ?? d?.M);
-      const byNum = Number.isFinite(mNum) && monthNumWanted != null ? mNum === monthNumWanted : true;
-      return byName || byNum;
     };
 
     const mapRowToCanonical = (row, i) => {
@@ -145,11 +132,40 @@ export default function ViewDistrictTables({ user, month, year }) {
 
       return {
         name: pickStr(r[ks.nameKey], r[`vc_${idx}_name`], r.name),
-        examined: pickNum(r[ks.examinedKey], r[`vc_${idx}_examined`], r.examined, r.patients_examined, r.patientsExamined),
-        cataract: pickNum(r[ks.cataractKey], r[`vc_${idx}_cataract`], r.cataract, r.cataractDetected, r.cataract_cases),
-        other_diseases: pickNum(r[ks.otherDiseasesKey], r[`vc_${idx}_other_diseases`], r.other_diseases, r.otherDiseases),
-        refractive_errors: pickNum(r[ks.refractiveErrorsKey], r[`vc_${idx}_refractive_errors`], r.refractive_errors, r.refractive_error, r.refraction),
-        spectacles_prescribed: pickNum(r[ks.spectaclesPrescribedKey], r[`vc_${idx}_spectacles_prescribed`], r.spectacles_prescribed, r.spectacle_prescribed, r.spectacles),
+        examined: pickNum(
+          r[ks.examinedKey],
+          r[`vc_${idx}_examined`],
+          r.examined,
+          r.patients_examined,
+          r.patientsExamined
+        ),
+        cataract: pickNum(
+          r[ks.cataractKey],
+          r[`vc_${idx}_cataract`],
+          r.cataract,
+          r.cataractDetected,
+          r.cataract_cases
+        ),
+        other_diseases: pickNum(
+          r[ks.otherDiseasesKey],
+          r[`vc_${idx}_other_diseases`],
+          r.other_diseases,
+          r.otherDiseases
+        ),
+        refractive_errors: pickNum(
+          r[ks.refractiveErrorsKey],
+          r[`vc_${idx}_refractive_errors`],
+          r.refractive_errors,
+          r.refractive_error,
+          r.refraction
+        ),
+        spectacles_prescribed: pickNum(
+          r[ks.spectaclesPrescribedKey],
+          r[`vc_${idx}_spectacles_prescribed`],
+          r.spectacles_prescribed,
+          r.spectacle_prescribed,
+          r.spectacles
+        ),
         __raw: r,
       };
     };
@@ -158,29 +174,42 @@ export default function ViewDistrictTables({ user, month, year }) {
       setLoading(true);
       setErrText("");
       try {
+        // 1) Query for exact month/year for the district
         const q =
           `district=${encodeURIComponent(district)}` +
           `&month=${encodeURIComponent(month)}` +
-          `&year=${encodeURIComponent(year)}` +
-          `&strict=1`;
+          `&year=${encodeURIComponent(year)}`;
         let list = await fetchList(`${API_BASE}/api/reports?${q}`);
+
+        // 2) If nothing comes back, optionally broaden by district only
+        //    (we will still STRICTLY filter to month/year below).
         if (!list.length) {
-          const q2 = `district=${encodeURIComponent(district)}&year=${encodeURIComponent(year)}`;
+          const q2 = `district=${encodeURIComponent(district)}`;
           list = await fetchList(`${API_BASE}/api/reports?${q2}`);
         }
 
-        const source = list.filter(isExactRecord);
+        // 3) STRICT filter — never use data from other months/years
+        const filtered = list.filter(
+          (d) =>
+            String(d?.district || "").trim().toLowerCase() ===
+              String(district).trim().toLowerCase() &&
+            String(d?.month || "").trim().toLowerCase() ===
+              String(month).trim().toLowerCase() &&
+            String(d?.year || "") === String(year)
+        );
 
-        if (!source.length) {
-          setEbTotals(fixedLengthArray((eyeBankSection?.rows || []).length));
-          setVcRows([]);
-          setErrText(`No reports found for ${district} — ${month} ${year}.`);
+        if (!filtered.length) {
+          if (!cancelled) {
+            setEbTotals(fixedLengthArray((eyeBankSection?.rows || []).length));
+            setVcRows([]);
+            setErrText(`No district reports for ${month} ${year}.`);
+          }
           return;
         }
 
         /* Eye Bank totals */
         const ebOut = fixedLengthArray((eyeBankSection?.rows || []).length);
-        source.forEach((rep) => {
+        filtered.forEach((rep) => {
           const eb = rep?.eyeBank || rep?.eyebank || rep?.eye_bank || [];
           for (let i = 0; i < ebOut.length; i++) {
             const srcRow = eb[i];
@@ -191,7 +220,7 @@ export default function ViewDistrictTables({ user, month, year }) {
 
         /* Vision Centre rows */
         const vcOut = [];
-        source.forEach((rep) => {
+        filtered.forEach((rep) => {
           const instName = String(rep?.institution || "").trim();
 
           let vc =
@@ -201,6 +230,7 @@ export default function ViewDistrictTables({ user, month, year }) {
             rep?.visioncentre ||
             [];
 
+          // Rebuild from answers if array missing
           if (!Array.isArray(vc) || !vc.length) {
             const a = rep?.answers || {};
             const rebuilt = [];
@@ -213,8 +243,12 @@ export default function ViewDistrictTables({ user, month, year }) {
                 [`vc_${j}_refractive_errors`]: a[`vc_${j}_refractive_errors`],
                 [`vc_${j}_spectacles_prescribed`]: a[`vc_${j}_spectacles_prescribed`],
               };
-              const anyNum = Object.values(rowObj).some((v) => Number.isFinite(Number(v)) && Number(v) !== 0);
-              if (String(rowObj[`vc_${j}_name`] || "").trim() !== "" || anyNum) rebuilt.push(rowObj);
+              const anyNum = Object.values(rowObj).some(
+                (v) => Number.isFinite(Number(v)) && Number(v) !== 0
+              );
+              if (String(rowObj[`vc_${j}_name`] || "").trim() !== "" || anyNum) {
+                rebuilt.push(rowObj);
+              }
             }
             vc = rebuilt;
           }
@@ -227,7 +261,10 @@ export default function ViewDistrictTables({ user, month, year }) {
               String(canon.name || "").trim() !== "" ||
               VC_METRIC_KEYS.some((k) => num(canon[k]) !== 0);
             if (hasAny) {
-              vcOut.push({ __institution: instName || "Unknown Institution", __data: canon });
+              vcOut.push({
+                __institution: instName || "Unknown Institution",
+                __data: canon,
+              });
             }
           });
         });
@@ -261,12 +298,13 @@ export default function ViewDistrictTables({ user, month, year }) {
     return () => {
       cancelled = true;
     };
-  }, [district, month, year, eyeBankSection, visionCenterSection]);
+  }, [district, month, year, eyeBankSection, visionCenterSection, ebRowKeys]);
 
   /* --------------------------- XLSX exporters --------------------------- */
   const handleDownloadEyeBank = async () => {
     const XLSX = await import("xlsx");
 
+    // Column headers (match on-screen labels)
     const EB_HEADERS = [
       "Status",
       "No of Eyes collected during the month",
@@ -276,6 +314,7 @@ export default function ViewDistrictTables({ user, month, year }) {
       "No of Eye Donation Pledge forms received",
     ];
 
+    // Try to derive row labels from the section config, else sensible fallbacks.
     const rowLabel = (i) => {
       const cfg = eyeBankSection?.rows?.[i] || {};
       return (
@@ -286,12 +325,14 @@ export default function ViewDistrictTables({ user, month, year }) {
       );
     };
 
+    // Keys per row (already in correct order from questions.js)
     const aoa = [EB_HEADERS];
     for (let i = 0; i < ebTotals.length; i++) {
       const keys = ebRowKeys[i] || [];
       if (!keys.length) continue;
       const row = [rowLabel(i)];
       for (const k of keys) row.push(num(ebTotals[i]?.[k]));
+      // ensure col count matches header length
       while (row.length < EB_HEADERS.length) row.push(0);
       aoa.push(row);
     }
@@ -303,11 +344,15 @@ export default function ViewDistrictTables({ user, month, year }) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Eye Bank");
     const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const blob = new Blob([wbout], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `EyeBank_${district || "District"}_${month}_${year}.xlsx`;
-    document.body.appendChild(a); a.click(); a.remove();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
   const handleDownloadVisionCenter = async () => {
@@ -346,13 +391,18 @@ export default function ViewDistrictTables({ user, month, year }) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Vision Center");
     const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const blob = new Blob([wbout], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `VisionCenter_${district || "District"}_${month}_${year}.xlsx`;
-    document.body.appendChild(a); a.click(); a.remove();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
+  /* ------------------------------ RENDER VC LIST ----------------------------- */
   const renderDistrictVisionCenterTable = () => {
     return (
       <div className="overflow-x-auto">
@@ -373,8 +423,7 @@ export default function ViewDistrictTables({ user, month, year }) {
               <th className="border px-2 py-1 text-left w-14">SL. NO</th>
               <th className="border px-2 py-1 text-left">Institution</th>
               <th className="border px-2 py-1 text-left">Name of Vision Centre</th>
-              {VC_METRIC_KEYS
-                .slice()
+              {VC_METRIC_KEYS.slice()
                 .sort((a, b) => metricRank(a) - metricRank(b))
                 .map((key) => (
                   <th key={key} className="border px-2 py-1 text-center">
@@ -391,8 +440,7 @@ export default function ViewDistrictTables({ user, month, year }) {
                   <td className="border px-2 py-1 text-center">{idx + 1}</td>
                   <td className="border px-2 py-1">{row.__institution || ""}</td>
                   <td className="border px-2 py-1">{String(d.name || "")}</td>
-                  {VC_METRIC_KEYS
-                    .slice()
+                  {VC_METRIC_KEYS.slice()
                     .sort((a, b) => metricRank(a) - metricRank(b))
                     .map((key) => (
                       <td key={key} className="border px-2 py-1 text-right">
@@ -404,7 +452,10 @@ export default function ViewDistrictTables({ user, month, year }) {
             })}
             {!vcRows.length && (
               <tr>
-                <td className="border px-2 py-3 text-center text-gray-500" colSpan={3 + VC_METRIC_KEYS.length}>
+                <td
+                  className="border px-2 py-3 text-center text-gray-500"
+                  colSpan={3 + VC_METRIC_KEYS.length}
+                >
                   No Vision Centre data for this month.
                 </td>
               </tr>
@@ -421,7 +472,11 @@ export default function ViewDistrictTables({ user, month, year }) {
         District Tables — {district} ({month} {year})
       </div>
 
-      {loading && <div className="text-center text-sm text-gray-600">Loading district tables…</div>}
+      {loading && (
+        <div className="text-center text-sm text-gray-600">
+          Loading district tables…
+        </div>
+      )}
       {errText && <div className="text-center text-sm text-red-600">{errText}</div>}
 
       {/* Eye Bank: district total */}
@@ -442,7 +497,9 @@ export default function ViewDistrictTables({ user, month, year }) {
 
       {/* Vision Center: each real centre row */}
       <section>
-        <h3 className="text-base font-semibold mb-2">V. VISION CENTER — District Total</h3>
+        <h3 className="text-base font-semibold mb-2">
+          V. VISION CENTER — District Total
+        </h3>
         {renderDistrictVisionCenterTable()}
       </section>
     </div>
