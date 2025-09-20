@@ -57,6 +57,14 @@ const VC_METRIC_KEYS = [
   "spectacles_prescribed",
 ];
 
+// map month name → number (April cycle)
+const MONTH_NUM = {
+  april: 4, may: 5, june: 6, july: 7, august: 8, september: 9,
+  october: 10, november: 11, december: 12, january: 1, february: 2, march: 3,
+};
+
+const norm = (s) => String(s || "").trim().toLowerCase();
+
 /* ===================================================================== */
 
 export default function ViewDistrictTables({ user, month, year }) {
@@ -119,6 +127,21 @@ export default function ViewDistrictTables({ user, month, year }) {
       return 0;
     };
 
+    const monthNumWanted = MONTH_NUM[norm(month)] ?? null;
+
+    const isExactRecord = (d) => {
+      // district
+      if (norm(d?.district) !== norm(district)) return false;
+      // year
+      if (String(d?.year) !== String(year)) return false;
+      // month by name
+      const byName = norm(d?.month) === norm(month);
+      // or by numeric field if present
+      const mNum = Number(d?.monthNum ?? d?.monthIndex ?? d?.month_number ?? d?.M);
+      const byNum = Number.isFinite(mNum) && monthNumWanted != null ? mNum === monthNumWanted : true;
+      return byName || byNum;
+    };
+
     const mapRowToCanonical = (row, i) => {
       const r = row || {};
       const ks = vcKeyset(i);
@@ -139,25 +162,26 @@ export default function ViewDistrictTables({ user, month, year }) {
       setLoading(true);
       setErrText("");
       try {
+        // ask backend for strict month/year; even if it ignores, we will filter below
         const q =
           `district=${encodeURIComponent(district)}` +
           `&month=${encodeURIComponent(month)}` +
-          `&year=${encodeURIComponent(year)}`;
+          `&year=${encodeURIComponent(year)}` +
+          `&strict=1`;
         let list = await fetchList(`${API_BASE}/api/reports?${q}`);
-        if (!list.length) list = await fetchList(`${API_BASE}/api/reports`);
+        if (!list.length) {
+          // as a last resort, fetch district-year and filter locally
+          const q2 = `district=${encodeURIComponent(district)}&year=${encodeURIComponent(year)}`;
+          list = await fetchList(`${API_BASE}/api/reports?${q2}`);
+        }
 
-        const filtered = list.filter(
-          (d) =>
-            String(d?.district || "").trim().toLowerCase() === String(district).trim().toLowerCase() &&
-            String(d?.month || "").trim().toLowerCase() === String(month).trim().toLowerCase() &&
-            String(d?.year || "") === String(year)
-        );
-        const source = filtered.length ? filtered : list;
+        // *** STRICT FILTER (no fallback to all months) ***
+        const source = list.filter(isExactRecord);
+
         if (!source.length) {
           setEbTotals(fixedLengthArray((eyeBankSection?.rows || []).length));
           setVcRows([]);
-          setLoading(false);
-          setErrText("No reports returned by API.");
+          setErrText(`No reports found for ${district} — ${month} ${year}.`);
           return;
         }
 
@@ -207,7 +231,9 @@ export default function ViewDistrictTables({ user, month, year }) {
 
           vc.forEach((row, i) => {
             const canon = mapRowToCanonical(row, i);
-            const hasAny = String(canon.name || "").trim() !== "" || VC_METRIC_KEYS.some((k) => num(canon[k]) !== 0);
+            const hasAny =
+              String(canon.name || "").trim() !== "" ||
+              VC_METRIC_KEYS.some((k) => num(canon[k]) !== 0);
             if (hasAny) {
               vcOut.push({ __institution: instName || "Unknown Institution", __data: canon });
             }
@@ -240,7 +266,9 @@ export default function ViewDistrictTables({ user, month, year }) {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [district, month, year, eyeBankSection, visionCenterSection]);
 
   /* --------------------------- XLSX exporters --------------------------- */
@@ -257,7 +285,6 @@ export default function ViewDistrictTables({ user, month, year }) {
       "No of Eye Donation Pledge forms received",
     ];
 
-    // Try to derive row labels from the section config, else sensible fallbacks.
     const rowLabel = (i) => {
       const cfg = eyeBankSection?.rows?.[i] || {};
       return (
@@ -268,14 +295,12 @@ export default function ViewDistrictTables({ user, month, year }) {
       );
     };
 
-    // Keys per row (already in correct order from questions.js)
     const aoa = [EB_HEADERS];
     for (let i = 0; i < ebTotals.length; i++) {
       const keys = ebRowKeys[i] || [];
       if (!keys.length) continue;
       const row = [rowLabel(i)];
       for (const k of keys) row.push(num(ebTotals[i]?.[k]));
-      // ensure col count matches header length
       while (row.length < EB_HEADERS.length) row.push(0);
       aoa.push(row);
     }
@@ -287,10 +312,7 @@ export default function ViewDistrictTables({ user, month, year }) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Eye Bank");
     const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    const blob = new Blob(
-      [wbout],
-      { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
-    );
+    const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `EyeBank_${district || "District"}_${month}_${year}.xlsx`;
@@ -333,10 +355,7 @@ export default function ViewDistrictTables({ user, month, year }) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Vision Center");
     const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    const blob = new Blob(
-      [wbout],
-      { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
-    );
+    const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `VisionCenter_${district || "District"}_${month}_${year}.xlsx`;
