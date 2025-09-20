@@ -130,13 +130,9 @@ export default function ViewDistrictTables({ user, month, year }) {
     const monthNumWanted = MONTH_NUM[norm(month)] ?? null;
 
     const isExactRecord = (d) => {
-      // district
       if (norm(d?.district) !== norm(district)) return false;
-      // year
       if (String(d?.year) !== String(year)) return false;
-      // month by name
       const byName = norm(d?.month) === norm(month);
-      // or by numeric field if present
       const mNum = Number(d?.monthNum ?? d?.monthIndex ?? d?.month_number ?? d?.M);
       const byNum = Number.isFinite(mNum) && monthNumWanted != null ? mNum === monthNumWanted : true;
       return byName || byNum;
@@ -162,7 +158,6 @@ export default function ViewDistrictTables({ user, month, year }) {
       setLoading(true);
       setErrText("");
       try {
-        // ask backend for strict month/year; even if it ignores, we will filter below
         const q =
           `district=${encodeURIComponent(district)}` +
           `&month=${encodeURIComponent(month)}` +
@@ -170,12 +165,10 @@ export default function ViewDistrictTables({ user, month, year }) {
           `&strict=1`;
         let list = await fetchList(`${API_BASE}/api/reports?${q}`);
         if (!list.length) {
-          // as a last resort, fetch district-year and filter locally
           const q2 = `district=${encodeURIComponent(district)}&year=${encodeURIComponent(year)}`;
           list = await fetchList(`${API_BASE}/api/reports?${q2}`);
         }
 
-        // *** STRICT FILTER (no fallback to all months) ***
         const source = list.filter(isExactRecord);
 
         if (!source.length) {
@@ -208,7 +201,6 @@ export default function ViewDistrictTables({ user, month, year }) {
             rep?.visioncentre ||
             [];
 
-          // Rebuild from answers if array missing
           if (!Array.isArray(vc) || !vc.length) {
             const a = rep?.answers || {};
             const rebuilt = [];
@@ -275,7 +267,6 @@ export default function ViewDistrictTables({ user, month, year }) {
   const handleDownloadEyeBank = async () => {
     const XLSX = await import("xlsx");
 
-    // Column headers (match on-screen labels)
     const EB_HEADERS = [
       "Status",
       "No of Eyes collected during the month",
@@ -362,7 +353,6 @@ export default function ViewDistrictTables({ user, month, year }) {
     document.body.appendChild(a); a.click(); a.remove();
   };
 
-  /* ------------------------------ RENDER VC LIST ----------------------------- */
   const renderDistrictVisionCenterTable = () => {
     return (
       <div className="overflow-x-auto">
