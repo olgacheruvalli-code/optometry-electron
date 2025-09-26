@@ -1,13 +1,33 @@
+// src/components/ConnectedLinks.jsx
 import React, { useMemo, useState } from "react";
 import LINKS_CONFIG, { SUBMENUS } from "../data/connectedLinks";
 
 export default function ConnectedLinks({ user, initialTab = "" }) {
   const district = String(user?.district || "").trim();
   const institution = String(user?.institution || "").trim();
+  const isKannur = district.toLowerCase() === "kannur";
 
-  // Everyone can access now (DOC/DC included)
+  // Base links from data file
+  const districtLinksBase = LINKS_CONFIG[district] || {};
 
-  const districtLinks = LINKS_CONFIG[district] || {};
+  // 🔒 Add two tabs ONLY for Kannur logins (no deep-link access for others)
+  const districtLinks = isKannur
+    ? {
+        ...districtLinksBase,
+        "Kannur — Sheet 1": [
+          {
+            label: "Open Google Sheet (Sheet 1)",
+            url: "https://docs.google.com/spreadsheets/d/1FqUEg4IEkU9KhwhWvs5n-T4mq-ITBS7T92NGgm7zX_g/edit?usp=drivesdk",
+          },
+        ],
+        "Kannur — Sheet 2": [
+          {
+            label: "Open Google Sheet (Sheet 2)",
+            url: "https://docs.google.com/spreadsheets/d/1i2CkYKqzHvxoBY3dsUiwFzMh6vVm1_DYU0MIMdNTGBA/edit?usp=drivesdk",
+          },
+        ],
+      }
+    : districtLinksBase;
 
   // Keep submenu tabs in a stable, expected order
   const categories = useMemo(() => {
@@ -30,7 +50,9 @@ export default function ConnectedLinks({ user, initialTab = "" }) {
     if (Array.isArray(value)) {
       return value
         .map((v) =>
-          typeof v === "string" ? { label: v, url: v } : { label: v.label || v.url, url: v.url }
+          typeof v === "string"
+            ? { label: v, url: v }
+            : { label: v.label || v.url, url: v.url }
         )
         .filter((x) => x.url);
     }
