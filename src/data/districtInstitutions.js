@@ -49,7 +49,27 @@ const baseInstitutions = {
     "CHC Meenangdi", "CHC Panamaram", "THQH Sulthan Bathery", "District Hospital Mananthavady"
   ],
   Kannur: [
-    "CHC Pappinissery", "THQH Taliparamba", "District Hospital Kannur"
+    "District Hospital Kannur",
+    "General Hospital Thalassery",
+    "THQH Thaliparamba",
+    "THQH Payyannur",
+    "THQH Kuthuparamba",
+    "THQH Pazhayangadi",
+    "THQH Peringome",
+    "THQH Iritty",
+    "CHC Azhikode",
+    "CHC Pappinissery",
+    "CHC Mayyil",
+    "CHC Iriveri",
+    "CHC Pinarayi",
+    "CHC Panoor",
+    "PHC Oduvallithattu",
+    "PHC Irikkur",
+    "PHC Ezhome",
+    "PHC Chittariparamba",
+    "PHC Keezhpally",
+    "PHC Cherukunnu",
+    "DEIC Mangattuparamba",
   ],
   Kasaragod: [
     "CHC Cheruvathur", "CHC Periye", "District Hospital Kanhangad"
