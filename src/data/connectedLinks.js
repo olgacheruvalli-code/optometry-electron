@@ -38,7 +38,20 @@ const LINKS_CONFIG = {
   Palakkad: emptyDistrict(),
   Malappuram: emptyDistrict(),
   Wayanad: emptyDistrict(),
-  Kannur: emptyDistrict(),
+  Kannur: {
+  "Old aged Spectacles": [
+    {
+      label: "Old aged Spectacles (Google Sheet)",
+      url: "https://docs.google.com/spreadsheets/d/1FqUEg4IEkU9KhwhWvs5n-T4mq-ITBS7T92NGgm7zX_g/edit?usp=drivesdk"
+    }
+  ],
+  "School Children Spectacles": [
+    {
+      label: "School Children Spectacles (Google Sheet)",
+      url: "https://docs.google.com/spreadsheets/d/1i2CkYKqzHvxoBY3dsUiwFzMh6vVm1_DYU0MIMdNTGBA/edit?usp=drivesdk"
+    }
+  ],
+},
   Kasaragod: emptyDistrict(),
 };
 
