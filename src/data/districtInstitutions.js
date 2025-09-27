@@ -51,6 +51,7 @@ const baseInstitutions = {
   Kannur: [
     "District Hospital Kannur",
     "General Hospital Thalassery",
+    "District Mobile Unit",
     "THQH Thaliparamba",
     "THQH Payyannur",
     "THQH Kuthuparamba",
