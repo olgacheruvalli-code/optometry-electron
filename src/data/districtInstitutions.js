@@ -1,86 +1,99 @@
 export const districts = [
-  "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha",
-  "Kottayam", "Idukki", "Ernakulam", "Thrissur", "Palakkad",
-  "Malappuram", "Kozhikode", "Wayanad", "Kannur", "Kasaragod"
+  "Thiruvananthapuram","Kollam","Pathanamthitta","Alappuzha",
+  "Kottayam","Idukki","Ernakulam","Thrissur","Palakkad",
+  "Malappuram","Kozhikode","Wayanad","Kannur","Kasaragod"
 ];
 
 const baseInstitutions = {
   Thiruvananthapuram: [
-    "CHC Anchuthengu", "CHC Aryanad", "CHC Kesavapuram", "CHC Vellanad", "CHC Vellarada",
-    "THQH Chirayinkeezhu", "THQH Parassala", "District Hospital Nedumangad"
+    "CHC Anchuthengu","CHC Aryanad","CHC Kesavapuram","CHC Vellanad","CHC Vellarada",
+    "THQH Chirayinkeezhu","THQH Parassala","District Hospital Nedumangad"
   ],
   Kollam: [
-    "CHC Anchal", "CHC Chavara", "CHC Kulathuppuzha", "CHC Mynagappally", "CHC Nedumpana",
-    "THQH Kottarakkara", "THQH Punalur", "THQH Sasthamcotta", "District Hospital Kollam (A. A. Rahim memorial)"
+    "CHC Anchal","CHC Chavara","CHC Kulathuppuzha","CHC Mynagappally","CHC Nedumpana",
+    "THQH Kottarakkara","THQH Punalur","THQH Sasthamcotta","District Hospital Kollam (A. A. Rahim memorial)"
   ],
   Pathanamthitta: [
-    "THQH Thiruvalla", "District Hospital Kozhencherry"
+    "THQH Thiruvalla","District Hospital Kozhencherry"
   ],
   Alappuzha: [
-    "CHC Arookutty", "CHC Champakulam", "CHC Chempumpuram", "CHC Chunakkara", "CHC Edathua",
-    "District Hospital Chengannur", "District Hospital Mavelikara"
+    "CHC Arookutty","CHC Champakulam","CHC Chempumpuram","CHC Chunakkara","CHC Edathua",
+    "District Hospital Chengannur","District Hospital Mavelikara"
   ],
   Kottayam: [
-    "CHC Edayarikkapuzha", "CHC Kumarakom", "THQH Pampady", "District Hospital Kottayam"
+    "CHC Edayarikkapuzha","CHC Kumarakom","THQH Pampady","District Hospital Kottayam"
   ],
   Idukki: [
-    "CHC Muttom", "CHC Purapuzha", "CHC Vandiperiyar", "THQH Peermade", "District Hospital Thodupuzha"
+    "CHC Muttom","CHC Purapuzha","CHC Vandiperiyar","THQH Peermade","District Hospital Thodupuzha"
   ],
   Ernakulam: [
-    "CHC Kalady", "CHC Moothakunnam", "District Hospital Aluva", "THQH Tripunithura"
+    "CHC Kalady","CHC Moothakunnam","District Hospital Aluva","THQH Tripunithura"
   ],
   Thrissur: [
     "District Hospital Wadakkanchery"
   ],
   Palakkad: [
-    "CHC Katampazhipuram", "CHC Chalissery", "District Hospital Palakkad"
+    "CHC Katampazhipuram","CHC Chalissery","District Hospital Palakkad"
   ],
   Malappuram: [
-    "CHC Chungathara", "CHC Edapal", "CHC Kalikavu", "District Hospital Nilambur", "THQH Tirurangadi"
+    "CHC Chungathara","CHC Edapal","CHC Kalikavu","District Hospital Nilambur","THQH Tirurangadi"
   ],
   Kozhikode: [
-    "CHC Mukkam", "CHC orkkattery", "CHC Narikkuni", "District Hospital Vadakara", "Taluk Hospital Perambra",
-    "CHC ulliery", "General Hospital Kozhikod", "CHC Thalakkulathur", "CHC Thiruvallur", "CHC Olavanna",
-    "Taluk Hospital Farook", "CHC Cheruvannur", "CHC Thamarassery",
-    "Taluk Hospital Koyilandy", "CHC Thiruvangoor", "Taluk Hospital Balussery", "PHC Meppayur",
-    "CHC Melady", "CHC Valayam", "Taluk Hospital Kuttiadi", "Taluk Hospital Nadapuram", "CHC Cheruvadi",
+    "CHC Mukkam","CHC orkkattery","CHC Narikkuni","District Hospital Vadakara","Taluk Hospital Perambra",
+    "CHC ulliery","General Hospital Kozhikod","CHC Thalakkulathur","CHC Thiruvallur","CHC Olavanna",
+    "Taluk Hospital Farook","CHC Cheruvannur","CHC Thamarassery",
+    "Taluk Hospital Koyilandy","CHC Thiruvangoor","Taluk Hospital Balussery","PHC Meppayur",
+    "CHC Melady","CHC Valayam","Taluk Hospital Kuttiadi","Taluk Hospital Nadapuram","CHC Cheruvadi",
     "District Mobile Unit"
   ],
   Wayanad: [
-    "CHC Meenangdi", "CHC Panamaram", "THQH Sulthan Bathery", "District Hospital Mananthavady"
+    "CHC Meenangdi","CHC Panamaram","THQH Sulthan Bathery","District Hospital Mananthavady"
   ],
+  // ✅ Fixed: “Kannur:” (not “Kannur =”)
   Kannur: [
-    "CHC Azhikode",
-    "CHC Irivery",
-    "CHC Mayyil",
-    "CHC Pappinissery",
-    "CHC Panoor",
-    "CHC Pinarayi",
-    "DEIC Mangattuparamba",
     "Dist. Hospital, Kannur",
     "Dist.Mobile Unit",
     "General Hospital, Thalassery",
-    "PHC Cherukunnu",
-    "PHC Chittariparamba",
-    "PHC Ezhome",
-    "PHC Irikkur",
-    "PHC Keezppally",
-    "PHC Oduvallithattu",
-    "THQH, Iritty",
+
+    "THQH, Thaliparamba",
+    "THQH, Payyannur",
     "THQH, Kuthuparamba",
     "THQH, Pazhayangadi",
-    "THQH, Payyannur",
     "THQH, Peringome",
-    "THQH, Thaliparamba"
+    "THQH, Iritty",
+
+    "CHC Azhikode",
+    "CHC Pappinissery",
+    "CHC Mayyil",
+    "CHC Irivery",
+    "CHC Pinarayi",
+    "CHC Panoor",
+
+    "PHC Oduvallithattu",
+    "PHC Irikkur",
+    "PHC Ezhome",
+    "PHC Chittariparamba",
+    "PHC Keezppally",
+    "PHC Cherukunnu",
+
+    "DEIC Mangattuparamba"
   ],
   Kasaragod: [
-    "CHC Cheruvathur", "CHC Periye", "District Hospital Kanhangad"
+    "CHC Cheruvathur","CHC Periye","District Hospital Kanhangad"
   ]
 };
 
+// ✅ Only append one “DOC {District}”. No “DC …” anywhere.
 export const districtInstitutions = Object.fromEntries(
   Object.entries(baseInstitutions).map(([district, insts]) => [
     district,
-    [...insts, `DOC ${district}`] // add DC to each list
+    // de-dup & drop any accidental DC entries
+    Array.from(
+      new Set(
+        [...insts, `DOC ${district}`]
+          .map(s => String(s || "").trim())
+          .filter(s => s && !/^dc\s/i.test(s)) // drop DC if present in old data
+      )
+    )
   ])
 );
