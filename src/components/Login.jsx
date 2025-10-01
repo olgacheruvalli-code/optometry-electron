@@ -1,5 +1,5 @@
 // src/components/Login.jsx
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import API_BASE from "../apiBase";
 import { districtInstitutions } from "../data/districtInstitutions";
 import rightImage from "../assets/optometrist-right.png";
@@ -13,34 +13,28 @@ export default function Login({ onLogin, onShowRegister }) {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Clean, sorted institution list for the selected district
-  const institutionOptions = React.useMemo(() => {
+  const institutionOptions = useMemo(() => {
     if (!district) return [];
-    const raw = Array.isArray(districtInstitutions[district])
+    const base = Array.isArray(districtInstitutions[district])
       ? districtInstitutions[district]
       : [];
 
+    // Ensure DOC/DC options always exist for the chosen district
+    const injected = [`DOC ${district}`, `DC ${district}`, ...base];
+
     const seen = new Set();
-    const cleaned = [];
-    for (const name of raw) {
+    const out = [];
+    for (const name of injected) {
       const s = String(name || "").trim();
       if (!s) continue;
-      if (/^doc\s|^dc\s/i.test(s)) continue; // exclude only DOC/DC
-      const key = s.toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        cleaned.push(s);
+      const k = s.toLowerCase();
+      if (!seen.has(k)) {
+        seen.add(k);
+        out.push(s);
       }
     }
-
-    cleaned.sort((a, b) =>
-      a.localeCompare(b, undefined, { sensitivity: "base" })
-    );
-
-    // Debug log (remove if not needed)
-    console.log("Institutions (last 3):", cleaned.slice(-3));
-
-    return cleaned;
+    out.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    return out;
   }, [district]);
 
   const handleLogin = async () => {
@@ -75,35 +69,22 @@ export default function Login({ onLogin, onShowRegister }) {
 
       const raw = await res.text();
       let data = {};
-      try {
-        data = raw ? JSON.parse(raw) : {};
-      } catch {}
+      try { data = raw ? JSON.parse(raw) : {}; } catch {}
 
       if (!res.ok) {
-        const msg =
-          data?.error ||
-          raw ||
-          `HTTP ${res.status} ${res.statusText || ""}`.trim();
+        const msg = data?.error || raw || `HTTP ${res.status} ${res.statusText || ""}`.trim();
         throw new Error(msg);
       }
 
       const user = data.user || data;
-      if (
-        !user ||
-        typeof user !== "object" ||
-        !user.district ||
-        !user.institution
-      ) {
+      if (!user || !user.district || !user.institution) {
         throw new Error("Malformed login response from server.");
       }
-
       onLogin(user);
     } catch (err) {
-      const msg =
-        err?.name === "AbortError"
-          ? "Login request timed out. Please try again."
-          : (err?.message || "Login failed.");
-      setError(msg);
+      setError(err?.name === "AbortError"
+        ? "Login request timed out. Please try again."
+        : (err?.message || "Login failed."));
       console.error("Login error:", err);
     } finally {
       clearTimeout(t);
@@ -112,17 +93,12 @@ export default function Login({ onLogin, onShowRegister }) {
   };
 
   const handleGuestLogin = () => {
-    onLogin({
-      district: "Guest",
-      institution: "Guest User",
-      isGuest: true,
-    });
+    onLogin({ district: "Guest", institution: "Guest User", isGuest: true });
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#e9f1f8] to-[#f7fafc] font-serif p-4">
       <div className="flex flex-col md:flex-row bg-white rounded-2xl shadow-xl overflow-hidden w-full max-w-5xl border border-gray-100">
-        {/* Left: Form */}
         <div className="w-full md:w-1/2 p-6 md:p-8 space-y-4 bg-white">
           <h2 className="text-2xl md:text-3xl font-bold text-center text-[#134074]">
             Optometry Monthly Reporting
@@ -145,9 +121,7 @@ export default function Login({ onLogin, onShowRegister }) {
           >
             <option value="">Select District</option>
             {Object.keys(districtInstitutions).map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
+              <option key={d} value={d}>{d}</option>
             ))}
           </select>
 
@@ -155,18 +129,13 @@ export default function Login({ onLogin, onShowRegister }) {
           <label className="block text-sm text-gray-700">Institution</label>
           <select
             value={institution}
-            onChange={(e) => {
-              setInstitution(e.target.value);
-              setError("");
-            }}
+            onChange={(e) => { setInstitution(e.target.value); setError(""); }}
             disabled={!district}
             className="w-full px-3 py-2 rounded bg-gray-100 text-gray-800 focus:outline-none disabled:opacity-50"
           >
             <option value="">Select Institution</option>
             {institutionOptions.map((i) => (
-              <option key={i} value={i}>
-                {i}
-              </option>
+              <option key={i} value={i}>{i}</option>
             ))}
           </select>
 
@@ -175,20 +144,13 @@ export default function Login({ onLogin, onShowRegister }) {
           <input
             type="password"
             value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              setError("");
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleLogin();
-            }}
+            onChange={(e) => { setPassword(e.target.value); setError(""); }}
+            onKeyDown={(e) => { if (e.key === "Enter") handleLogin(); }}
             className="w-full px-3 py-2 rounded bg-gray-100 text-gray-800 focus:outline-none"
             autoComplete="current-password"
           />
 
-          {error && (
-            <div className="text-sm text-red-600 text-center">{error}</div>
-          )}
+          {error && <div className="text-sm text-red-600 text-center">{error}</div>}
 
           <button
             onClick={handleLogin}
@@ -199,11 +161,7 @@ export default function Login({ onLogin, onShowRegister }) {
           </button>
 
           <div className="text-center mt-2">
-            <button
-              onClick={onShowRegister}
-              className="text-sm text-blue-600 hover:underline"
-              type="button"
-            >
+            <button onClick={onShowRegister} className="text-sm text-blue-600 hover:underline" type="button">
               New Optometrist? Register here
             </button>
           </div>
@@ -224,11 +182,7 @@ export default function Login({ onLogin, onShowRegister }) {
 
         {/* Right: Image */}
         <div className="w-full md:w-1/2 bg-[#0b2e59]/5">
-          <img
-            src={rightImage}
-            alt="Optometrist examining patient"
-            className="object-cover w-full h-full"
-          />
+          <img src={rightImage} alt="Optometrist examining patient" className="object-cover w-full h-full" />
         </div>
       </div>
     </div>

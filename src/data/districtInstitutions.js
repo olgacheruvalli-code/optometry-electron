@@ -11,7 +11,7 @@ const baseInstitutions = {
   ],
   Kollam: [
     "CHC Anchal", "CHC Chavara", "CHC Kulathuppuzha", "CHC Mynagappally", "CHC Nedumpana",
-    "THQH Kottarakkara", "THQH Punalur", "THQH Sasthamcotta", "District Hospital Kollam (A. A. Rahim memorial)"
+    "THQH Kottarakkara", "THQH Punalur", "THQH Sasthamcotta", "District Hospital Kollam (A. A. Rahim memorial)"
   ],
   Pathanamthitta: [
     "THQH Thiruvalla", "District Hospital Kozhencherry"
@@ -40,16 +40,38 @@ const baseInstitutions = {
   ],
   Kozhikode: [
     "CHC Mukkam", "CHC orkkattery", "CHC Narikkuni", "District Hospital Vadakara", "Taluk Hospital Perambra",
-    "CHC ulliery", "General Hospital Kozhikod", "CHC Thalakkulathur","CHC Thiruvallur" ,"CHC Olavanna",
+    "CHC ulliery", "General Hospital Kozhikod", "CHC Thalakkulathur", "CHC Thiruvallur", "CHC Olavanna",
     "Taluk Hospital Farook", "CHC Cheruvannur", "CHC Thamarassery",
     "Taluk Hospital Koyilandy", "CHC Thiruvangoor", "Taluk Hospital Balussery", "PHC Meppayur",
-    "CHC Melady", "CHC Valayam", "Taluk Hospital Kuttiadi","Taluk Hospital Nadapuram","CHC Cheruvadi","District Mobile Unit"
+    "CHC Melady", "CHC Valayam", "Taluk Hospital Kuttiadi", "Taluk Hospital Nadapuram", "CHC Cheruvadi",
+    "District Mobile Unit"
   ],
   Wayanad: [
     "CHC Meenangdi", "CHC Panamaram", "THQH Sulthan Bathery", "District Hospital Mananthavady"
   ],
   Kannur: [
-    "CHC Pappinissery", "THQH Taliparamba", "District Hospital Kannur"
+    "CHC Azhikode",
+    "CHC Irivery",
+    "CHC Mayyil",
+    "CHC Pappinissery",
+    "CHC Panoor",
+    "CHC Pinarayi",
+    "DEIC Mangattuparamba",
+    "Dist. Hospital, Kannur",
+    "Dist.Mobile Unit",
+    "General Hospital, Thalassery",
+    "PHC Cherukunnu",
+    "PHC Chittariparamba",
+    "PHC Ezhome",
+    "PHC Irikkur",
+    "PHC Keezppally",
+    "PHC Oduvallithattu",
+    "THQH, Iritty",
+    "THQH, Kuthuparamba",
+    "THQH, Pazhayangadi",
+    "THQH, Payyannur",
+    "THQH, Peringome",
+    "THQH, Thaliparamba"
   ],
   Kasaragod: [
     "CHC Cheruvathur", "CHC Periye", "District Hospital Kanhangad"
