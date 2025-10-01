@@ -36,41 +36,20 @@ const baseInstitutions = {
     "CHC Katampazhipuram", "CHC Chalissery", "District Hospital Palakkad"
   ],
   Malappuram: [
-    "CHC Chungathara", "CHC Edapal", "CHC Kalikavu", "District Hospital Nilambur", "THQH Tirurangadi","CHC Thanur"
+    "CHC Chungathara", "CHC Edapal", "CHC Kalikavu", "District Hospital Nilambur", "THQH Tirurangadi"
   ],
   Kozhikode: [
     "CHC Mukkam", "CHC orkkattery", "CHC Narikkuni", "District Hospital Vadakara", "Taluk Hospital Perambra",
     "CHC ulliery", "General Hospital Kozhikod", "CHC Thalakkulathur","CHC Thiruvallur" ,"CHC Olavanna",
-    "Taluk Hospital Farook", "CHC Cheruvannur", "Taluk Hospital Thamarassery",
+    "Taluk Hospital Farook", "CHC Cheruvannur", "CHC Thamarassery",
     "Taluk Hospital Koyilandy", "CHC Thiruvangoor", "Taluk Hospital Balussery", "PHC Meppayur",
-    "CHC Melady", "CHC Valayam", "Taluk Hospital Kuttiadi","Taluk Hospital Nadapuram","CHC Cheruvadi","MCH Unit Cheroopa"
+    "CHC Melady", "CHC Valayam", "Taluk Hospital Kuttiadi","Taluk Hospital Nadapuram","CHC Cheruvadi","District Mobile Unit"
   ],
   Wayanad: [
     "CHC Meenangdi", "CHC Panamaram", "THQH Sulthan Bathery", "District Hospital Mananthavady"
   ],
   Kannur: [
-    "District Hospital Kannur",
-    "General Hospital Thalassery",
-    "District Mobile Unit",
-    "THQH Thaliparamba",
-    "THQH Payyannur",
-    "THQH Kuthuparamba",
-    "THQH Pazhayangadi",
-    "THQH Peringome",
-    "THQH Iritty",
-    "CHC Azhikode",
-    "CHC Pappinissery",
-    "CHC Mayyil",
-    "CHC Iriveri",
-    "CHC Pinarayi",
-    "CHC Panoor",
-    "PHC Oduvallithattu",
-    "PHC Irikkur",
-    "PHC Ezhome",
-    "PHC Chittariparamba",
-    "PHC Keezhpally",
-    "PHC Cherukunnu",
-    "DEIC Mangattuparamba",
+    "CHC Pappinissery", "THQH Taliparamba", "District Hospital Kannur"
   ],
   Kasaragod: [
     "CHC Cheruvathur", "CHC Periye", "District Hospital Kanhangad"
