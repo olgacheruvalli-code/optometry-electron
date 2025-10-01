@@ -196,10 +196,14 @@ app.get("/api/reports", async (req, res) => {
   }
 });
 
-// Get by ID
+// Get by ID (read-only, safe)
 app.get("/api/reports/:id", async (req, res) => {
   try {
-    const doc = await Report.findById(req.params.id).lean();
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
+    const doc = await Report.findById(id).lean();
     if (!doc) return res.status(404).json({ ok: false, error: "not_found" });
     res.json({ ok: true, doc: _ensure84OnDoc(doc) });
   } catch (e) {
@@ -304,6 +308,56 @@ app.get("/api/district-institution-report", async (req, res) => {
   } catch (e) {
     console.error("GET /api/district-institution-report error:", e);
     res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
+/* ========= NEW: FY cumulative for one institution (read-only, safe) ======== */
+app.get("/api/institution-fy-cumulative", async (req, res) => {
+  try {
+    const district = String(req.query.district || "").trim();
+    const institution = String(req.query.institution || "").trim();
+    const month = normalizeMonth(req.query.month || "");
+    const year = String(req.query.year || "");
+
+    if (!district || !institution || !month || !year) {
+      return res.status(400).json({ ok: false, error: "missing_params" });
+    }
+
+    const window = _fiscalWindow(month, year);
+    const docs = await Report.find({
+      ...ciEq("district", district),
+      ...ciEq("institution", institution),
+    }).lean();
+
+    // Latest doc per (month,year)
+    const key = (m, y) => `${m.toLowerCase()}|${y}`;
+    const ts = (d) => Date.parse(d?.updatedAt || d?.createdAt || 0) || 0;
+    const latestByMY = new Map();
+    for (const d of docs) {
+      const k = key(d.month, d.year);
+      const prev = latestByMY.get(k);
+      if (!prev || ts(d) > ts(prev)) latestByMY.set(k, d);
+    }
+
+    // Sum q1..q84 across the window
+    let sums = {};
+    for (const p of window) {
+      const d = latestByMY.get(key(p.month, p.year));
+      if (!d) continue;
+      const a = _normalize84(d.answers || {});
+      for (const [k, v] of Object.entries(a)) {
+        sums[k] = (sums[k] || 0) + (Number(v) || 0);
+      }
+    }
+
+    // Selected month answers (handy for client)
+    const sel = latestByMY.get(key(month, year));
+    const monthAnswers = _normalize84((sel && sel.answers) || {});
+
+    return res.json({ ok: true, district, institution, month, year, cumulative: sums, monthAnswers });
+  } catch (e) {
+    console.error("GET /api/institution-fy-cumulative error:", e);
+    return res.status(500).json({ ok: false, error: "server_error" });
   }
 });
 

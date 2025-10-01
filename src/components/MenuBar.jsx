@@ -1,33 +1,35 @@
-// src/components/MenuBar.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 export default function MenuBar({ onMenu, onLogout, active, user }) {
-  // Treat DOC/DC as coordinators for district menus
-  const isCoordinator = /^doc\s|^dc\s/i.test(String(user?.institution || ""));
-
-  const [open, setOpen] = useState(null);
-  const refs = useRef({});
+  const isDistrictCoordinator = user?.institution?.startsWith("DOC ");
+  const [openSubmenuKey, setOpenSubmenuKey] = useState(null);
+  const submenuRefs = useRef({});
 
   useEffect(() => {
-    const onClick = (e) => {
-      const inside = Object.values(refs.current).some((r) => r && r.contains(e.target));
-      if (!inside) setOpen(null);
-    };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    function handleClickOutside(event) {
+      const isClickInsideAny = Object.values(submenuRefs.current).some(
+        (ref) => ref && ref.contains(event.target)
+      );
+      if (!isClickInsideAny) {
+        setOpenSubmenuKey(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const items = [
+  // Only show "View/Edit Reports" if NOT DOC
+  const menuItems = [
     { key: "entry", label: "Report Entry" },
-    ...(!isCoordinator ? [{ key: "view", label: "View/Edit Reports" }] : []),
-    { key: "search-proxy", label: "Search Reports", onClick: () => onMenu?.("view") },
+    ...(!isDistrictCoordinator ? [{ key: "view", label: "View/Edit Reports" }] : []),
+    { key: "search", label: "Search Reports" },
     { key: "print", label: "Print Reports" },
     { key: "edit", label: "Edit Report" },
   ];
 
-  if (isCoordinator) {
-    items.push({
+  if (isDistrictCoordinator) {
+    menuItems.push({
       key: "district",
       label: "District Report",
       sub: [
@@ -39,103 +41,77 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
         { key: "other-diseases", label: "Details of Other Eye Diseases" },
         { key: "identified-cataract", label: "Number of Cataract Cases Identified" },
         { key: "test-vc", label: "Test VC Table" },
+
+        // ── NEW DOWNLOAD ITEMS (appended at the end) ─────────────────────────────
         { key: "district-dl-inst", label: "Download Institution-wise (.xlsx)" },
         { key: "district-dl-ebvc", label: "Download Eye Bank & Vision Center (.xlsx)" },
+        // ─────────────────────────────────────────────────────────────────────────
       ],
     });
   }
 
-  // Connected Links (visible to everyone; routes as connected-links:<Label>)
-  items.push({
-    key: "connected-links",
-    label: "Connected Links",
+  menuItems.push({
+    key: "others-connected",
+    label: "connected Link",
     sub: [
       { key: "blind-register", label: "Blind Register" },
       { key: "cataract-backlog", label: "Cataract Backlog" },
-      { key: "old-aged-spectacles", label: "Old aged Spectacles" },
-      { key: "school-children-spectacles", label: "School Children Spectacles" },
+      { key: "vc-issues", label: "Vision Center Related Issues" },
     ],
   });
-
-  // Research / Deep Study (visible to everyone; routes as research:<Label>)
-  items.push({
-    key: "research",
-    label: "Research / Deep Study",
-    sub: [
-      { key: "research-ssa", label: "School Screening Analysis" },
-      { key: "research-vt", label: "Vision Therapy" },
-      { key: "research-dr", label: "Diabetic Retinopathy" },
-      { key: "research-glaucoma", label: "Glaucoma" },
-    ],
-  });
-
-  const parentActive = (it) =>
-    it.sub && (active?.startsWith?.(it.key) || it.sub.some((s) => s.key === active));
-
-  const handleSubClick = (groupKey, subItem) => {
-    setOpen(null);
-    if (groupKey === "connected-links") {
-      onMenu?.(`connected-links:${subItem.label}`);
-    } else if (groupKey === "research") {
-      onMenu?.(`research:${subItem.label}`);
-    } else {
-      onMenu?.(subItem.key);
-    }
-  };
 
   return (
-    <div className="menu-bar w-full border-b border-gray-200">
-      {/* top white strip */}
+    <div className="w-full border-b border-gray-200">
+      {/* Top white bar with title and user info */}
       <div className="bg-white flex justify-between items-center px-6 py-4">
-        <h1 className="text-2xl font-bold tracking-wide uppercase">OPTOMETRY</h1>
+        <h1 className="text-2xl font-bold text-gray-900">OPTOMETRY</h1>
         <div className="flex items-center gap-4">
-          <div className="text-right text-sm leading-tight">
-            <div>
-              District: <b>{user?.district}</b>
-            </div>
-            <div>
-              Institution: <b>{user?.institution}</b>
-            </div>
+          <div className="text-right text-sm text-gray-700 leading-tight font-medium">
+            <div>District: <b>{user?.district}</b></div>
+            <div>Institution: <b>{user?.institution}</b></div>
           </div>
-          <div className="w-9 h-9 bg-[#3b6e8f] rounded-full" />
-          <button
-            onClick={onLogout}
-            className="bg-white hover:bg-gray-100 px-4 py-2 rounded-md font-semibold text-[#dc2626] border"
-          >
-            Logout
-          </button>
+          <div className="w-9 h-9 bg-[#3b6e8f] rounded-full flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 12c2.7 0 4.5-1.8 4.5-4.5S14.7 3 12 3 7.5 4.8 7.5 7.5 9.3 12 12 12Zm0 1.5c-3 0-9 1.5-9 4.5V21h18v-3c0-3-6-4.5-9-4.5Z" />
+            </svg>
+          </div>
         </div>
       </div>
 
-      {/* blue menu bar */}
-      <div className="bg-[#396b84] text-white font-serif text-sm px-10 py-2">
-        <div className="flex items-center gap-3 relative">
-          {items.map((it) =>
-            it.sub ? (
-              <div key={it.key} className="relative" ref={(el) => (refs.current[it.key] = el)}>
+      {/* Flat blue menu bar */}
+      <div className="bg-[#396b84] flex items-center px-10 py-2 font-serif text-sm text-white">
+        <div className="flex space-x-6 relative">
+          {menuItems.map((item) =>
+            item.sub ? (
+              <div
+                key={item.key}
+                className="relative"
+                ref={(el) => (submenuRefs.current[item.key] = el)}
+              >
                 <button
-                  onClick={() => setOpen(open === it.key ? null : it.key)}
-                  className={`px-4 py-2 rounded-md flex items-center gap-2 font-semibold transition ${
-                    parentActive(it) ? "bg-[#2f5a70]" : "hover:bg-[#2f5a70]"
+                  onClick={() =>
+                    setOpenSubmenuKey(openSubmenuKey === item.key ? null : item.key)
+                  }
+                  className={`px-4 py-2 rounded-md flex items-center gap-2 font-semibold tracking-wide transition ${
+                    active?.startsWith?.(item.key) ? "bg-[#2f5a70]" : "hover:bg-[#2f5a70]"
                   }`}
                 >
-                  {it.label} <ChevronDown className="w-4 h-4" />
+                  {item.label}
+                  <ChevronDown className="w-4 h-4" />
                 </button>
-                {open === it.key && (
-                  <div className="absolute top-full left-0 mt-1 min-w-[280px] rounded-md bg-[#396b84] shadow-lg z-50">
-                    {it.sub.map((s) => (
+
+                {openSubmenuKey === item.key && (
+                  <div className="absolute top-full mt-1 left-0 flex flex-col bg-[#396b84] text-white rounded-md shadow-lg z-50 min-w-[280px]">
+                    {item.sub.map((subItem) => (
                       <button
-                        key={s.key}
-                        onClick={() => handleSubClick(it.key, s)}
-                        className={`block w-full text-left px-6 py-2 hover:bg-[#2f5a70] whitespace-nowrap ${
-                          active === s.key ||
-                          (active?.startsWith?.("connected-links") && it.key === "connected-links") ||
-                          (active?.startsWith?.("research") && it.key === "research")
-                            ? "bg-[#2f5a70]"
-                            : ""
-                        }`}
+                        key={subItem.key}
+                        onClick={() => {
+                          setOpenSubmenuKey(null);
+                          onMenu(subItem.key);
+                        }}
+                        className="px-6 py-2 text-left hover:bg-[#2f5a70] whitespace-nowrap"
                       >
-                        {s.label}
+                        {subItem.label}
                       </button>
                     ))}
                   </div>
@@ -143,16 +119,25 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
               </div>
             ) : (
               <button
-                key={it.key}
-                onClick={() => (it.onClick ? it.onClick() : onMenu?.(it.key))}
-                className={`px-4 py-2 rounded-md font-semibold transition ${
-                  active === it.key ? "bg-[#2f5a70]" : "hover:bg-[#2f5a70]"
+                key={item.key}
+                onClick={() => onMenu(item.key)}
+                className={`px-4 py-2 rounded-md font-semibold tracking-wide transition ${
+                  active === item.key ? "bg-[#2f5a70]" : "hover:bg-[#2f5a70]"
                 }`}
               >
-                {it.label}
+                {item.label}
               </button>
             )
           )}
+        </div>
+
+        <div className="ml-auto">
+          <button
+            onClick={onLogout}
+            className="bg-white hover:bg-gray-100 px-6 py-2 rounded-md font-semibold text-[#dc2626] transition"
+          >
+            Logout
+          </button>
         </div>
       </div>
     </div>
