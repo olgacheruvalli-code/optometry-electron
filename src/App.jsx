@@ -1,76 +1,125 @@
 // src/App.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  useEffect,
+  useLayoutEffect, // ok even if unused in this file
+  useMemo,
+  useRef,          // ok even if unused in this file
+  useState,
+} from "react";
 import API_BASE from "./apiBase";
 import sections from "./data/questions";
 import { districtInstitutions } from "./data/districtInstitutions";
 import "./index.css";
+
 import MonthYearSelector from "./components/MonthYearSelector";
 import EyeBankTable from "./components/EyeBankTable";
-import VisionCenterTable from "./components/VisionCenterTable.jsx";
+import VisionCenterTable from "./components/VisionCenterTable";
 import QuestionInput from "./components/QuestionInput";
 import Login from "./components/Login";
 import MenuBar from "./components/MenuBar";
 import ReportsList from "./components/ReportsList";
 import ViewInstitutionWiseReport from "./components/ViewInstitutionWiseReport";
 import ViewDistrictTables from "./components/ViewDistrictTables";
-import { startFlute, pauseFlute, stopFlute } from "./utils/sound";
 import EditReport from "./components/EditReport";
-import ConnectedLinks from "./components/ConnectedLinks";
 import Register from "./components/Register";
 import EditGate from "./components/EditGate";
+import TestVisionCenter from "./components/TestVisionCenter";
 
 /* ----------------------------- Month constants ---------------------------- */
 const MONTHS = [
-  "April","May","June","July","August","September",
-  "October","November","December","January","February","March",
+  "April", "May", "June", "July", "August", "September",
+  "October", "November", "December", "January", "February", "March",
 ];
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
-// Return section questions whether the data uses `questions` or `rows`
-const getQs = (s) => Array.isArray(s?.questions) ? s.questions : (Array.isArray(s?.rows) ? s.rows : []);
+/** Return an array of question defs from a block that might use `questions` or `rows`. */
+const getQs = (blk) =>
+  Array.isArray(blk?.questions)
+    ? blk.questions
+    : Array.isArray(blk?.rows)
+    ? blk.rows
+    : [];
 
-// Build flat rows in display order (headers, subheaders, q-rows, and table markers)
+/** Build flat rows in display order (headers, subheaders, q-rows, and table markers). */
 function buildFlatRows(secs) {
   const out = [];
-  for (const sec of secs) {
-    if (typeof sec.title === "string") out.push({ kind: "header", label: sec.title });
+  for (const sec of secs || []) {
+    const titleStr = String(sec?.title ?? "");
+    if (titleStr) out.push({ kind: "header", label: titleStr });
 
-    // direct questions in this section (skip Vision Center table rows)
-    const titleLower = String(sec.title || "").toLowerCase();
-    const isVisionCenter = sec.table && titleLower.includes("vision center");
-    if (!isVisionCenter) {
-      for (const q of getQs(sec)) out.push({ kind: "q", row: q });
-    }
+    // top-level questions (support both `questions` and `rows`)
+    for (const q of getQs(sec)) out.push({ kind: "q", row: q });
 
-    // subsections
-    if (Array.isArray(sec.subsections)) {
+    // subsections (each with its own questions/rows)
+    if (Array.isArray(sec?.subsections)) {
       for (const sub of sec.subsections) {
-        if (sub.title) out.push({ kind: "subheader", label: sub.title });
+        const subTitle = String(sub?.title ?? "");
+        if (subTitle) out.push({ kind: "subheader", label: subTitle });
         for (const q of getQs(sub)) out.push({ kind: "q", row: q });
       }
     }
 
-    // tables
-    if (sec.table && sec.title?.toLowerCase().includes("eye bank")) out.push({ kind: "eyeBankTable" });
-    if (sec.table && sec.title?.toLowerCase().includes("vision center")) out.push({ kind: "visionCenterTable" });
+    // special tables (match both "center" and "centre")
+    if (sec?.table) {
+      if (/eye\s*bank/i.test(titleStr)) out.push({ kind: "eyeBankTable" });
+      if (/vision\s*cent(e|)r(e|)/i.test(titleStr)) out.push({ kind: "visionCenterTable" });
+    }
   }
   return out;
 }
 
-// Only the question rows (in the same display order)
+/** Only the question rows (in the same display order). */
 function orderedQuestions(secs) {
   return buildFlatRows(secs).filter((r) => r.kind === "q").map((r) => r.row);
 }
 
-/** Build ONLY non-zero q# keys (by row order q1..qN). */
+const KEYS = Array.from({ length: 84 }, (_, i) => `q${i + 1}`);
+const Q_ROWS = orderedQuestions(sections);
+
+/** Create an object with q1..q84 = 0 */
+const makeEmptyAnswers = () => KEYS.reduce((a, k) => ((a[k] = 0), a), {});
+
+/** Ensure an object has numeric q1..q84 entries (missing -> 0, non-numeric -> 0). */
+const fill84 = (obj) => {
+  const base = { ...(obj || {}) };
+  for (const k of KEYS) {
+    const v = base[k];
+    base[k] = typeof v === "number" ? (Number.isFinite(v) ? v : 0) : Number(v ?? 0) || 0;
+  }
+  return base;
+};
+
+/** Normalize month names (case/abbr tolerant). */
+const normMonth = (m) => {
+  if (!m) return m;
+  const s = String(m).trim().toLowerCase();
+  const map = {
+    january: "January", jan: "January",
+    february: "February", feb: "February",
+    march: "March", mar: "March",
+    april: "April", apr: "April",
+    may: "May",
+    june: "June", jun: "June",
+    july: "July", jul: "July",
+    august: "August", aug: "August",
+    september: "September", sep: "September", sept: "September",
+    october: "October", oct: "October",
+    november: "November", nov: "November",
+    december: "December", dec: "December",
+  };
+  return map[s] || m;
+};
+
+/** Build ONLY non-zero q# keys (q1..qN), respecting the *display order* in `secs`. */
 function buildAnswersPartial(answers, secs) {
   const qs = orderedQuestions(secs);
   const out = {};
   for (let i = 0; i < qs.length; i++) {
-    const id = qs[i].id;
+    const id = qs[i]?.id;
+    if (!id) continue;
     const raw = answers[id];
     let v = 0;
     if (raw && typeof raw === "object") {
@@ -78,19 +127,25 @@ function buildAnswersPartial(answers, secs) {
     } else {
       v = Number(raw || 0);
     }
-    if (v > 0) out[`q${i + 1}`] = String(v);
+    if (v > 0) out[`q${i + 1}`] = String(v); // keep as string to match earlier cURL behavior
   }
   return out;
 }
 
-// --- helpers for tables: keep names as strings; only numeric-looking values -> numbers
+/** Convert table rows: keep names as strings; numeric-looking cells -> numbers; null/undefined -> "" */
 const sanitizeTableArray = (arr) =>
   Array.isArray(arr)
     ? arr.map((row) => {
         const out = {};
         for (const [k, v] of Object.entries(row || {})) {
-          if (v === null || v === undefined) { out[k] = ""; continue; }
-          if (typeof v === "number") { out[k] = Number.isFinite(v) ? v : 0; continue; }
+          if (v === null || v === undefined) {
+            out[k] = "";
+            continue;
+          }
+          if (typeof v === "number") {
+            out[k] = Number.isFinite(v) ? v : 0;
+            continue;
+          }
           const s = String(v).trim();
           out[k] = /^-?\d+(\.\d+)?$/.test(s) ? Number(s) : s;
         }
@@ -98,7 +153,7 @@ const sanitizeTableArray = (arr) =>
       })
     : [];
 
-// used before saving: do we have any numeric values in any row?
+/** Do we have any numeric (>0) value in any row? */
 const someRowHasValues = (arr) =>
   Array.isArray(arr) &&
   arr.some((row) =>
@@ -108,147 +163,153 @@ const someRowHasValues = (arr) =>
     })
   );
 
-// used when viewing old records that accidentally saved name fields as 0/"0"
+/** Replace accidental numeric zeros in text fields like "Name" with empty strings (for old records). */
 const normalizeTextNameFields = (rows) =>
   Array.isArray(rows)
     ? rows.map((row) => {
         const out = { ...(row || {}) };
         for (const k of Object.keys(out)) {
-          if (/name|centre|center/i.test(k) && (out[k] === 0 || out[k] === "0")) out[k] = "";
+          if (/name|centre|center/i.test(k) && (out[k] === 0 || out[k] === "0")) {
+            out[k] = "";
+          }
         }
         return out;
       })
     : [];
 
 /* ========================================================================== */
-/* ViewReports                                                                 */
+/* ViewReports (uses backend FY endpoint; Apr→selected; EB/VC no cumulative)  */
 /* ========================================================================== */
-function ViewReports({ reportData, month, year }) {
-  const [doc, setDoc] = useState(reportData || null);
-  const [hydrating, setHydrating] = useState(false);
-  const [errText, setErrText] = useState("");
 
+function ViewReports({ reportData, month, year }) {
+  const [doc, setDoc] = useState(reportData);
+  const [hydrating, setHydrating] = useState(false);
+  const [cumTotals, setCumTotals] = useState({});
+  const [cumFallback, setCumFallback] = useState(null); // local FY fallback
   const flatRows = useMemo(() => buildFlatRows(sections), []);
 
-  // helpers
-  const norm = (s) => String(s || "").trim().toLowerCase();
-  const eq = (a, b) => norm(a) === norm(b);
-
-  // identity we filter by: always from the selected card/report
+  const id = reportData?._id || reportData?.id;
   const baseDistrict = reportData?.district || "";
   const baseInstitution = reportData?.institution || "";
 
-  /* -------- EXACT selection whenever month/year (or identity) change -------- */
+  // Hydrate the selected document (so month column shows full data)
   useEffect(() => {
-    const hasSel =
-      !!norm(baseDistrict) && !!norm(baseInstitution) && !!norm(month) && String(year);
-
-    // If there's no selection (e.g., initial cards view), keep whatever came in
-    if (!hasSel) {
-      setErrText("");
-      setDoc(reportData || null);
-      return;
-    }
-
-    let cancelled = false;
-
-    const fetchList = async (url) => {
-      try {
-        const r = await fetch(url);
-        if (!r.ok) return [];
-        const j = await r.json().catch(() => ({}));
-        return Array.isArray(j) ? j : Array.isArray(j?.docs) ? j.docs : [];
-      } catch {
-        return [];
-      }
-    };
-
-    (async () => {
-      setHydrating(true);
-      setErrText("");
-      setDoc(null); // clear stale doc so UI can't show June under July header
-
-      try {
-        // Ask backend for the narrowest set first
-        const q =
-          `district=${encodeURIComponent(baseDistrict)}` +
-          `&institution=${encodeURIComponent(baseInstitution)}` +
-          `&month=${encodeURIComponent(month)}` +
-          `&year=${encodeURIComponent(year)}`;
-
-        let list = await fetchList(`${API_BASE}/api/reports?${q}`);
-        if (!list.length) {
-          // broader fallback (institution only), then filter locally
-          const q2 =
-            `district=${encodeURIComponent(baseDistrict)}` +
-            `&institution=${encodeURIComponent(baseInstitution)}`;
-          list = await fetchList(`${API_BASE}/api/reports?${q2}`);
-          if (!list.length) list = await fetchList(`${API_BASE}/api/reports`);
-        }
-
-        // strict match – NEVER silently fall back to a different month
-        const exact = list.find(
-          (d) =>
-            eq(d?.district, baseDistrict) &&
-            eq(d?.institution, baseInstitution) &&
-            eq(d?.month, month) &&
-            String(d?.year) === String(year)
-        );
-
-        if (cancelled) return;
-
-        if (!exact) {
-          setDoc(null);
-          setErrText(`No report found for ${baseInstitution} — ${month} ${year}.`);
-        } else {
-          setDoc(exact);
-          setErrText("");
-        }
-      } finally {
-        if (!cancelled) setHydrating(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [baseDistrict, baseInstitution, month, year, reportData]);
-
-  /* ---- optional hydration by id; keep only if identity & month/year still match ---- */
-  useEffect(() => {
-    const id = doc?._id || doc?.id;
     if (!id) return;
-
     let cancelled = false;
     (async () => {
       try {
         setHydrating(true);
         const res = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(id)}`);
-        if (!res.ok) return; // backend may 404; it's fine to skip
         const data = await res.json().catch(() => ({}));
-        const hydrated = data?.doc || data;
-
-        if (!cancelled && hydrated && typeof hydrated === "object") {
-          if (
-            eq(hydrated?.district, doc?.district) &&
-            eq(hydrated?.institution, doc?.institution) &&
-            eq(hydrated?.month, doc?.month) &&
-            String(hydrated?.year) === String(doc?.year)
-          ) {
-            setDoc(hydrated);
-          }
+        if (!cancelled && res.ok && data && typeof data === "object" && (data.doc || data).answers) {
+          setDoc(data.doc || data);
+        } else {
+          // Fallback: query by MY
+          const q =
+            `district=${encodeURIComponent(reportData?.district || "")}` +
+            `&institution=${encodeURIComponent(reportData?.institution || "")}` +
+            `&month=${encodeURIComponent(reportData?.month || "")}` +
+            `&year=${encodeURIComponent(reportData?.year || "")}`;
+          const r2 = await fetch(`${API_BASE}/api/reports?${q}`);
+          const j2 = await r2.json().catch(() => ({}));
+          const arr = Array.isArray(j2?.docs) ? j2.docs : Array.isArray(j2) ? j2 : [];
+          const latest = arr.sort((a,b) =>
+            new Date(b?.updatedAt||b?.createdAt||0) - new Date(a?.updatedAt||a?.createdAt||0)
+          )[0];
+          if (!cancelled && latest) setDoc(latest);
         }
       } finally {
         if (!cancelled) setHydrating(false);
       }
     })();
+    return () => { cancelled = true; };
+  }, [id, reportData?.district, reportData?.institution, reportData?.month, reportData?.year]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [doc?._id, doc?.id]);
+  // Server FY totals (April→selected, inclusive)
+  useEffect(() => {
+    setCumTotals({});
+    if (!baseDistrict || !baseInstitution || !month || !year) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const qs = new URLSearchParams({
+          district: baseDistrict,
+          institution: baseInstitution,
+          month,
+          year: String(year),
+        }).toString();
+        const r = await fetch(`${API_BASE}/api/institution-fy-cumulative?${qs}`);
+        const j = await r.json().catch(() => ({}));
+        if (!cancelled && r.ok && j?.ok && j?.cumulative) {
+          setCumTotals(j.cumulative);
+        }
+      } catch (e) {
+        console.warn("FY cumulative fetch failed:", e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [baseDistrict, baseInstitution, month, year]);
 
-  // Pull fields **from the selected doc** so header always matches table content
+  // Local FY fallback (April→selected) — only if server didn't provide totals
+  useEffect(() => {
+    if (cumTotals && Object.keys(cumTotals).length) { setCumFallback(null); return; }
+    if (!baseDistrict || !baseInstitution || !month || !year) { setCumFallback(null); return; }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        // all reports for this institution
+        const qs = new URLSearchParams({ district: baseDistrict, institution: baseInstitution }).toString();
+        const r = await fetch(`${API_BASE}/api/reports?${qs}`);
+        const j = await r.json().catch(() => ({}));
+        const all = Array.isArray(j?.docs) ? j.docs : Array.isArray(j) ? j : [];
+        if (cancelled) return;
+
+        // FY window April -> selected
+        const monthIdx = Object.fromEntries(MONTHS.map((m, i) => [m.toLowerCase(), i]));
+        const selIdx = monthIdx[String(month).toLowerCase()];
+        if (selIdx == null || selIdx < 0) { setCumFallback(null); return; }
+        const fiscalStartYear = selIdx >= 9 ? Number(year) - 1 : Number(year);
+        const fiscalPairs = [];
+        for (let i = 0; i <= selIdx; i++) {
+          const m = MONTHS[i];
+          const y = i <= 8 ? fiscalStartYear : fiscalStartYear + 1;
+          fiscalPairs.push({ month: m, year: String(y) });
+        }
+
+        // pick latest per month in window
+        const ts = (d) => new Date(d?.updatedAt || d?.createdAt || 0).getTime() || 0;
+        const latestByMY = new Map(); // `${m}|${y}` -> doc
+        for (const d of all) {
+          const m = String(d?.month || "").trim();
+          const y = String(d?.year || "").trim();
+          if (!fiscalPairs.some(p => p.month === m && p.year === y)) continue;
+          const k = `${m}|${y}`;
+          const prev = latestByMY.get(k);
+          if (!prev || ts(d) >= ts(prev)) latestByMY.set(k, d);
+        }
+
+        // sum q1..q84 across FY window
+        const out = {}; for (let i = 1; i <= 84; i++) out[`q${i}`] = 0;
+        for (const p of fiscalPairs) {
+          const d = latestByMY.get(`${p.month}|${p.year}`);
+          const ans = (d && d.answers) || {};
+          for (let i = 1; i <= 84; i++) {
+            const k = `q${i}`;
+            out[k] += Number(ans[k] ?? 0) || 0;
+          }
+        }
+        if (!cancelled) setCumFallback(out);
+      } catch (e) {
+        console.warn("Local cumulative fallback failed:", e);
+        if (!cancelled) setCumFallback(null);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [cumTotals, baseDistrict, baseInstitution, month, year]);
+
+  // Render fields
   const {
     answers: answersRaw = {},
     cumulative: cumulativeFromServer = {},
@@ -259,21 +320,30 @@ function ViewReports({ reportData, month, year }) {
     updatedAt,
   } = doc || {};
 
+  const normalizeTextNameFields = (rows) =>
+    Array.isArray(rows)
+      ? rows.map((row) => {
+          const out = { ...(row || {}) };
+          for (const k of Object.keys(out)) {
+            if (/name|centre|center/i.test(k) && (out[k] === 0 || out[k] === "0")) out[k] = "";
+          }
+          return out;
+        })
+      : [];
+
   const eyeBankData = normalizeTextNameFields(eyeBank || doc?.eyebank || doc?.eye_bank || []);
   const visionCenterData = normalizeTextNameFields(
     visionCenter || doc?.visioncentre || doc?.vision_centre || []
   );
 
+  // Pick cumulative: server → local FY fallback → stored cumulative → {}
   const cumSrc =
-    cumulativeFromServer && Object.keys(cumulativeFromServer).length
-      ? cumulativeFromServer
-      : answersRaw;
+    (cumTotals && Object.keys(cumTotals).length && cumTotals) ||
+    (cumFallback && Object.keys(cumFallback).length && cumFallback) ||
+    (cumulativeFromServer && Object.keys(cumulativeFromServer).length && cumulativeFromServer) ||
+    {};
 
-  // Header uses the DOC's month/year; falls back to props only if doc missing
-  const headerMonth = doc?.month ?? month;
-  const headerYear = doc?.year ?? year;
-
-  if (!reportData && !doc) return null;
+  if (!reportData) return null;
 
   return (
     <div className="a4-wrapper text-[12pt] font-serif">
@@ -285,17 +355,16 @@ function ViewReports({ reportData, month, year }) {
       </div>
 
       <div className="mb-4">
-        <p><strong>District:</strong> {district || reportData?.district || ""}</p>
-        <p><strong>Institution:</strong> {institution || reportData?.institution || ""}</p>
+        <p><strong>District:</strong> {district}</p>
+        <p><strong>Institution:</strong> {institution}</p>
         <p>
-          <strong>Month:</strong> {headerMonth} {headerYear}
+          <strong>Month:</strong> {month} {year}
           {updatedAt ? (
             <span className="ml-2 text-gray-500 no-print">
               (updated {new Date(updatedAt).toLocaleString()})
             </span>
           ) : null}
         </p>
-        {errText && <p className="text-red-600 text-sm mt-1">{errText}</p>}
       </div>
 
       {hydrating && (
@@ -304,90 +373,355 @@ function ViewReports({ reportData, month, year }) {
         </div>
       )}
 
-      {!doc ? null : (
-        <table className="table-auto w-full text-sm border border-black">
-          <thead>
-            <tr>
-              <th className="border p-1 text-left">Description</th>
-              <th className="border p-1 text-right">During the Month</th>
-              <th className="border p-1 text-right">Cumulative</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(() => {
-              let qNumber = 0;
-              return flatRows.map((item, idx) => {
-                if (item.kind === "header") {
-                  return (
-                    <tr key={`h-${idx}`}>
-                      <td colSpan={3} className="border p-1 font-bold bg-gray-100">{item.label}</td>
-                    </tr>
-                  );
-                }
-                if (item.kind === "subheader") {
-                  return (
-                    <tr key={`sh-${idx}`}>
-                      <td colSpan={3} className="border p-1 font-semibold bg-gray-50">{item.label}</td>
-                    </tr>
-                  );
-                }
-                if (item.kind === "eyeBankTable") {
-                  return (
-                    <tr key={`eb-${idx}`}>
-                      <td colSpan={3} className="border p-1">
-                        <EyeBankTable data={eyeBankData} disabled cumulative />
-                      </td>
-                    </tr>
-                  );
-                }
-                if (item.kind === "visionCenterTable") {
-                  return (
-                    <tr key={`vc-${idx}`}>
-                      <td colSpan={3} className="border p-1">
-                        <VisionCenterTable data={visionCenterData} disabled cumulative />
-                      </td>
-                    </tr>
-                  );
-                }
-                if (item.kind === "q") {
-                  qNumber += 1;
-                  const key = `q${qNumber}`;
-                  const monthVal = Number(answersRaw[key] ?? 0);
-                  const cumVal  = Number(cumSrc[key] ?? 0);
-                  return (
-                    <tr key={`r-${idx}`}>
-                      <td className="border p-1">{item.row.label}</td>
-                      <td className="border p-1 text-right">{monthVal}</td>
-                      <td className="border p-1 text-right">{cumVal}</td>
-                    </tr>
-                  );
-                }
-                return null;
-              });
-            })()}
-          </tbody>
-        </table>
-      )}
+      <table className="table-auto w-full text-sm border border-black">
+        <thead>
+          <tr>
+            <th className="border p-1 text-left">Description</th>
+            <th className="border p-1 text-right">During the Month</th>
+            <th className="border p-1 text-right">Cumulative</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(() => {
+            let qNumber = 0;
+            return flatRows.map((item, idx) => {
+              if (item.kind === "header") {
+                return (
+                  <tr key={`h-${idx}`}>
+                    <td colSpan={3} className="border p-1 font-bold bg-gray-100">{item.label}</td>
+                  </tr>
+                );
+              }
+              if (item.kind === "subheader") {
+                return (
+                  <tr key={`sh-${idx}`}>
+                    <td colSpan={3} className="border p-1 font-semibold bg-gray-50">{item.label}</td>
+                  </tr>
+                );
+              }
+              if (item.kind === "eyeBankTable") {
+                return (
+                  <tr key={`eb-${idx}`}>
+                    <td colSpan={3} className="border p-1">
+                      <EyeBankTable data={eyeBankData} disabled />
+                    </td>
+                  </tr>
+                );
+              }
+              if (item.kind === "visionCenterTable") {
+                return (
+                  <tr key={`vc-${idx}`}>
+                    <td colSpan={3} className="border p-1">
+                      <VisionCenterTable data={visionCenterData} disabled />
+                    </td>
+                  </tr>
+                );
+              }
+              if (item.kind === "q") {
+                qNumber += 1;
+                const key = `q${qNumber}`;
+                const monthVal = Number(answersRaw[key] ?? 0);
+                const cumVal = Number((cumSrc && cumSrc[key]) ?? 0);
+                return (
+                  <tr key={`r-${idx}`}>
+                    <td className="border p-1">{item.row.label}</td>
+                    <td className="border p-1 text-right">{monthVal}</td>
+                    <td className="border p-1 text-right">{cumVal}</td>
+                  </tr>
+                );
+              }
+              return null;
+            });
+          })()}
+        </tbody>
+      </table>
 
-      {doc && (
-        <div className="flex justify-between mt-8">
-          <div>
-            Signature of Senior Optometrist / Optometrist
-            <br />.........................................
-          </div>
-          <div>
-            Signature of Superintendent / Medical Officer
-            <br />.........................................
-          </div>
+      <div className="flex justify-between mt-8">
+        <div>
+          Signature of Senior Optometrist / Optometrist
+          <br />.........................................
+        </div>
+        <div>
+          Signature of Superintendent / Medical Officer
+          <br />.........................................
+        </div>
+      </div>
+    </div>
+  );
+}
+) {
+  const [doc, setDoc] = useState(reportData);
+  const [hydrating, setHydrating] = useState(false);
+  const [cumTotals, setCumTotals] = useState({});
+  const [cumFallback, setCumFallback] = useState(null); // 👈 local FY fallback
+  const flatRows = useMemo(() => buildFlatRows(sections), []);
+
+  const id = reportData?._id || reportData?.id;
+
+  const baseDistrict = reportData?.district || "";
+  const baseInstitution = reportData?.institution || "";
+
+  // Hydrate the selected document (so month column shows full data)
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setHydrating(true);
+        const res = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(id)}`);
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled && res.ok && data && typeof data === "object" && (data.doc || data).answers) {
+          setDoc(data.doc || data);
+        } else {
+          // Fallback: query by MY
+          const q =
+            `district=${encodeURIComponent(reportData?.district || "")}` +
+            `&institution=${encodeURIComponent(reportData?.institution || "")}` +
+            `&month=${encodeURIComponent(reportData?.month || "")}` +
+            `&year=${encodeURIComponent(reportData?.year || "")}`;
+          const r2 = await fetch(`${API_BASE}/api/reports?${q}`);
+          const j2 = await r2.json().catch(() => ({}));
+          const arr = Array.isArray(j2?.docs) ? j2.docs : Array.isArray(j2) ? j2 : [];
+          const latest = arr.sort((a,b) =>
+            new Date(b?.updatedAt||b?.createdAt||0) - new Date(a?.updatedAt||a?.createdAt||0)
+          )[0];
+          if (!cancelled && latest) setDoc(latest);
+        }
+      } finally {
+        if (!cancelled) setHydrating(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, reportData?.district, reportData?.institution, reportData?.month, reportData?.year]);
+
+  // Authoritative FY totals from backend (Apr→selected, inclusive)
+  useEffect(() => {
+    setCumTotals({});
+    if (!baseDistrict || !baseInstitution || !month || !year) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const qs = new URLSearchParams({
+          district: baseDistrict,
+          institution: baseInstitution,
+          month,
+          year: String(year),
+        }).toString();
+        const r = await fetch(`${API_BASE}/api/institution-fy-cumulative?${qs}`);
+        const j = await r.json().catch(() => ({}));
+        if (!cancelled && r.ok && j?.ok && j?.cumulative) {
+          setCumTotals(j.cumulative);
+        }
+      } catch (e) {
+        console.warn("FY cumulative fetch failed:", e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [baseDistrict, baseInstitution, month, year]);
+
+  // 🧮 Local FY fallback (latest per month, April → selected), used only if server didn't provide totals
+  useEffect(() => {
+    if (cumTotals && Object.keys(cumTotals).length) { setCumFallback(null); return; }
+    if (!baseDistrict || !baseInstitution || !month || !year) { setCumFallback(null); return; }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        // All reports for this institution
+        const qs = new URLSearchParams({ district: baseDistrict, institution: baseInstitution }).toString();
+        const r = await fetch(`${API_BASE}/api/reports?${qs}`);
+        const j = await r.json().catch(() => ({}));
+        const all = Array.isArray(j?.docs) ? j.docs : Array.isArray(j) ? j : [];
+        if (cancelled) return;
+
+        // Fiscal window April -> selected
+        const monthIdx = Object.fromEntries(MONTHS.map((m, i) => [m.toLowerCase(), i]));
+        const selIdx = monthIdx[String(month).toLowerCase()];
+        if (selIdx == null || selIdx < 0) { setCumFallback(null); return; }
+        const fiscalStartYear = selIdx >= 9 ? Number(year) - 1 : Number(year);
+        const fiscalPairs = [];
+        for (let i = 0; i <= selIdx; i++) {
+          const m = MONTHS[i];
+          const y = i <= 8 ? fiscalStartYear : fiscalStartYear + 1;
+          fiscalPairs.push({ month: m, year: String(y) });
+        }
+
+        // Pick latest per month
+        const ts = (d) => new Date(d?.updatedAt || d?.createdAt || 0).getTime() || 0;
+        const latestByMY = new Map(); // `${m}|${y}` -> doc
+        for (const d of all) {
+          const m = String(d?.month || "").trim();
+          const y = String(d?.year || "").trim();
+          if (!fiscalPairs.some(p => p.month === m && p.year === y)) continue;
+          const k = `${m}|${y}`;
+          const prev = latestByMY.get(k);
+          if (!prev || ts(d) >= ts(prev)) latestByMY.set(k, d);
+        }
+
+        // Sum q1..q84 across window
+        const out = {}; for (let i = 1; i <= 84; i++) out[`q${i}`] = 0;
+        for (const p of fiscalPairs) {
+          const d = latestByMY.get(`${p.month}|${p.year}`);
+          const ans = (d && d.answers) || {};
+          for (let i = 1; i <= 84; i++) { const k = `q${i}`; out[k] += Number(ans[k] ?? 0) || 0; }
+        }
+        if (!cancelled) setCumFallback(out);
+      } catch (e) {
+        console.warn("Local cumulative fallback failed:", e);
+        if (!cancelled) setCumFallback(null);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [cumTotals, baseDistrict, baseInstitution, month, year]);
+
+  // Render fields
+  const {
+    answers: answersRaw = {},
+    cumulative: cumulativeFromServer = {},
+    eyeBank,
+    visionCenter,
+    institution,
+    district,
+    updatedAt,
+  } = doc || {};
+
+  const normalizeTextNameFields = (rows) =>
+    Array.isArray(rows)
+      ? rows.map((row) => {
+          const out = { ...(row || {}) };
+          for (const k of Object.keys(out)) {
+            if (/name|centre|center/i.test(k) && (out[k] === 0 || out[k] === "0")) out[k] = "";
+          }
+          return out;
+        })
+      : [];
+
+  const eyeBankData = normalizeTextNameFields(eyeBank || doc?.eyebank || doc?.eye_bank || []);
+  const visionCenterData = normalizeTextNameFields(
+    visionCenter || doc?.visioncentre || doc?.vision_centre || []
+  );
+
+  // ✅ Choose cumulative source: server → local FY fallback → (optional) stored cumulative → {}
+  const cumSrc =
+    (cumTotals && Object.keys(cumTotals).length && cumTotals) ||
+    (cumFallback && Object.keys(cumFallback).length && cumFallback) ||
+    (cumulativeFromServer && Object.keys(cumulativeFromServer).length && cumulativeFromServer) ||
+    {};
+
+  if (!reportData) return null;
+
+  return (
+    <div className="a4-wrapper text-[12pt] font-serif">
+      <div className="text-center font-bold text-[16pt] mb-1">
+        NATIONAL PROGRAMME FOR CONTROL OF BLINDNESS (NPCB) KERALA
+      </div>
+      <div className="text-center font-semibold text-[14pt] mb-4">
+        INDIVIDUAL REPORTING FORMAT
+      </div>
+
+      <div className="mb-4">
+        <p><strong>District:</strong> {district}</p>
+        <p><strong>Institution:</strong> {institution}</p>
+        <p>
+          <strong>Month:</strong> {month} {year}
+          {updatedAt ? (
+            <span className="ml-2 text-gray-500 no-print">
+              (updated {new Date(updatedAt).toLocaleString()})
+            </span>
+          ) : null}
+        </p>
+      </div>
+
+      {hydrating && (
+        <div className="no-print mb-3 px-3 py-2 rounded bg-yellow-100 text-yellow-900">
+          Loading full data…
         </div>
       )}
+
+      <table className="table-auto w-full text-sm border border-black">
+        <thead>
+          <tr>
+            <th className="border p-1 text-left">Description</th>
+            <th className="border p-1 text-right">During the Month</th>
+            <th className="border p-1 text-right">Cumulative</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(() => {
+            let qNumber = 0;
+            return flatRows.map((item, idx) => {
+              if (item.kind === "header") {
+                return (
+                  <tr key={`h-${idx}`}>
+                    <td colSpan={3} className="border p-1 font-bold bg-gray-100">{item.label}</td>
+                  </tr>
+                );
+              }
+              if (item.kind === "subheader") {
+                return (
+                  <tr key={`sh-${idx}`}>
+                    <td colSpan={3} className="border p-1 font-semibold bg-gray-50">{item.label}</td>
+                  </tr>
+                );
+              }
+              if (item.kind === "eyeBankTable") {
+                return (
+                  <tr key={`eb-${idx}`}>
+                    <td colSpan={3} className="border p-1">
+                      <EyeBankTable data={eyeBankData} disabled />
+                    </td>
+                  </tr>
+                );
+              }
+              if (item.kind === "visionCenterTable") {
+                return (
+                  <tr key={`vc-${idx}`}>
+                    <td colSpan={3} className="border p-1">
+                      <VisionCenterTable data={visionCenterData} disabled />
+                    </td>
+                  </tr>
+                );
+              }
+              if (item.kind === "q") {
+                qNumber += 1;
+                const key = `q${qNumber}`;
+                const monthVal = Number(answersRaw[key] ?? 0);
+                const cumVal = Number((cumSrc && cumSrc[key]) ?? 0);
+                return (
+                  <tr key={`r-${idx}`}>
+                    <td className="border p-1">{item.row.label}</td>
+                    <td className="border p-1 text-right">{monthVal}</td>
+                    <td className="border p-1 text-right">{cumVal}</td>
+                  </tr>
+                );
+              }
+              return null;
+            });
+          })()}
+        </tbody>
+      </table>
+
+      <div className="flex justify-between mt-8">
+        <div>
+          Signature of Senior Optometrist / Optometrist
+          <br />.........................................
+        </div>
+        <div>
+          Signature of Superintendent / Medical Officer
+          <br />.........................................
+        </div>
+      </div>
     </div>
   );
 }
 
+
+
 /* -------------------------------------------------------------------------- */
-/* ReportEntry                                                                 */
+/* ReportEntry (data entry + save)                                             */
 /* -------------------------------------------------------------------------- */
+
 function ReportEntry({
   user,
   initialAnswers = {},
@@ -396,34 +730,45 @@ function ReportEntry({
   initialMonth = "",
   initialYear = "",
   disabled = false,
-  onOpenExisting, // optional: navigate to existing doc
 }) {
   const [answers, setAnswers] = useState(initialAnswers);
 
-  // Eye Bank table state (fallback to 2 empty rows if structure missing)
-  const eyeBankSection = sections.find((s) => (s.title || "").toUpperCase().includes("EYE BANK"));
-  const eyeBankRowsDef = getQs(eyeBankSection);
+  // Helper: accept .questions or .rows and ensure each item has id/label
+  const getQs = (blk) =>
+    (Array.isArray(blk?.questions) ? blk.questions : Array.isArray(blk?.rows) ? blk.rows : []).map(
+      (q, i) => ({
+        ...q,
+        id:
+          q?.id ??
+          q?.key ??
+          q?.code ??
+          q?.name ??
+          q?.labelKey ??
+          `q_auto_${(blk?.title || "blk").toString().replace(/\s+/g, "_")}_${i + 1}`,
+        label: q?.label ?? q?.title ?? q?.text ?? q?.name ?? `Row ${i + 1}`,
+      })
+    );
+
+  // ---- Eye Bank table state (robust to data shape) ----
+  const eyeBankSec = sections.find((s) => /eye bank/i.test(String(s.title || "")));
+  const eyeBankTemplateRows = Array.isArray(eyeBankSec?.rows) ? eyeBankSec.rows : [];
   const [eyeBank, setEyeBank] = useState(
-    initialEyeBank.length
-      ? initialEyeBank
-      : (eyeBankRowsDef.length ? eyeBankRowsDef.map(() => ({})) : [{}, {}])
+    initialEyeBank.length ? initialEyeBank : eyeBankTemplateRows.map(() => ({}))
   );
 
-  // Vision Center table state (fallback rows)
-  const visionSection = sections.find((s) => (s.title || "").toUpperCase().includes("VISION CENTER"));
-  const visionRowsDef = Array.isArray(visionSection?.rows) ? visionSection.rows : [];
+  // ---- Vision Center table state (robust to data shape) ----
+  const vcSec = sections.find((s) => /vision center/i.test(String(s.title || "")));
+  const visionRows = Array.isArray(vcSec?.rows) ? vcSec.rows : [];
   const [visionCenter, setVisionCenter] = useState(
     initialVisionCenter.length
       ? initialVisionCenter
-      : (visionRowsDef.length
-          ? visionRowsDef.map((row) =>
-              Object.fromEntries(
-                Object.keys(row)
-                  .filter((k) => k.endsWith("Key"))
-                  .map((k) => [row[k], ""])
-              )
-            )
-          : [{ name: "", examined: "" }, { name: "", examined: "" }])
+      : visionRows.map((row) =>
+          Object.fromEntries(
+            Object.keys(row || {})
+              .filter((k) => k.endsWith("Key"))
+              .map((k) => [row[k], ""])
+          )
+        )
   );
 
   const [month, setMonth] = useState(initialMonth);
@@ -431,95 +776,12 @@ function ReportEntry({
   const [mode, setMode] = useState("edit");
   const [locked, setLocked] = useState(false);
 
-  // Auto-play flute while in Report Entry; stop on exit
-  useEffect(() => {
-    startFlute();
-    return () => stopFlute();
-  }, []);
-
-  // ---------- Prevent duplicate report for same Institution+District+Month+Year ----------
-  const [existingForPeriod, setExistingForPeriod] = useState(null);
-  const [checkingExisting, setCheckingExisting] = useState(false);
-
-  const norm = (s) => String(s || "").trim().toLowerCase();
-  const eq = (a, b) => norm(a) === norm(b);
-
-  const district = String(user?.district || "").trim();
-  const institution = String(user?.institution || "").trim();
-
-  // DOC detection
   const isDoc = user?.institution?.startsWith("DOC ");
+  const canSave = month && year;
 
-  useEffect(() => {
-    if (isDoc) { setExistingForPeriod(null); return; }
-    if (!district || !institution || !month || !year) {
-      setExistingForPeriod(null);
-      return;
-    }
-
-    let cancelled = false;
-
-    const fetchList = async (url) => {
-      try {
-        const r = await fetch(url);
-        if (!r.ok) return [];
-        const j = await r.json().catch(() => ({}));
-        return Array.isArray(j?.docs) ? j.docs : Array.isArray(j) ? j : [];
-      } catch {
-        return [];
-      }
-    };
-
-    (async () => {
-      setCheckingExisting(true);
-      try {
-        const q =
-          `district=${encodeURIComponent(district)}` +
-          `&institution=${encodeURIComponent(institution)}` +
-          `&month=${encodeURIComponent(month)}` +
-          `&year=${encodeURIComponent(year)}`;
-
-        let list = await fetchList(`${API_BASE}/api/reports?${q}`);
-        if (!list.length) {
-          const q2 =
-            `district=${encodeURIComponent(district)}` +
-            `&institution=${encodeURIComponent(institution)}`;
-          list = await fetchList(`${API_BASE}/api/reports?${q2}`);
-          if (!list.length) list = await fetchList(`${API_BASE}/api/reports`);
-        }
-
-        const exact = list.find(
-          (d) =>
-            eq(d?.district, district) &&
-            eq(d?.institution, institution) &&
-            eq(d?.month, month) &&
-            String(d?.year) === String(year)
-        );
-
-        if (!cancelled) setExistingForPeriod(exact || null);
-      } finally {
-        if (!cancelled) setCheckingExisting(false);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [district, institution, month, year, isDoc]);
-
-  const canSave = !!month && !!year && !existingForPeriod;
-
-  const handleSubmitSave = async () => {
+  const confirm = async () => {
     if (!month || !year) {
       alert("Please select both Month and Year before saving.");
-      return;
-    }
-    if (!isDoc && existingForPeriod) {
-      if (onOpenExisting) {
-        if (window.confirm(`A report for ${institution} — ${month} ${year} already exists.\nOpen it now?`)) {
-          onOpenExisting(existingForPeriod);
-        }
-      } else {
-        alert(`A report for ${institution} — ${month} ${year} already exists. Please open and edit that report.`);
-      }
       return;
     }
 
@@ -553,17 +815,12 @@ function ReportEntry({
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.ok === false) {
+      if (!res.ok) {
         console.error("Save failed:", data);
-        if (res.status === 409 || data?.code === "DUPLICATE_MONTH") {
-          alert(`❌ A report for ${institution} — ${month} ${year} already exists.`);
-          return;
-        }
-        alert(`❌ Save failed: ${data?.error || res.status}`);
+        alert("❌ Save failed. See console.");
         return;
       }
       setLocked(true);
-      stopFlute();
       alert(`✅ Saved for ${user.institution}, ${user.district}`);
     } catch (err) {
       console.error("Save error:", err);
@@ -588,7 +845,6 @@ function ReportEntry({
     );
   }
 
-  // Render all sections/questions
   return (
     <div className="a4-wrapper font-serif">
       <div className="p-6 bg-white rounded-xl shadow-lg">
@@ -609,68 +865,53 @@ function ReportEntry({
           />
         </div>
 
-        {/* Duplicate guard banner */}
-        {!isDoc && existingForPeriod && !checkingExisting && (
-          <div className="no-print mb-4 px-3 py-2 rounded bg-red-100 text-red-800">
-            A report for <b>{institution}</b> — <b>{month} {year}</b> already exists.
-            <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                className="px-3 py-1.5 rounded bg-indigo-600 text-white"
-                onClick={() => {
-                  if (onOpenExisting) onOpenExisting(existingForPeriod);
-                  else alert("Please open the existing report from the View menu.");
-                }}
-              >
-                Open Existing
-              </button>
-              <span className="text-xs text-red-700 self-center">
-                (Saving another one is disabled.)
-              </span>
-            </div>
-          </div>
-        )}
+        {/* ===== Question Sections (accepts `questions` OR `rows`) ===== */}
+        {sections
+          .filter((s) => !s.table)
+          .map((s, secIdx) => {
+            const topQs = getQs(s);
+            return (
+              <div key={s.title || `sec-${secIdx}`} className="mb-12">
+                <h4 className="text-lg font-bold text-[#017d8a] mb-4">{s.title || ""}</h4>
 
-        {/* Question Sections */}
-        {sections.filter((s) => !s.table).map((s) => (
-          <div key={s.title || Math.random()} className="mb-12">
-            {s.title && <h4 className="text-lg font-bold text-[#017d8a] mb-4">{s.title}</h4>}
-
-            {/* top-level questions/rows */}
-            {getQs(s).length > 0 && (
-              <div className="flex flex-col gap-6">
-                {getQs(s).map((q) => (
-                  <div className="mb-2" key={q.id || q.label}>
-                    <QuestionInput
-                      q={q}
-                      value={answers[q.id] || ""}
-                      onChange={(val) => setAnswers((a) => ({ ...a, [q.id]: val }))}
-                      disabled={disabled}
-                    />
+                {topQs.length > 0 && (
+                  <div className="flex flex-col gap-6">
+                    {topQs.map((q) => (
+                      <div className="mb-2" key={q.id}>
+                        <QuestionInput
+                          q={q}
+                          value={answers[q.id] || ""}
+                          onChange={(val) => setAnswers((a) => ({ ...a, [q.id]: val }))}
+                          disabled={disabled}
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                )}
 
-            {/* subsections */}
-            {Array.isArray(s.subsections) && s.subsections.map((sub) => (
-              <div key={sub.title || Math.random()} className="mt-10">
-                {sub.title && <h5 className="font-bold text-[#017d8a] mb-4">{sub.title}</h5>}
-                <div className="flex flex-col space-y-8">
-                  {getQs(sub).map((q) => (
-                    <QuestionInput
-                      key={q.id || q.label}
-                      q={q}
-                      value={answers[q.id] || ""}
-                      onChange={(val) => setAnswers((a) => ({ ...a, [q.id]: val }))}
-                      disabled={disabled}
-                    />
-                  ))}
-                </div>
+                {Array.isArray(s.subsections) &&
+                  s.subsections.map((sub, subIdx) => {
+                    const subQs = getQs(sub);
+                    return (
+                      <div key={sub.title || `sub-${secIdx}-${subIdx}`} className="mt-10">
+                        <h5 className="font-bold text-[#017d8a] mb-4">{sub.title || ""}</h5>
+                        <div className="flex flex-col space-y-8">
+                          {subQs.map((q) => (
+                            <QuestionInput
+                              key={q.id}
+                              q={q}
+                              value={answers[q.id] || ""}
+                              onChange={(val) => setAnswers((a) => ({ ...a, [q.id]: val }))}
+                              disabled={disabled}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
-            ))}
-          </div>
-        ))}
+            );
+          })}
 
         {/* Eye Bank */}
         <div className="mb-12">
@@ -694,27 +935,20 @@ function ReportEntry({
 
         {!disabled && !isDoc && (
           <div className="text-center mt-8">
-            {!month || !year ? (
+            {!canSave && (
               <div className="text-red-600 font-medium mb-4">
                 Please select both <b>Month</b> and <b>Year</b> before saving.
               </div>
-            ) : null}
+            )}
             <button
-              onClick={() => {
-                if (!month || !year) return alert("❌ Please select both Month and Year before saving.");
-                if (existingForPeriod) {
-                  if (onOpenExisting) onOpenExisting(existingForPeriod);
-                  else alert(`A report for ${institution} — ${month} ${year} already exists.`);
-                  return;
-                }
-                setMode("confirm");
-              }}
+              onClick={() =>
+                canSave
+                  ? setMode("confirm")
+                  : alert("❌ Please select both Month and Year before saving.")
+              }
               className={`px-8 py-3 rounded-lg text-white transition ${
-                !month || !year || !!existingForPeriod
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-green-600 hover:bg-green-700"
+                canSave ? "bg-green-600 hover:bg-green-700" : "bg-gray-400 cursor-not-allowed"
               }`}
-              disabled={!month || !year || !!existingForPeriod}
             >
               Save All
             </button>
@@ -725,7 +959,7 @@ function ReportEntry({
           <div className="text-center mt-6">
             <button
               className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-              onClick={handleSubmitSave}
+              onClick={confirm}
             >
               ✅ Confirm and Submit
             </button>
@@ -742,16 +976,13 @@ function ReportEntry({
   );
 }
 
+
 /* ========================================================================== */
 /* App                                                                         */
 /* ========================================================================== */
-function App() {
-  // persist login
-  const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("user")) || null; } catch { return null; }
-  });
-  useEffect(() => { localStorage.setItem("user", JSON.stringify(user)); }, [user]);
 
+function App() {
+  const [user, setUser] = useState(null);
   const [menu, setMenu] = useState("");
   const [showRegister, setShowRegister] = useState(false);
   const [showVideo, setShowVideo] = useState(true);
@@ -766,17 +997,26 @@ function App() {
   const [year, setYear] = useState("");
 
   const [institutionData, setInstitutionData] = useState([]);
-  const [districtPerformance, setDistrictPerformance] = useState({ monthData: [], cumulativeData: [] });
+  const [districtPerformance, setDistrictPerformance] = useState({
+    monthData: [],
+    cumulativeData: [],
+  });
 
   // DOC/DC detection
   const instStr = String(user?.institution || "").trim().toLowerCase();
-  const userRole = (user?.isDoc || /^doc\s/.test(instStr) || /^dc\s/.test(instStr)) ? "DOC" : (user?.role || "USER");
+  const userRole =
+    (user?.isDoc || /^doc\s/.test(instStr) || /^dc\s/.test(instStr))
+      ? "DOC"
+      : (user?.role || "USER");
 
   const qDefs = useMemo(() => orderedQuestions(sections), []);
   const selectedDistrict = user?.district || "Kozhikode";
 
   const institutionNamesMemo = useMemo(
-    () => (Array.isArray(districtInstitutions[selectedDistrict]) ? districtInstitutions[selectedDistrict] : []),
+    () =>
+      Array.isArray(districtInstitutions[selectedDistrict])
+        ? districtInstitutions[selectedDistrict]
+        : [],
     [selectedDistrict]
   );
 
@@ -785,60 +1025,194 @@ function App() {
     const prev = document.getElementById(id);
     if (prev) prev.remove();
     const style = document.createElement("style");
-    style.id = id; style.media = "print";
+    style.id = id;
+    style.media = "print";
     style.innerHTML = `@media print { @page { size: ${size}; margin: ${margin}; } }`;
     document.head.appendChild(style);
-    setTimeout(() => { window.print(); setTimeout(() => style.remove(), 400); }, 40);
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => style.remove(), 400);
+    }, 40);
   };
   const handlePrintA4 = () => printWithPageSize("A4 portrait", "10mm");
 
-  // District institution-wise (server-side aggregate)
+  /* ------------------------ Build district institution-wise ------------------------ */
   useEffect(() => {
-    const needs =
-      (menu === "district-institutions" || menu === "print" || menu === "district-dl-inst") &&
-      month && year && selectedDistrict;
-    if (!needs) return;
+    if ((menu !== "district-institutions" && menu !== "print" && menu !== "district-dl-inst") || !month || !year || !selectedDistrict) return;
 
     let cancelled = false;
+
+    const monthIdx = Object.fromEntries(MONTHS.map((m, i) => [m.toLowerCase(), i]));
+    const selIdx = monthIdx[String(month).toLowerCase()];
+    if (selIdx == null || selIdx < 0) return;
+    const fiscalStartYear = selIdx >= 9 ? Number(year) - 1 : Number(year);
+
+    const fiscalPairs = [];
+    for (let i = 0; i <= selIdx; i++) {
+      const m = MONTHS[i];
+      const y = i <= 8 ? fiscalStartYear : fiscalStartYear + 1;
+      fiscalPairs.push({ month: m, year: String(y) });
+    }
+
+    const fetchList = async (url) => {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) return [];
+        const j = await r.json().catch(() => ({}));
+        return Array.isArray(j?.docs) ? j.docs : Array.isArray(j) ? j : [];
+      } catch {
+        return [];
+      }
+    };
+
+    const hydrateDoc = async (doc) => {
+      const id = doc?._id || doc?.id;
+      if (!id) return doc;
+      try {
+        const r = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(id)}`);
+        if (!r.ok) return doc;
+        const j = await r.json().catch(() => ({}));
+        return j?.doc || j || doc;
+      } catch {
+        return doc;
+      }
+    };
+
+    const ts = (d) => {
+      const t = Date.parse(d?.updatedAt || d?.createdAt || 0);
+      return Number.isFinite(t) ? t : 0;
+    };
+
     (async () => {
       try {
-        const q = new URLSearchParams({ district: selectedDistrict, month, year }).toString();
-        const res = await fetch(`${API_BASE}/api/district-institution-report?` + q);
-        const json = await res.json().catch(() => ({}));
+        const all = await fetchList(`${API_BASE}/api/reports`);
+
+        const districtDocs = all.filter(
+          (d) =>
+            String(d?.district || "").trim().toLowerCase() ===
+            String(selectedDistrict).trim().toLowerCase()
+        );
+
+        const inFiscalWindow = districtDocs.filter((d) =>
+          fiscalPairs.some(
+            (p) =>
+              String(d?.month || "").trim().toLowerCase() === p.month.toLowerCase() &&
+              String(d?.year || "") === p.year
+          )
+        );
+
+        const hydrated = await Promise.all(inFiscalWindow.map(hydrateDoc));
         if (cancelled) return;
 
-        if (!res.ok || json?.ok === false) {
-          console.error("district-institution-report failed:", json);
-          setInstitutionData([]);
-          setDistrictPerformance({ monthData: Array(qDefs.length).fill(0), cumulativeData: Array(qDefs.length).fill(0) });
-          return;
-        }
+        const latestByInstMonth = new Map();
+        hydrated.forEach((d) => {
+          const inst = String(d?.institution || "").trim();
+          if (!inst || /^doc\s/i.test(inst) || /^dc\s/i.test(inst)) return;
+          const instLower = inst.toLowerCase();
+          const mLower = String(d?.month || "").trim().toLowerCase();
+          const y = String(d?.year || "").trim();
+          const key = `${instLower}|${mLower}|${y}`;
+          const prev = latestByInstMonth.get(key);
+          if (!prev || ts(d) >= ts(prev)) latestByInstMonth.set(key, d);
+        });
 
-        setInstitutionData(Array.isArray(json.institutionData) ? json.institutionData : []);
-        setDistrictPerformance(json.districtPerformance || { monthData: Array(qDefs.length).fill(0), cumulativeData: Array(qDefs.length).fill(0) });
-      } catch (e) {
-        console.error("district-institution-report error:", e);
-        if (!cancelled) {
-          setInstitutionData([]);
-          setDistrictPerformance({ monthData: Array(qDefs.length).fill(0), cumulativeData: Array(qDefs.length).fill(0) });
+        const displayByLower = new Map();
+        (Array.isArray(institutionNamesMemo) ? institutionNamesMemo : [])
+          .filter((s) => s && !/^doc\s/i.test(String(s)) && !/^dc\s/i.test(String(s)))
+          .forEach((s) => {
+            const disp = String(s).trim();
+            const lower = disp.toLowerCase();
+            if (!displayByLower.has(lower)) displayByLower.set(lower, disp);
+          });
+
+        Array.from(latestByInstMonth.keys()).forEach((k) => {
+          const lower = k.split("|")[0];
+          if (!displayByLower.has(lower)) displayByLower.set(lower, lower);
+        });
+
+        const namesUnion = Array.from(displayByLower.values()).sort((a, b) =>
+          a.localeCompare(b, undefined, { sensitivity: "base" })
+        );
+
+        const mkZeros = () => Array(qDefs.length).fill(0);
+
+        const byInstAgg = new Map(
+          namesUnion.map((name) => [
+            name,
+            { institution: name, monthData: mkZeros(), cumulativeData: mkZeros() },
+          ])
+        );
+
+        const monthLowerSel = String(month).toLowerCase();
+        const yearStrSel = String(year);
+
+        displayByLower.forEach((displayName, lowerName) => {
+          const rec =
+            byInstAgg.get(displayName) ||
+            { institution: displayName, monthData: mkZeros(), cumulativeData: mkZeros() };
+
+          const md = latestByInstMonth.get(`${lowerName}|${monthLowerSel}|${yearStrSel}`);
+          const monthAns = md?.answers || {};
+          for (let i = 0; i < qDefs.length; i++) {
+            const k = `q${i + 1}`;
+            rec.monthData[i] = Number(monthAns[k] ?? 0) || 0;
+          }
+
+          for (const p of fiscalPairs) {
+            const k2 = `${lowerName}|${p.month.toLowerCase()}|${p.year}`;
+            const d = latestByInstMonth.get(k2);
+            const a = d?.answers || {};
+            for (let i = 0; i < qDefs.length; i++) {
+              const k = `q${i + 1}`;
+              rec.cumulativeData[i] += Number(a[k] ?? 0) || 0;
+            }
+          }
+          byInstAgg.set(displayName, rec);
+        });
+
+        const list = Array.from(byInstAgg.values());
+        const distMonth = mkZeros();
+        const distCum = mkZeros();
+        for (const r of list) {
+          for (let i = 0; i < qDefs.length; i++) {
+            distMonth[i] += r.monthData[i];
+            distCum[i] += r.cumulativeData[i];
+          }
         }
+        setInstitutionData(list);
+        setDistrictPerformance({ monthData: distMonth, cumulativeData: distCum });
+      } catch (e) {
+        console.error("Institution-wise fiscal aggregate failed:", e);
+        setInstitutionData([]);
+        setDistrictPerformance({
+          monthData: Array(qDefs.length).fill(0),
+          cumulativeData: Array(qDefs.length).fill(0),
+        });
       }
     })();
-    return () => { cancelled = true; };
-  }, [menu, month, year, selectedDistrict, qDefs.length]);
 
-  // Force-open "view" if a flag was set externally
+    return () => {
+      cancelled = true;
+    };
+  }, [menu, month, year, selectedDistrict, qDefs.length, institutionNamesMemo]);
+
   useEffect(() => {
-    if (window.__FORCE_VIEW__) { window.__FORCE_VIEW__ = false; setMenu("view"); }
+    if (window.__FORCE_VIEW__) {
+      window.__FORCE_VIEW__ = false;
+      setMenu("view");
+    }
   }, []);
 
-  // Auto-select current user's report for chosen month/year (non-DOC)
   useEffect(() => {
     if (!(menu === "view" || menu === "print")) return;
-    if (!month || !year) { setCurrent(null); return; }
+    if (!month || !year) {
+      setCurrent(null);
+      return;
+    }
     if (userRole === "DOC") return;
 
     let cancelled = false;
+
     const pickLatest = (arr) =>
       arr.slice().sort(
         (a, b) =>
@@ -860,8 +1234,10 @@ function App() {
 
         const mine = items.filter(
           (d) =>
-            String(d?.district || "").trim().toLowerCase() === String(user?.district || "").trim().toLowerCase() &&
-            String(d?.institution || "").trim().toLowerCase() === String(user?.institution || "").trim().toLowerCase() &&
+            String(d?.district || "").trim().toLowerCase() ===
+              String(user?.district || "").trim().toLowerCase() &&
+            String(d?.institution || "").trim().toLowerCase() ===
+              String(user?.institution || "").trim().toLowerCase() &&
             String(d?.month || "").trim().toLowerCase() === String(month).toLowerCase() &&
             String(d?.year || "") === String(year)
         );
@@ -876,6 +1252,163 @@ function App() {
 
     return () => { cancelled = true; };
   }, [menu, month, year, userRole, user?.district, user?.institution]);
+
+  /* =======================  EXCEL DOWNLOADS  ======================= */
+
+  const saveBlob = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const toCSV = (rows) =>
+    rows.map((r) =>
+      r.map((v) => {
+        const s = v == null ? "" : String(v);
+        return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      }).join(",")
+    ).join("\n");
+
+  const downloadInstitutionWiseXLSX = async () => {
+    if (!month || !year || !institutionData.length || !Q_ROWS.length) {
+      alert("Nothing to export. Pick Month & Year and wait for data.");
+      return;
+    }
+
+    const instNames = institutionData.map((d) => d.institution);
+    const header = ["Description"];
+    instNames.forEach((n) => header.push(`${n} (Month)`, `${n} (Cumulative)`));
+    header.push("District (Month)", "District (Cumulative)");
+
+    const rows = [header];
+    for (let i = 0; i < Q_ROWS.length; i++) {
+      const label = Q_ROWS[i].label;
+      const row = [label];
+      instNames.forEach((n) => {
+        const rec = institutionData.find((r) => r.institution === n);
+        row.push(rec?.monthData?.[i] ?? 0, rec?.cumulativeData?.[i] ?? 0);
+      });
+      row.push(districtPerformance.monthData?.[i] ?? 0, districtPerformance.cumulativeData?.[i] ?? 0);
+      rows.push(row);
+    }
+
+    try {
+      const XLSX = await import("xlsx");
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      XLSX.utils.book_append_sheet(wb, ws, "Institution-wise");
+      XLSX.writeFile(wb, `Institution-wise_${selectedDistrict}_${month}_${year}.xlsx`);
+    } catch (e) {
+      console.warn("xlsx not available, fallback CSV:", e);
+      saveBlob(new Blob([toCSV(rows)], { type: "text/csv;charset=utf-8" }),
+        `Institution-wise_${selectedDistrict}_${month}_${year}.csv`);
+    }
+  };
+
+  const fetchDistrictDocsForMonth = async () => {
+    const url =
+      `${API_BASE}/api/reports?` +
+      `district=${encodeURIComponent(selectedDistrict)}` +
+      `&month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}`;
+
+    const res = await fetch(url);
+    const json = await res.json().catch(() => ({}));
+    const list = Array.isArray(json?.docs) ? json.docs : Array.isArray(json) ? json : [];
+
+    const hydrated = await Promise.all(
+      list.map(async (d) => {
+        try {
+          const id = d?._id || d?.id;
+          if (!id) return d;
+          const r2 = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(id)}`);
+          const j2 = await r2.json().catch(() => ({}));
+          return j2?.doc || j2 || d;
+        } catch {
+          return d;
+        }
+      })
+    );
+    return hydrated;
+  };
+
+  const normalizeArray = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    return arr.map((o) => {
+      const out = {};
+      Object.entries(o || {}).forEach(([k, v]) => {
+        const key = String(k).trim();
+        out[key] = typeof v === "string" ? v.trim() : v;
+      });
+      return out;
+    });
+  };
+  const unionKeys = (rows) => {
+    const set = new Set();
+    rows.forEach((r) => Object.keys(r || {}).forEach((k) => set.add(k)));
+    return Array.from(set);
+  };
+
+  const downloadEyeBankVisionCenterXLSX = async () => {
+    if (!month || !year) {
+      alert("Pick Month & Year first.");
+      return;
+    }
+    try {
+      const docs = await fetchDistrictDocsForMonth();
+
+      const ebRows = [];
+      const vcRows = [];
+      docs.forEach((d) => {
+        const inst = String(d?.institution || "").trim();
+        if (!inst || /^doc\s/i.test(inst) || /^dc\s/i.test(inst)) return;
+
+        const eb = normalizeArray(d?.eyeBank || d?.eyebank || d?.eye_bank || []);
+        eb.forEach((row) => ebRows.push({ Institution: inst, ...row }));
+
+        const vc = normalizeArray(d?.visionCenter || d?.visioncentre || d?.vision_centre || []);
+        vc.forEach((row) => vcRows.push({ Institution: inst, ...row }));
+      });
+
+      const ebKeys = ["Institution", ...unionKeys(ebRows).filter((k) => k !== "Institution")];
+      const vcKeys = ["Institution", ...unionKeys(vcRows).filter((k) => k !== "Institution")];
+
+      const ebAOA = [ebKeys, ...ebRows.map((r) => ebKeys.map((k) => r?.[k] ?? ""))];
+      const vcAOA = [vcKeys, ...vcRows.map((r) => vcKeys.map((k) => r?.[k] ?? ""))];
+
+      try {
+        const XLSX = await import("xlsx");
+        const wb = XLSX.utils.book_new();
+        if (ebRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ebAOA), "EyeBank");
+        if (vcRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(vcAOA), "VisionCenter");
+        if (!ebRows.length && !vcRows.length) {
+          alert("No Eye Bank / Vision Center data for this month.");
+          return;
+        }
+        XLSX.writeFile(wb, `EB_VC_${selectedDistrict}_${month}_${year}.xlsx`);
+      } catch (e) {
+        console.warn("xlsx not available, fallback CSV:", e);
+        if (ebRows.length) {
+          saveBlob(new Blob([toCSV(ebAOA)], { type: "text/csv;charset=utf-8" }),
+            `EyeBank_${selectedDistrict}_${month}_${year}.csv`);
+        }
+        if (vcRows.length) {
+          saveBlob(new Blob([toCSV(vcAOA)], { type: "text/csv;charset=utf-8" }),
+            `VisionCenter_${selectedDistrict}_${month}_${year}.csv`);
+        }
+        if (!ebRows.length && !vcRows.length) {
+          alert("No Eye Bank / Vision Center data for this month.");
+        }
+      }
+    } catch (e) {
+      console.error("EB/VC export failed:", e);
+      alert("Could not build Eye Bank & Vision Center export.");
+    }
+  };
 
   /* ------------------------- Auth & shells ------------------------- */
   if (!user) {
@@ -895,15 +1428,24 @@ function App() {
   if (showVideo) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center">
-        <video src="/intro.mp4" autoPlay onEnded={() => setShowVideo(false)} className="w-full max-w-4xl" controls />
-        <button className="mt-4 px-6 py-2 bg-gray-200 rounded hover:bg-gray-300 font-medium" onClick={() => setShowVideo(false)}>
+        <video
+          src="/intro.mp4"
+          autoPlay
+          onEnded={() => setShowVideo(false)}
+          className="w-full max-w-4xl"
+          controls
+        />
+        <button
+          className="mt-4 px-6 py-2 bg-gray-200 rounded hover:bg-gray-300 font-medium"
+          onClick={() => setShowVideo(false)}
+        >
           Skip Video
         </button>
       </div>
     );
   }
 
-  const viewerInstitution = userRole === "DOC" ? undefined : (user?.institution || "");
+  const viewerInstitution = userRole === "DOC" ? undefined : user?.institution || "";
 
   return (
     <div className="min-h-screen bg-gray-100 pt-[80px]">
@@ -912,8 +1454,15 @@ function App() {
           user={user}
           userRole={userRole}
           active={menu}
-          onMenu={(key) => { setMenu(key); if (!key.startsWith("view")) setCurrent(null); }}
-          onLogout={() => { setUser(null); localStorage.removeItem("user"); setMenu(""); setCurrent(null); }}
+          onMenu={(key) => {
+            setMenu(key);
+            if (!key.startsWith("view")) setCurrent(null);
+          }}
+          onLogout={() => {
+            setUser(null);
+            setMenu("");
+            setCurrent(null);
+          }}
         />
       </div>
 
@@ -924,7 +1473,6 @@ function App() {
       )}
 
       <div className="p-4 font-serif text-[12pt]">
-
         {/* Report Entry */}
         {menu === "entry" && (
           <ReportEntry
@@ -935,24 +1483,7 @@ function App() {
             initialMonth={month}
             initialYear={year}
             disabled={user?.isGuest}
-            onOpenExisting={(rep) => { setCurrent(rep); setMenu("view"); }}
           />
-        )}
-
-        {/* Connected Links (accepts connected-links or connected-links:<Tab Label>) */}
-        {menu?.startsWith?.("connected-links") && (
-          <ConnectedLinks user={user} initialTab={menu.split(":")[1] || ""} />
-        )}
-
-        {/* NEW — Research / Deep Study (menu or research:<Tab Label>) */}
-        {menu?.startsWith?.("research") && (
-          <div className="max-w-3xl mx-auto p-6 bg-white rounded-xl shadow font-serif">
-            <h2 className="text-2xl font-bold text-[#134074] mb-2">Research / Deep Study</h2>
-            <div className="text-[#016eaa] mb-4">
-              Section: <b>{menu.split(":")[1] || "—"}</b>
-            </div>
-            <div className="text-gray-700">Coming soon.</div>
-          </div>
         )}
 
         {/* View / Edit */}
@@ -961,15 +1492,18 @@ function App() {
             <div className="flex justify-center gap-4 mb-4">
               <select className="border p-2 rounded" value={month} onChange={(e) => setMonth(e.target.value)}>
                 <option value="">Month</option>
-                {MONTHS.map((m) => (<option key={m} value={m}>{m}</option>))}
+                {MONTHS.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
               </select>
               <select className="border p-2 rounded" value={year} onChange={(e) => setYear(e.target.value)}>
                 <option value="">Year</option>
-                {Array.from({ length: 6 }, (_, i) => 2024 + i).map((y) => (<option key={y} value={y}>{y}</option>))}
+                {Array.from({ length: 6 }, (_, i) => 2024 + i).map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
               </select>
             </div>
 
-            {/* Reports list & selection */}
             <ReportsList
               filterMonth={month}
               filterYear={year}
@@ -978,21 +1512,14 @@ function App() {
               onSelect={(report) => setCurrent(report || null)}
             />
 
-            {/* Selection status */}
             <div className="text-center mt-4 text-sm text-black no-print">
               {currentReport
                 ? `✅ Selected: ${currentReport.institution}, ${currentReport.month} ${currentReport.year}`
                 : "❌ No report selected"}
             </div>
 
-            {/* Single detail view */}
             {currentReport && (
-              <ViewReports
-                key={`${currentReport.district}|${currentReport.institution}|${currentReport.month}|${currentReport.year}`}
-                reportData={currentReport}
-                month={currentReport.month}
-                year={currentReport.year}
-              />
+              <ViewReports reportData={currentReport} month={currentReport.month} year={currentReport.year} />
             )}
           </div>
         )}
@@ -1005,32 +1532,23 @@ function App() {
               <div className="no-print flex flex-wrap items-center justify-center gap-3 mb-4">
                 <button
                   className="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white"
-                  onClick={async () => {
-                    if (!month || !year) return alert("Select Month & Year first.");
-                    const q = new URLSearchParams({ district: selectedDistrict, month, year }).toString();
-                    try {
-                      const res = await fetch(`${API_BASE}/api/district-institution-report?` + q);
-                      const json = await res.json().catch(() => ({}));
-                      if (json?.institutionData) setInstitutionData(json.institutionData);
-                      if (json?.districtPerformance) setDistrictPerformance(json.districtPerformance);
-                    } catch {}
-                  }}
+                  onClick={downloadInstitutionWiseXLSX}
                   disabled={!month || !year}
                 >
-                  ⬇️ Refresh Institution-wise
+                  ⬇️ Download Institution-wise (.xlsx)
                 </button>
                 <button
                   className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white"
-                  onClick={() => setMenu("district-dl-ebvc")}
+                  onClick={downloadEyeBankVisionCenterXLSX}
                   disabled={!month || !year}
                 >
-                  ⬇️ Eye Bank & Vision Center
+                  ⬇️ Download Eye Bank & Vision Center (.xlsx)
                 </button>
               </div>
             )}
             {month && year ? (
               <ViewInstitutionWiseReport
-                questions={qDefs.map((q) => q.label)}
+                questions={Q_ROWS.map((q) => q.label)}
                 institutionNames={institutionNamesMemo}
                 data={institutionData}
                 districtPerformance={districtPerformance}
@@ -1045,19 +1563,38 @@ function App() {
           </>
         )}
 
-        {/* Submenus */}
+        {/* Submenu: Download Institution-wise */}
         {menu === "district-dl-inst" && (
           <>
             <MonthYearSelector month={month} year={year} setMonth={setMonth} setYear={setYear} />
+            <div className="no-print flex justify-center mt-3">
+              <button
+                className="px-5 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
+                onClick={downloadInstitutionWiseXLSX}
+                disabled={!month || !year || institutionData.length === 0}
+              >
+                ⬇️ Download Institution-wise (.xlsx)
+              </button>
+            </div>
             <div className="text-center mt-3 text-sm text-gray-600">
-              Select month & year, then click download from the District Institutions tab.
+              Select month & year, then click download.
             </div>
           </>
         )}
 
+        {/* Submenu: Download Eye Bank & VC */}
         {menu === "district-dl-ebvc" && (
           <>
             <MonthYearSelector month={month} year={year} setMonth={setMonth} setYear={setYear} />
+            <div className="no-print flex justify-center mt-3">
+              <button
+                className="px-5 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+                onClick={downloadEyeBankVisionCenterXLSX}
+                disabled={!month || !year}
+              >
+                ⬇️ Download Eye Bank & Vision Center (.xlsx)
+              </button>
+            </div>
             <div className="text-center mt-3 text-sm text-gray-600">
               Select month & year, then click download.
             </div>
@@ -1084,25 +1621,27 @@ function App() {
             <div className="flex justify-center gap-4 mb-4 no-print">
               <select className="border p-2 rounded" value={month} onChange={(e) => setMonth(e.target.value)}>
                 <option value="">Month</option>
-                {MONTHS.map((m) => (<option key={m} value={m}>{m}</option>))}
+                {MONTHS.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
               </select>
               <select className="border p-2 rounded" value={year} onChange={(e) => setYear(e.target.value)}>
                 <option value="">Year</option>
-                {Array.from({ length: 6 }, (_, i) => 2024 + i).map((y) => (<option key={y} value={y}>{y}</option>))}
+                {Array.from({ length: 6 }, (_, i) => 2024 + i).map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
               </select>
             </div>
 
             {userRole !== "DOC" && currentReport && (
               <>
-                <button className="no-print mb-4 px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700" onClick={handlePrintA4}>
+                <button
+                  className="no-print mb-4 px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  onClick={handlePrintA4}
+                >
                   🖨️ Print (A4 portrait)
                 </button>
-                <ViewReports
-                  key={`${currentReport.district}|${currentReport.institution}|${currentReport.month}|${currentReport.year}`}
-                  reportData={currentReport}
-                  month={currentReport.month}
-                  year={currentReport.year}
-                />
+                <ViewReports reportData={currentReport} month={currentReport.month} year={currentReport.year} />
               </>
             )}
 
@@ -1116,7 +1655,7 @@ function App() {
               <>
                 {month && year ? (
                   <ViewInstitutionWiseReport
-                    questions={qDefs.map((q) => q.label)}
+                    questions={Q_ROWS.map((q) => q.label)}
                     institutionNames={institutionNamesMemo}
                     data={institutionData}
                     districtPerformance={districtPerformance}
@@ -1137,6 +1676,14 @@ function App() {
           <EditGate user={user}>
             <EditReport user={user} />
           </EditGate>
+        )}
+
+        {menu === "test-vc" && <TestVisionCenter />}
+
+        {menu === "" && (
+          <div className="text-center text-gray-500 mt-10 text-lg italic">
+            🔹 Please select a menu option to begin.
+          </div>
         )}
       </div>
     </div>
