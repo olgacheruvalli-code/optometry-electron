@@ -1,4 +1,3 @@
-// src/components/Login.jsx
 import React, { useState, useMemo } from "react";
 import API_BASE from "../apiBase";
 import { districtInstitutions } from "../data/districtInstitutions";
@@ -13,32 +12,16 @@ export default function Login({ onLogin, onShowRegister }) {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Institutions for the selected district:
-  // - Inject exactly ONE "DOC <district>"
-  // - Never include any "DC ..." entries
-  // - Remove duplicates
+  // Use the curated list (which already includes DOC <district>) — no DC injection.
   const institutionOptions = useMemo(() => {
     if (!district) return [];
-    const base = Array.isArray(districtInstitutions[district])
-      ? districtInstitutions[district]
-      : [];
-
-    const injected = [`DOC ${district}`, ...base];
-
-    const seen = new Set();
-    const out = [];
-    for (const name of injected) {
-      const s = String(name || "").trim();
-      if (!s) continue;
-      if (/^dc\s/i.test(s)) continue; // 🚫 drop any DC entries
-      const key = s.toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        out.push(s);
-      }
+    const base = Array.isArray(districtInstitutions[district]) ? districtInstitutions[district] : [];
+    const seen = new Set(); const out = [];
+    for (const name of base) {
+      const s = String(name || "").trim(); if (!s) continue;
+      const k = s.toLowerCase(); if (!seen.has(k)) { seen.add(k); out.push(s); }
     }
-    // Sort A→Z (you can pin DOC at top if you prefer)
-    out.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    out.sort((a,b)=>a.localeCompare(b, undefined, { sensitivity:"base" }));
     return out;
   }, [district]);
 
@@ -52,15 +35,9 @@ export default function Login({ onLogin, onShowRegister }) {
       return;
     }
 
-    setError("");
-    setIsLoading(true);
+    setError(""); setIsLoading(true);
 
-    const payload = {
-      institution: institution.trim(),
-      district: district.trim(),
-      password,
-    };
-
+    const payload = { institution: institution.trim(), district: district.trim(), password };
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), 12_000);
 
@@ -87,11 +64,9 @@ export default function Login({ onLogin, onShowRegister }) {
       }
       onLogin(user);
     } catch (err) {
-      setError(
-        err?.name === "AbortError"
-          ? "Login request timed out. Please try again."
-          : (err?.message || "Login failed.")
-      );
+      setError(err?.name === "AbortError"
+        ? "Login request timed out. Please try again."
+        : (err?.message || "Login failed."));
       console.error("Login error:", err);
     } finally {
       clearTimeout(t);
@@ -105,7 +80,7 @@ export default function Login({ onLogin, onShowRegister }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#e9f1f8] to-[#f7fafc] font-serif p-4">
-      <div className="flex flex-col md:flex-row bg-white rounded-2xl shadow-xl overflow-hidden w/full max-w-5xl border border-gray-100">
+      <div className="flex flex-col md:flex-row bg-white rounded-2xl shadow-xl overflow-hidden w-full max-w-5xl border border-gray-100">
         {/* Left: Form */}
         <div className="w-full md:w-1/2 p-6 md:p-8 space-y-4 bg-white">
           <h2 className="text-2xl md:text-3xl font-bold text-center text-[#134074]">
@@ -120,11 +95,7 @@ export default function Login({ onLogin, onShowRegister }) {
           <label className="block text-sm text-gray-700">District</label>
           <select
             value={district}
-            onChange={(e) => {
-              setDistrict(e.target.value);
-              setInstitution("");
-              setError("");
-            }}
+            onChange={(e) => { setDistrict(e.target.value); setInstitution(""); setError(""); }}
             className="w-full px-3 py-2 rounded bg-gray-100 text-gray-800 focus:outline-none"
           >
             <option value="">Select District</option>
