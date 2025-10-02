@@ -1,213 +1,188 @@
 // src/components/VisionCenterTable.jsx
 import React from "react";
 
-/**
- * A robust 7-column Vision Center table.
- * Columns:
- *  # | Institution | Vision Centre | Patients Examined | Cataract Cases | Other Eye Diseases | Refractive Errors
- *
- * Back-compat: accepts many legacy/variant key names and normalizes them.
- * Emits a stable set of keys onChange:
- *   institution, visionCenter, examined, cataract, otherDiseases, refractiveErrors
- */
-
-const NUM_ROWS = 10;
-
-// Read a string field from a row using multiple possible keys
-const readStr = (row, keys) => {
+/** Get the first defined, non-null value from possible keys */
+function read(row, keys, fallback = "") {
   for (const k of keys) {
     const v = row?.[k];
-    if (typeof v === "string") return v;
-    if (v != null && typeof v?.toString === "function") return v.toString();
+    if (v !== undefined && v !== null && v !== "") return v;
   }
-  return "";
-};
+  return fallback;
+}
 
-// Read a numeric field from a row using multiple possible keys; return "" for empty
-const readNum = (row, keys) => {
-  for (const k of keys) {
-    const v = row?.[k];
-    if (v === "" || v == null) return "";
-    const n = Number(v);
-    if (Number.isFinite(n)) return String(n);
-  }
-  return "";
-};
+/** Coerce numeric-looking strings to integers for footer totals */
+function toInt(v) {
+  const n = Number(String(v ?? "").replace(/[^\d-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
 
-// Update helper (immutable)
-const updateAt = (arr, idx, patch) => {
-  const next = arr.slice();
-  next[idx] = { ...(next[idx] || {}), ...patch };
-  return next;
-};
+export default function VisionCenterTable({
+  data = [],
+  onChange,
+  disabled = false,
+}) {
+  const rows = Array.isArray(data) ? data : [];
 
-export default function VisionCenterTable({ data = [], onChange, disabled = false }) {
-  // Build rows to show: existing rows + blank rows up to NUM_ROWS
-  const rows = React.useMemo(() => {
-    const base = Array.isArray(data) ? data.slice(0, NUM_ROWS) : [];
-    while (base.length < NUM_ROWS) base.push({});
-    return base;
-  }, [data]);
-
-  // Normalized getters (back-compat aliases)
-  const getInstitution = (r) =>
-    readStr(r, ["institution", "institutionName", "inst", "nameOfInstitution", "Name of Institution", "NameOfInstitution"]);
-
-  const getVCName = (r) =>
-    readStr(r, ["visionCenter", "visionCentre", "vcName", "name", "vision_center", "visioncentre", "Name of Vision Centre", "NameOfVisionCentre"]);
-
-  const getExamined = (r) =>
-    readNum(r, ["examined", "patientsExamined", "patients", "No of patients examined", "noPatientsExamined"]);
-
-  const getCataract = (r) =>
-    readNum(r, ["cataract", "cataractCases", "cataractDetected", "No of Cataract cases detected", "noCataract"]);
-
-  const getOther = (r) =>
-    readNum(r, ["otherDiseases", "otherEyeDiseases", "others", "No of other eye diseases", "noOtherDiseases"]);
-
-  const getRefractive = (r) =>
-    readNum(r, ["refractiveErrors", "refErrors", "refractive", "No of Refractive errors", "noRefractiveErrors"]);
-
-  const handle = (rowIdx, key, rawVal) => {
+  // Write only to canonical field; caller's setState should merge rows (spread)
+  const handle = (rowIdx, canonicalKey, value) => {
     if (!onChange) return;
-
-    // Validate & normalize by key
-    if (key === "institution" || key === "visionCenter") {
-      // Only letters, numbers, spaces, dash, slash, comma, dot
-      const cleaned = (rawVal || "").replace(/[^a-zA-Z0-9 \-\/,.\(\)]/g, "");
-      onChange(rowIdx, key, cleaned);
-      return;
-    }
-
-    // Numeric fields: strip all non-digits
-    const digits = String(rawVal || "").replace(/\D/g, "");
-    onChange(rowIdx, key, digits);
+    onChange(rowIdx, canonicalKey, value);
   };
 
   return (
     <div className="overflow-x-auto">
-      <table className="table-auto w-full border border-black text-sm">
+      <table className="min-w-full border border-black text-sm">
         <thead>
           <tr className="bg-gray-100">
-            <th className="border p-1 w-[36px] text-center">#</th>
-            <th className="border p-1 text-left">Name of Institution</th>
-            <th className="border p-1 text-left">Name of Vision Centre</th>
-            <th className="border p-1 text-right">No of patients examined</th>
-            <th className="border p-1 text-right">No of Cataract cases detected</th>
-            <th className="border p-1 text-right">No of other eye diseases</th>
-            <th className="border p-1 text-right">No of Refractive errors</th>
+            <th className="border p-2 text-center">Sl. No.</th>
+            <th className="border p-2">Name of Institution</th>
+            <th className="border p-2">Name of Vision Centre</th>
+            <th className="border p-2 text-right">No. of patients examined</th>
+            <th className="border p-2 text-right">No. of Cataract cases detected</th>
+            <th className="border p-2 text-right">No. of other eye diseases</th>
+            <th className="border p-2 text-right">No. of Refractive errors</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, i) => {
-            const vInstitution = getInstitution(row);
-            const vVCName = getVCName(row);
-            const vExamined = getExamined(row);
-            const vCataract = getCataract(row);
-            const vOther = getOther(row);
-            const vRefractive = getRefractive(row);
+          {rows.length === 0 ? (
+            <tr>
+              <td className="border p-2 text-center" colSpan={7}>
+                No rows. Add entries from the report entry page.
+              </td>
+            </tr>
+          ) : (
+            rows.map((row, i) => {
+              // Read with legacy aliases so old data shows up again
+              const vInstitution = read(row, [
+                "institution", "inst", "hospital", "institutionName", "nameOfInstitution"
+              ]);
+              const vCentre = read(row, [
+                "centre", "center", "visionCentre", "visionCenter", "vcName", "name"
+              ]);
+              const vExamined = read(row, [
+                "examined", "patientsExamined", "patients", "noExamined"
+              ], "");
+              const vCataract = read(row, [
+                "cataract", "cataractDetected", "cat"
+              ], "");
+              const vOther = read(row, [
+                "other", "otherDiseases", "otherEyeDiseases"
+              ], "");
+              const vRefrac = read(row, [
+                "refrac", "refr", "refractiveErrors", "refraction"
+              ], "");
 
-            return (
-              <tr key={i}>
-                <td className="border p-1 text-center">{i + 1}</td>
+              return (
+                <tr key={i}>
+                  <td className="border p-2 text-center">{i + 1}</td>
 
-                <td className="border p-1">
-                  <input
-                    type="text"
-                    className="w-full border rounded px-2 py-1"
-                    value={vInstitution}
-                    onChange={(e) =>
-                      handle(i, "institution", e.target.value)
-                    }
-                    disabled={disabled}
-                    placeholder="Enter institution name"
-                  />
-                </td>
+                  <td className="border p-1">
+                    <input
+                      type="text"
+                      className="w-full border rounded px-2 py-1"
+                      value={vInstitution}
+                      onChange={(e) => handle(i, "institution", e.target.value)}
+                      disabled={disabled}
+                      placeholder="Institution name"
+                    />
+                  </td>
 
-                <td className="border p-1">
-                  <input
-                    type="text"
-                    className="w-full border rounded px-2 py-1"
-                    value={vVCName}
-                    onChange={(e) =>
-                      handle(i, "visionCenter", e.target.value)
-                    }
-                    disabled={disabled}
-                    placeholder="Enter vision centre name"
-                  />
-                </td>
+                  <td className="border p-1">
+                    <input
+                      type="text"
+                      className="w-full border rounded px-2 py-1"
+                      value={vCentre}
+                      onChange={(e) => handle(i, "centre", e.target.value)}
+                      disabled={disabled}
+                      placeholder="Vision centre name"
+                    />
+                  </td>
 
-                <td className="border p-1 text-right">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    className="w-full border rounded px-2 py-1 text-right"
-                    value={vExamined}
-                    onChange={(e) =>
-                      handle(i, "examined", e.target.value)
-                    }
-                    disabled={disabled}
-                    placeholder="0"
-                  />
-                </td>
+                  <td className="border p-1 text-right">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="w-full border rounded px-2 py-1 text-right"
+                      value={String(vExamined)}
+                      onChange={(e) =>
+                        handle(i, "examined", e.target.value.replace(/\D/g, ""))
+                      }
+                      disabled={disabled}
+                      placeholder="0"
+                    />
+                  </td>
 
-                <td className="border p-1 text-right">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    className="w-full border rounded px-2 py-1 text-right"
-                    value={vCataract}
-                    onChange={(e) =>
-                      handle(i, "cataract", e.target.value)
-                    }
-                    disabled={disabled}
-                    placeholder="0"
-                  />
-                </td>
+                  <td className="border p-1 text-right">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="w-full border rounded px-2 py-1 text-right"
+                      value={String(vCataract)}
+                      onChange={(e) =>
+                        handle(i, "cataract", e.target.value.replace(/\D/g, ""))
+                      }
+                      disabled={disabled}
+                      placeholder="0"
+                    />
+                  </td>
 
-                <td className="border p-1 text-right">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    className="w-full border rounded px-2 py-1 text-right"
-                    value={vOther}
-                    onChange={(e) =>
-                      handle(i, "otherDiseases", e.target.value)
-                    }
-                    disabled={disabled}
-                    placeholder="0"
-                  />
-                </td>
+                  <td className="border p-1 text-right">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="w-full border rounded px-2 py-1 text-right"
+                      value={String(vOther)}
+                      onChange={(e) =>
+                        handle(i, "other", e.target.value.replace(/\D/g, ""))
+                      }
+                      disabled={disabled}
+                      placeholder="0"
+                    />
+                  </td>
 
-                <td className="border p-1 text-right">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    className="w-full border rounded px-2 py-1 text-right"
-                    value={vRefractive}
-                    onChange={(e) =>
-                      handle(i, "refractiveErrors", e.target.value)
-                    }
-                    disabled={disabled}
-                    placeholder="0"
-                  />
-                </td>
-              </tr>
-            );
-          })}
+                  <td className="border p-1 text-right">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="w-full border rounded px-2 py-1 text-right"
+                      value={String(vRefrac)}
+                      onChange={(e) =>
+                        handle(i, "refrac", e.target.value.replace(/\D/g, ""))
+                      }
+                      disabled={disabled}
+                      placeholder="0"
+                    />
+                  </td>
+                </tr>
+              );
+            })
+          )}
         </tbody>
-      </table>
 
-      {/* If parent forgot to provide onChange, prevent silent edits */}
-      {!onChange && (
-        <div className="mt-2 text-xs text-red-600">
-          VisionCenterTable is read-only because no <code>onChange</code> prop was provided.
-        </div>
-      )}
+        {rows.length > 0 && (
+          <tfoot>
+            <tr className="bg-gray-50 font-semibold">
+              <td className="border p-2 text-right" colSpan={3}>Total</td>
+              <td className="border p-2 text-right">
+                {rows.reduce((s, r) => s + toInt(read(r, ["examined","patientsExamined","patients","noExamined"])), 0)}
+              </td>
+              <td className="border p-2 text-right">
+                {rows.reduce((s, r) => s + toInt(read(r, ["cataract","cataractDetected","cat"])), 0)}
+              </td>
+              <td className="border p-2 text-right">
+                {rows.reduce((s, r) => s + toInt(read(r, ["other","otherDiseases","otherEyeDiseases"])), 0)}
+              </td>
+              <td className="border p-2 text-right">
+                {rows.reduce((s, r) => s + toInt(read(r, ["refrac","refr","refractiveErrors","refraction"])), 0)}
+              </td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
     </div>
   );
 }
