@@ -41,7 +41,7 @@ const baseInstitutions = {
   Kozhikode: [
     "CHC Mukkam", "CHC orkkattery", "CHC Narikkuni", "District Hospital Vadakara", "Taluk Hospital Perambra",
     "CHC ulliery", "General Hospital Kozhikod", "CHC Thalakkulathur", "CHC Thiruvallur", "CHC Olavanna",
-    "Taluk Hospital Farook", "CHC Cheruvannur", "CHC Thamarassery",
+    "Taluk Hospital Farook", "CHC Cheruvannur", "Taluk Hospital Thamarassery",
     "Taluk Hospital Koyilandy", "CHC Thiruvangoor", "Taluk Hospital Balussery", "PHC Meppayur",
     "CHC Melady", "CHC Valayam", "Taluk Hospital Kuttiadi", "Taluk Hospital Nadapuram",
     "CHC Cheruvadi", "District Mobile Unit"
