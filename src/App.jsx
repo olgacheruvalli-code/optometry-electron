@@ -181,55 +181,135 @@ const normalizeTextNameFields = (rows) =>
 /* ========================================================================== */
 /* ViewReports (uses backend FY endpoint; Apr→selected; EB/VC no cumulative)  */
 /* ========================================================================== */
+/* ========================================================================== */
+/* ViewReports (FIXED: Cumulative = Fiscal YTD Apr→selected with fallback)    */
+/* ========================================================================== */
 function ViewReports({ reportData, month, year }) {
   const [doc, setDoc] = useState(reportData);
   const [hydrating, setHydrating] = useState(false);
+  const [cumTotals, setCumTotals] = useState({});
   const flatRows = useMemo(() => buildFlatRows(sections), []);
+
   const id = reportData?._id || reportData?.id;
 
-  // --- robust hydration: try multiple endpoint shapes; log what we get ---
+  // small helpers
+  const norm = (s) => String(s || "").trim().toLowerCase();
+  const eq = (a, b) => norm(a) === norm(b);
+
+  // identity we aggregate by
+  const baseDistrict = reportData?.district || "";
+  const baseInstitution = reportData?.institution || "";
+
+  // 1) Hydrate this specific document by ID (no month fallback)
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-
-    const tryFetch = async (url) => {
-      const r = await fetch(url);
-      const raw = await r.text();
-      let data = {};
-      try { data = raw ? JSON.parse(raw) : {}; } catch {}
-      return { ok: r.ok, status: r.status, url, data, raw };
-    };
-
     (async () => {
       try {
         setHydrating(true);
-        const base = `${API_BASE}`.replace(/\/+$/,'');
-        const urls = [
-          `${base}/api/reports/${encodeURIComponent(id)}`,
-          `${base}/api/report/${encodeURIComponent(id)}`,
-          `${base}/api/reports?id=${encodeURIComponent(id)}`,
-        ];
-
-        for (const u of urls) {
-          const res = await tryFetch(u);
-          console.log("[ViewReports] probe", res.url, res.status, res.ok);
-          if (res.ok && res.data && typeof res.data === "object") {
-            const picked = res.data.doc || res.data;
-            if (!cancelled) setDoc(picked);
-            break;
-          } else {
-            console.warn("[ViewReports] fetch failed", res.url, res.status, res.raw?.slice(0,200));
-          }
+        const res = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(id)}`);
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled && res.ok && data && typeof data === "object") {
+          setDoc(data.doc || data);
         }
       } finally {
         if (!cancelled) setHydrating(false);
       }
     })();
-
     return () => { cancelled = true; };
   }, [id]);
 
-  // --- doc fields (after hydrate or from list item fallback) ---
+  // 2) Compute fiscal YTD cumulative (April → selected month inclusive)
+  useEffect(() => {
+    setCumTotals({});
+    if (!month || !year || !baseDistrict || !baseInstitution) return;
+
+    let cancelled = false;
+
+    // FIXED: correctly include Apr–Dec of previous FY when selected is Jan/Feb/Mar
+    const fiscalMonthsUpTo = (selMonth, selYear) => {
+      const idx = MONTHS.indexOf(selMonth); // 0..11 for Jan..Dec
+      if (idx < 0) return [];
+
+      const arr = [];
+      if (idx <= 2) {
+        // Selected Jan/Feb/Mar of selYear → include Apr..Dec of (selYear-1) + Jan..selected of selYear
+        for (let i = 3; i <= 11; i++) arr.push({ month: MONTHS[i], year: String(Number(selYear) - 1) });
+        for (let i = 0; i <= idx; i++) arr.push({ month: MONTHS[i], year: String(selYear) });
+      } else {
+        // Selected Apr..Dec → include Apr..selected of selYear
+        for (let i = 3; i <= idx; i++) arr.push({ month: MONTHS[i], year: String(selYear) });
+      }
+      return arr;
+    };
+
+    const fetchList = async (url) => {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) return [];
+        const j = await r.json().catch(() => ({}));
+        return Array.isArray(j) ? j : Array.isArray(j?.docs) ? j.docs : [];
+      } catch {
+        return [];
+      }
+    };
+
+    (async () => {
+      try {
+        const q =
+          `district=${encodeURIComponent(baseDistrict)}` +
+          `&institution=${encodeURIComponent(baseInstitution)}`;
+        let list = await fetchList(`${API_BASE}/api/reports?${q}`);
+
+        // Fallback: fetch all and filter locally if needed
+        if (!Array.isArray(list) || list.length < 2) {
+          const all = await fetchList(`${API_BASE}/api/reports`);
+          list = Array.isArray(all)
+            ? all.filter((d) => eq(d?.district, baseDistrict) && eq(d?.institution, baseInstitution))
+            : [];
+        }
+
+        const sameInst = list.filter(
+          (d) => eq(d?.district, baseDistrict) && eq(d?.institution, baseInstitution)
+        );
+
+        const pairs = fiscalMonthsUpTo(month, String(year));
+        const wanted = new Set(pairs.map((p) => `${norm(p.month)}|${String(p.year)}`));
+
+        // pick latest doc per (month,year)
+        const latestByMY = new Map();
+        for (const d of sameInst) {
+          const k = `${norm(d?.month)}|${String(d?.year || "")}`;
+          if (!wanted.has(k)) continue;
+          const ts = new Date(d?.updatedAt || d?.createdAt || 0).getTime();
+          const prev = latestByMY.get(k);
+          const prevTs = prev ? new Date(prev.updatedAt || prev.createdAt || 0).getTime() : -Infinity;
+          if (!prev || ts >= prevTs) latestByMY.set(k, d);
+        }
+
+        // sum q1..qN across the picked months
+        const sums = {};
+        for (const d of latestByMY.values()) {
+          const a = d?.answers || {};
+          for (const [k, v] of Object.entries(a)) {
+            if (/^q\d+$/.test(k)) {
+              const n = Number(v) || 0;
+              if (n !== 0) sums[k] = (sums[k] || 0) + n;
+            }
+          }
+        }
+
+        if (!cancelled) setCumTotals(sums);
+      } catch (e) {
+        console.error("Cumulative compute failed:", e);
+        if (!cancelled) setCumTotals({});
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [baseDistrict, baseInstitution, month, year]);
+
+  // pull fields from hydrated doc for header + month column
   const {
     answers: answersRaw = {},
     cumulative: cumulativeFromServer = {},
@@ -240,7 +320,7 @@ function ViewReports({ reportData, month, year }) {
     updatedAt,
   } = doc || {};
 
-  // Light cleanup for text-like name fields that were "0" in some old saves
+  // robust table fields
   const normalizeTextNameFields = (rows) =>
     Array.isArray(rows)
       ? rows.map((row) => {
@@ -254,60 +334,12 @@ function ViewReports({ reportData, month, year }) {
         })
       : [];
 
-  // ---- Eye Bank array (keep your tolerant fallbacks) ----
-  const eyeBankData = normalizeTextNameFields(
-    eyeBank || doc?.eyebank || doc?.eye_bank || []
-  );
-
-  // ---- Vision Center array: adapt legacy keys to your table’s expected keys ----
-  const adaptVCRow = (r = {}) => {
-    const get = (k, ...alts) => {
-      for (const key of [k, ...alts]) if (r[key] !== undefined) return r[key];
-      return "";
-    };
-    return {
-      // Keep institution if present (harmless for totals)
-      institution: get(
-        "institution", "Institution", "Name of Institution", "inst",
-        "institutionName", "Institution ", "ins", "ins_name", "centreName", "CenterName", "Center"
-      ),
-      centre: get(
-        "centre", "Center", "Vision Centre", "Name of Vision Centre",
-        "visionCentre", "vision_center", "vision_centre", "Vision center", "Vision centre",
-        "VC Name", "Name"
-      ),
-      examined: get(
-        "examined", "patientsExamined", "No. of patients examined", "patients",
-        "noExamined", "No of patients examined", "No. of patients"
-      ),
-      cataract: get(
-        "cataract", "cataractCases", "No. of Cataract cases detected",
-        "cataractDetected", "No of Cataract cases detected"
-      ),
-      other: get(
-        "other", "otherDiseases", "No. of other eye diseases",
-        "otherEyeDiseases", "No of other eye diseases"
-      ),
-      refrac: get(
-        "refrac", "refractiveErrors", "No. of Refractive errors",
-        "refrErrors", "refr", "No of Refractive errors"
-      ),
-      // preserve all original keys too
-      ...r,
-    };
-  };
-
-  const vcArrayRaw =
-    visionCenter ||
-    doc?.visioncentre ||
-    doc?.vision_centre ||
-    [];
-
+  const eyeBankData = normalizeTextNameFields(eyeBank || doc?.eyebank || doc?.eye_bank || []);
   const visionCenterData = normalizeTextNameFields(
-    Array.isArray(vcArrayRaw) ? vcArrayRaw.map(adaptVCRow) : []
+    visionCenter || doc?.visioncentre || doc?.vision_centre || []
   );
 
-  // ---- cumulative source (prefer server-provided cumulative) ----
+  // server cumulative (fallback only)
   const cumSrc =
     cumulativeFromServer && Object.keys(cumulativeFromServer).length
       ? cumulativeFromServer
@@ -373,7 +405,7 @@ function ViewReports({ reportData, month, year }) {
                 return (
                   <tr key={`eb-${idx}`}>
                     <td colSpan={3} className="border p-1">
-                      <EyeBankTable data={eyeBankData} disabled />
+                      <EyeBankTable data={eyeBankData} disabled cumulative />
                     </td>
                   </tr>
                 );
@@ -382,7 +414,8 @@ function ViewReports({ reportData, month, year }) {
                 return (
                   <tr key={`vc-${idx}`}>
                     <td colSpan={3} className="border p-1">
-                      <VisionCenterTable data={visionCenterData} disabled />
+                      {/* Individual view: hide Institution column */}
+                      <VisionCenterTable data={visionCenterData} disabled cumulative showInstitution={false} />
                     </td>
                   </tr>
                 );
@@ -391,7 +424,13 @@ function ViewReports({ reportData, month, year }) {
                 qNumber += 1;
                 const key = `q${qNumber}`;
                 const monthVal = Number(answersRaw[key] ?? 0);
-                const cumVal = Number(cumSrc[key] ?? 0);
+
+                // Prefer computed fiscal YTD; fall back to server cumulative/answers
+                const cumVal =
+                  cumTotals[key] !== undefined
+                    ? Number(cumTotals[key] || 0)
+                    : Number(cumSrc[key] || 0);
+
                 return (
                   <tr key={`r-${idx}`}>
                     <td className="border p-1">{item.row.label}</td>
@@ -421,10 +460,6 @@ function ViewReports({ reportData, month, year }) {
 }
 
 
-/* -------------------------------------------------------------------------- */
-/* ReportEntry (data entry + save)                                             */
-/* -------------------------------------------------------------------------- */
-
 function ReportEntry({
   user,
   initialAnswers = {},
@@ -434,95 +469,96 @@ function ReportEntry({
   initialYear = "",
   disabled = false,
 }) {
-  const [answers, setAnswers] = useState(initialAnswers);
-
-  // Helper: accept .questions or .rows and ensure each item has id/label
+  // helper used in your snippets: normalize a block's questions/rows to {id,label}
   const getQs = (blk) =>
-    (Array.isArray(blk?.questions) ? blk.questions : Array.isArray(blk?.rows) ? blk.rows : []).map(
-      (q, i) => ({
-        ...q,
-        id:
-          q?.id ??
-          q?.key ??
-          q?.code ??
-          q?.name ??
-          q?.labelKey ??
-          `q_auto_${(blk?.title || "blk").toString().replace(/\s+/g, "_")}_${i + 1}`,
-        label: q?.label ?? q?.title ?? q?.text ?? q?.name ?? `Row ${i + 1}`,
-      })
-    );
+    (Array.isArray(blk?.questions)
+      ? blk.questions
+      : Array.isArray(blk?.rows)
+      ? blk.rows
+      : []
+    ).map((q, i) => ({
+      ...q,
+      id:
+        q?.id ??
+        q?.key ??
+        q?.code ??
+        q?.name ??
+        q?.labelKey ??
+        `q_auto_${(blk?.title || "blk").toString().replace(/\s+/g, "_")}_${i + 1}`,
+      label: q?.label ?? q?.title ?? q?.text ?? q?.name ?? `Row ${i + 1}`,
+    }));
 
-  // ---- Eye Bank table state (robust to data shape) ----
-  const eyeBankSec = sections.find((s) => /eye bank/i.test(String(s.title || "")));
-  const eyeBankTemplateRows = Array.isArray(eyeBankSec?.rows) ? eyeBankSec.rows : [];
-  const [eyeBank, setEyeBank] = useState(
-    initialEyeBank.length ? initialEyeBank : eyeBankTemplateRows.map(() => ({}))
+  const [answers, setAnswers] = React.useState(initialAnswers);
+
+  // Eye Bank table state (fallback to 2 empty rows if structure missing)
+  const eyeBankSection = sections.find((s) =>
+    (s.title || "").toUpperCase().includes("EYE BANK")
+  );
+  const eyeBankRowsDef = getQs(eyeBankSection);
+  const [eyeBank, setEyeBank] = React.useState(
+    initialEyeBank.length
+      ? initialEyeBank
+      : eyeBankRowsDef.length
+      ? eyeBankRowsDef.map(() => ({}))
+      : [{}, {}]
   );
 
-  // ---- Vision Center table state (robust to data shape) ----
-  // We seed with canonical columns if nothing is present, but we DO NOT drop unknown/legacy keys.
-  const vcSec = sections.find((s) => /vision center/i.test(String(s.title || "")));
-  const visionRows = Array.isArray(vcSec?.rows) ? vcSec.rows : [];
-  const seedVCRow = () => ({
-    institution: "",
-    centre: "",
-    examined: "",
-    cataract: "",
-    other: "",
-    refrac: "",
-  });
-  const defaultVC = visionRows.length
-    ? visionRows.map(() => seedVCRow())
-    : Array.from({ length: 5 }, seedVCRow); // 5 empty rows if no template provided
-
-  const [visionCenter, setVisionCenter] = useState(
-    initialVisionCenter.length ? initialVisionCenter : defaultVC
+  // Vision Center table state (fallback rows)
+  const visionSection = sections.find((s) =>
+    (s.title || "").toUpperCase().includes("VISION CENTER")
+  );
+  const visionRowsDef = Array.isArray(visionSection?.rows) ? visionSection.rows : [];
+  const [visionCenter, setVisionCenter] = React.useState(
+    initialVisionCenter.length
+      ? initialVisionCenter
+      : visionRowsDef.length
+      ? visionRowsDef.map((row) =>
+          Object.fromEntries(
+            Object.keys(row)
+              .filter((k) => k.endsWith("Key"))
+              .map((k) => [row[k], ""])
+          )
+        )
+      : [{ name: "", examined: "" }, { name: "", examined: "" }]
   );
 
-  const [month, setMonth] = useState(initialMonth);
-  const [year, setYear] = useState(initialYear);
-  const [mode, setMode] = useState("edit");
-  const [locked, setLocked] = useState(false);
+  const [month, setMonth] = React.useState(initialMonth);
+  const [year, setYear] = React.useState(initialYear);
+  const [mode, setMode] = React.useState("edit");
+
+  // NEW: detect existing submission but DO NOT lock; just warn & block save
+  const [alreadySubmitted, setAlreadySubmitted] = React.useState(false);
 
   const isDoc = user?.institution?.startsWith("DOC ");
   const canSave = month && year;
+  const canSaveThisCombo = canSave && !alreadySubmitted;
 
-  // ---- Safe sanitizers (preserve unknown keys!) ----
-  const trimIfString = (v) => (typeof v === "string" ? v.trim() : v);
+  // ✅ Check if a report already exists for this Institution + Month + Year.
+  React.useEffect(() => {
+    let cancelled = false;
+    setAlreadySubmitted(false);
 
-  const sanitizeRowPreserveUnknown = (row) => {
-    const out = { ...(row || {}) };
-    // Only touch known fields lightly
-    if ("institution" in out) out.institution = trimIfString(out.institution);
-    if ("centre" in out) out.centre = trimIfString(out.centre);
-    if ("examined" in out) out.examined = String(out.examined ?? "").replace(/\D/g, "");
-    if ("cataract" in out) out.cataract = String(out.cataract ?? "").replace(/\D/g, "");
-    if ("other" in out) out.other = String(out.other ?? "").replace(/\D/g, "");
-    if ("refrac" in out) out.refrac = String(out.refrac ?? "").replace(/\D/g, "");
-    // leave any unknown/legacy keys as-is
-    return out;
-  };
+    const go = async () => {
+      if (!user?.district || !user?.institution || !month || !year) return;
+      try {
+        const url =
+          `${API_BASE}/api/reports?` +
+          `district=${encodeURIComponent(user.district)}` +
+          `&institution=${encodeURIComponent(user.institution)}` +
+          `&month=${encodeURIComponent(month)}` +
+          `&year=${encodeURIComponent(year)}`;
+        const res = await fetch(url);
+        const json = await res.json().catch(() => ({}));
+        const items = Array.isArray(json?.docs) ? json.docs : Array.isArray(json) ? json : [];
+        if (!cancelled) setAlreadySubmitted(items.length > 0);
+      } catch {
+        // ignore transient errors; allow user to try saving
+      }
+    };
+    go();
 
-  const sanitizeTableArrayPreserveUnknown = (arr) =>
-    Array.isArray(arr) ? arr.map(sanitizeRowPreserveUnknown) : [];
-
-  const someRowHasValues = (arr) =>
-    Array.isArray(arr) &&
-    arr.some((row) => {
-      if (!row || typeof row !== "object") return false;
-      // Any non-empty string in known text fields or any positive number-like value
-      const texts = [row.institution, row.centre].some((v) => String(v ?? "").trim() !== "");
-      const nums = ["examined", "cataract", "other", "refrac"].some((k) => {
-        const n = Number(String(row?.[k] ?? "").replace(/\D/g, ""));
-        return Number.isFinite(n) && n > 0;
-      });
-      // also consider legacy numeric fields if present
-      const legacyNums = ["patientsExamined", "patients", "noExamined", "cataractDetected", "cat", "otherDiseases", "otherEyeDiseases", "refr", "refractiveErrors", "refraction"].some((k) => {
-        const n = Number(String(row?.[k] ?? "").replace(/\D/g, ""));
-        return Number.isFinite(n) && n > 0;
-      });
-      return texts || nums || legacyNums;
-    });
+    return () => { cancelled = true; };
+  }, [user?.district, user?.institution, month, year]);
 
   const confirm = async () => {
     if (!month || !year) {
@@ -530,15 +566,14 @@ function ReportEntry({
       return;
     }
 
-    const answersPartial = buildAnswersPartial(answers, sections);
-    // Eye Bank: keep your existing sanitizer if it doesn't drop unknown keys; otherwise preserve unknowns like VC
-    const cleanEyeBank =
-      typeof sanitizeTableArray === "function"
-        ? sanitizeTableArray(eyeBank)
-        : sanitizeTableArrayPreserveUnknown(eyeBank);
+    if (alreadySubmitted) {
+      alert("A report for this Month & Year already exists for your institution. Please pick another Month/Year.");
+      return;
+    }
 
-    // Vision Center: IMPORTANT — preserve unknown keys so old data still round-trips
-    const cleanVisionCenter = sanitizeTableArrayPreserveUnknown(visionCenter);
+    const answersPartial = buildAnswersPartial(answers, sections);
+    const cleanEyeBank = sanitizeTableArray(eyeBank);
+    const cleanVisionCenter = sanitizeTableArray(visionCenter);
 
     if (
       Object.keys(answersPartial).length === 0 &&
@@ -566,39 +601,47 @@ function ReportEntry({
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      if (!res.ok || data?.ok === false) {
         console.error("Save failed:", data);
-        alert("❌ Save failed. See console.");
+        alert(`❌ Save failed: ${data?.error || res.status}`);
         return;
       }
-      setLocked(true);
       alert(`✅ Saved for ${user.institution}, ${user.district}`);
+      // You can optionally navigate away or set a local flag; keeping page open for now.
     } catch (err) {
       console.error("Save error:", err);
       alert("❌ Unexpected error during save. See console.");
     }
   };
 
-  const handleTableChange = (setFn) => (rowIdx, key, value) => {
-    setFn((prev) => {
-      const updated = [...prev];
-      // merge — so we never drop unknown/legacy keys on edit
-      updated[rowIdx] = { ...updated[rowIdx], [key]: value };
-      return updated;
-    });
+  const handleTableChange =
+    (setFn) =>
+    (rowIdx, key, value) => {
+      setFn((prev) => {
+        const updated = [...prev];
+        updated[rowIdx] = { ...updated[rowIdx], [key]: value };
+        return updated;
+      });
+    };
+
+  // Prevent mouse-wheel changing numeric values; also hide spinners on this page only
+  const handleWheelBlock = (e) => {
+    const t = e.target;
+    if (t && t.tagName === "INPUT" && t.type === "number") {
+      t.blur();
+      e.preventDefault();
+    }
   };
 
-  if (locked) {
-    return (
-      <div className="max-w-2xl mx-auto mt-12 p-8 rounded-xl shadow-lg bg-white text-center text-[#134074] font-serif">
-        ✅ Report for <b>{user.institution}, {user.district}</b> is locked.<br />
-        Contact admin to unlock.
-      </div>
-    );
-  }
-
   return (
-    <div className="a4-wrapper font-serif">
+    <div className="a4-wrapper font-serif" onWheel={handleWheelBlock}>
+      {/* Hide number spinners only on this page */}
+      <style>{`
+        .a4-wrapper input[type="number"]::-webkit-outer-spin-button,
+        .a4-wrapper input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .a4-wrapper input[type="number"] { -moz-appearance: textfield; }
+      `}</style>
+
       <div className="p-6 bg-white rounded-xl shadow-lg">
         <h2 className="text-3xl font-extrabold text-center text-[#134074] uppercase mb-4">
           REPORT DATA ENTRY
@@ -607,7 +650,7 @@ function ReportEntry({
           District: <b>{user.district}</b> | Institution: <b>{user.institution}</b>
         </div>
 
-        <div className="flex justify-end mb-6">
+        <div className="flex justify-end mb-2">
           <MonthYearSelector
             month={month}
             year={year}
@@ -617,53 +660,54 @@ function ReportEntry({
           />
         </div>
 
-        {/* ===== Question Sections (accepts `questions` OR `rows`) ===== */}
-        {sections
-          .filter((s) => !s.table)
-          .map((s, secIdx) => {
-            const topQs = getQs(s);
-            return (
-              <div key={s.title || `sec-${secIdx}`} className="mb-12">
-                <h4 className="text-lg font-bold text-[#017d8a] mb-4">{s.title || ""}</h4>
+        {/* Warning if an entry already exists for this combo */}
+        {alreadySubmitted && (
+          <div className="mb-4 px-3 py-2 rounded bg-yellow-100 text-yellow-900 border border-yellow-300">
+            ⚠️ A report for <b>{month}</b> <b>{year}</b> already exists for your institution.
+            Please choose a different Month/Year to make a new entry.
+          </div>
+        )}
 
-                {topQs.length > 0 && (
-                  <div className="flex flex-col gap-6">
-                    {topQs.map((q) => (
-                      <div className="mb-2" key={q.id}>
-                        <QuestionInput
-                          q={q}
-                          value={answers[q.id] || ""}
-                          onChange={(val) => setAnswers((a) => ({ ...a, [q.id]: val }))}
-                          disabled={disabled}
-                        />
-                      </div>
-                    ))}
+        {/* Question Sections */}
+        {sections.filter((s) => !s.table).map((s) => (
+          <div key={s.title || Math.random()} className="mb-12">
+            {s.title && <h4 className="text-lg font-bold text-[#017d8a] mb-4">{s.title}</h4>}
+
+            {/* top-level questions/rows */}
+            {getQs(s).length > 0 && (
+              <div className="flex flex-col gap-6">
+                {getQs(s).map((q) => (
+                  <div className="mb-2" key={q.id || q.label}>
+                    <QuestionInput
+                      q={q}
+                      value={answers[q.id] || ""}
+                      onChange={(val) => setAnswers((a) => ({ ...a, [q.id]: val }))}
+                      disabled={disabled}
+                    />
                   </div>
-                )}
-
-                {Array.isArray(s.subsections) &&
-                  s.subsections.map((sub, subIdx) => {
-                    const subQs = getQs(sub);
-                    return (
-                      <div key={sub.title || `sub-${secIdx}-${subIdx}`} className="mt-10">
-                        <h5 className="font-bold text-[#017d8a] mb-4">{sub.title || ""}</h5>
-                        <div className="flex flex-col space-y-8">
-                          {subQs.map((q) => (
-                            <QuestionInput
-                              key={q.id}
-                              q={q}
-                              value={answers[q.id] || ""}
-                              onChange={(val) => setAnswers((a) => ({ ...a, [q.id]: val }))}
-                              disabled={disabled}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
+                ))}
               </div>
-            );
-          })}
+            )}
+
+            {/* subsections */}
+            {Array.isArray(s.subsections) && s.subsections.map((sub) => (
+              <div key={sub.title || Math.random()} className="mt-10">
+                {sub.title && <h5 className="font-bold text-[#017d8a] mb-4">{sub.title}</h5>}
+                <div className="flex flex-col space-y-8">
+                  {getQs(sub).map((q) => (
+                    <QuestionInput
+                      key={q.id || q.label}
+                      q={q}
+                      value={answers[q.id] || ""}
+                      onChange={(val) => setAnswers((a) => ({ ...a, [q.id]: val }))}
+                      disabled={disabled}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
 
         {/* Eye Bank */}
         <div className="mb-12">
@@ -675,13 +719,14 @@ function ReportEntry({
           />
         </div>
 
-        {/* Vision Center */}
+        {/* Vision Center — Institution column removed via prop in the VC component */}
         <div className="mb-12">
           <h4 className="text-lg font-bold text-[#017d8a] mb-4">V. VISION CENTER</h4>
           <VisionCenterTable
             data={visionCenter}
             onChange={handleTableChange(setVisionCenter)}
             disabled={disabled}
+            showInstitution={false}
           />
         </div>
 
@@ -694,12 +739,19 @@ function ReportEntry({
             )}
             <button
               onClick={() =>
-                canSave
+                canSaveThisCombo
                   ? setMode("confirm")
-                  : alert("❌ Please select both Month and Year before saving.")
+                  : alert(
+                      alreadySubmitted
+                        ? "A report already exists for this Month & Year. Please pick another Month/Year."
+                        : "❌ Please select both Month and Year before saving."
+                    )
               }
+              disabled={!canSaveThisCombo}
               className={`px-8 py-3 rounded-lg text-white transition ${
-                canSave ? "bg-green-600 hover:bg-green-700" : "bg-gray-400 cursor-not-allowed"
+                canSaveThisCombo
+                  ? "bg-green-600 hover:bg-green-700"
+                  : "bg-gray-400 cursor-not-allowed"
               }`}
             >
               Save All
