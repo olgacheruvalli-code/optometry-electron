@@ -169,10 +169,20 @@ const getMetricFromRow = (rowObj, which /* "refractive" | "spectacles" */) => {
   return 0;
 };
 
+/* ========================= Excel Export helper ========================== */
+/* Minimal inline helper; only used in this district view */
+const exportTable = async (tableId, filename = "export.xlsx") => {
+  const el = document.getElementById(tableId);
+  if (!el) return alert("Table not found: " + tableId);
+  const XLSX = await import("xlsx");
+  const wb = XLSX.utils.table_to_book(el, { sheet: "Sheet1" });
+  XLSX.writeFile(wb, filename);
+};
+
 /* ===================================================================== */
 
-export default function ViewDistrictTables({ user, month, year }) {
-  const district = user?.district || "";
+export default function ViewDistrictTables({ user, month, year, district: districtProp, showDownloadEB = false, showDownloadVC = false }) {
+  const district = districtProp || user?.district || "";
 
   const eyeBankSection = useMemo(
     () => sections.find((s) => s?.title?.toLowerCase().includes("eye bank")),
@@ -390,10 +400,12 @@ export default function ViewDistrictTables({ user, month, year }) {
   }, [district, month, year, eyeBankSection, visionCenterSection]);
 
   /* ------------------------------ renderers ------------------------------ */
+  const VC_TABLE_ID = `districtVC_${(district || "").replace(/\s+/g, "_")}_${month || ""}_${year || ""}`;
+
   const renderDistrictVisionCenterTable = () => {
     return (
       <div className="overflow-x-auto">
-        <table className="min-w-full border">
+        <table id={VC_TABLE_ID} className="min-w-full border">
           <thead>
             <tr className="bg-gray-50">
               <th className="border px-2 py-1 text-left w-14">SL. NO</th>
@@ -450,12 +462,36 @@ export default function ViewDistrictTables({ user, month, year }) {
 
       <section>
         <h3 className="text-base font-semibold mb-2">III. EYE BANK — District Total</h3>
-        <EyeBankTable data={ebTotals} disabled cumulative />
+        <EyeBankTable
+          data={ebTotals}
+          disabled
+          cumulative
+          /* ✅ Excel button only when this district view enables it */
+          showDownload={!!showDownloadEB}
+          tableId={`districtEB_${(district || "").replace(/\s+/g, "_")}_${month || ""}_${year || ""}`}
+          district={district}
+          month={month}
+          year={year}
+        />
       </section>
 
       <section>
         <h3 className="text-base font-semibold mb-2">V. VISION CENTER — District Total</h3>
         {renderDistrictVisionCenterTable()}
+
+        {/* ✅ Excel button for Vision Center (district) */}
+        {showDownloadVC && (
+          <div className="mt-3 flex justify-end">
+            <button
+              onClick={() =>
+                exportTable(VC_TABLE_ID, `VisionCenter_${(district || "").replace(/\s+/g, "_")}_${month || ""}_${year || ""}.xlsx`)
+              }
+              className="px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              Download as Excel
+            </button>
+          </div>
+        )}
       </section>
     </div>
   );

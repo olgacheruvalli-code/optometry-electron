@@ -20,6 +20,7 @@ export default function VisionCenterTable({
   data = [],
   onChange,
   disabled = false,
+  showInstitution = true, // 👈 NEW: hide Institution column when false
 }) {
   const rows = Array.isArray(data) ? data : [];
 
@@ -29,13 +30,18 @@ export default function VisionCenterTable({
     onChange(rowIdx, canonicalKey, value);
   };
 
+  // When Institution column is hidden, totals header colspan changes
+  const totalLabelColSpan = showInstitution ? 3 : 2;
+
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full border border-black text-sm">
         <thead>
           <tr className="bg-gray-100">
             <th className="border p-2 text-center">Sl. No.</th>
-            <th className="border p-2">Name of Institution</th>
+            {showInstitution && (
+              <th className="border p-2">Name of Institution</th>
+            )}
             <th className="border p-2">Name of Vision Centre</th>
             <th className="border p-2 text-right">No. of patients examined</th>
             <th className="border p-2 text-right">No. of Cataract cases detected</th>
@@ -46,7 +52,7 @@ export default function VisionCenterTable({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td className="border p-2 text-center" colSpan={7}>
+              <td className="border p-2 text-center" colSpan={showInstitution ? 7 : 6}>
                 No rows. Add entries from the report entry page.
               </td>
             </tr>
@@ -57,7 +63,7 @@ export default function VisionCenterTable({
                 "institution", "inst", "hospital", "institutionName", "nameOfInstitution"
               ]);
               const vCentre = read(row, [
-                "centre", "center", "visionCentre", "visionCenter", "vcName", "name"
+                "centre", "center", "visionCentre", "visionCenter", "vcName", "name", "vision_centre"
               ]);
               const vExamined = read(row, [
                 "examined", "patientsExamined", "patients", "noExamined"
@@ -76,16 +82,18 @@ export default function VisionCenterTable({
                 <tr key={i}>
                   <td className="border p-2 text-center">{i + 1}</td>
 
-                  <td className="border p-1">
-                    <input
-                      type="text"
-                      className="w-full border rounded px-2 py-1"
-                      value={vInstitution}
-                      onChange={(e) => handle(i, "institution", e.target.value)}
-                      disabled={disabled}
-                      placeholder="Institution name"
-                    />
-                  </td>
+                  {showInstitution && (
+                    <td className="border p-1">
+                      <input
+                        type="text"
+                        className="w-full border rounded px-2 py-1"
+                        value={vInstitution}
+                        onChange={(e) => handle(i, "institution", e.target.value)}
+                        disabled={disabled}
+                        placeholder="Institution name"
+                      />
+                    </td>
+                  )}
 
                   <td className="border p-1">
                     <input
@@ -166,7 +174,7 @@ export default function VisionCenterTable({
         {rows.length > 0 && (
           <tfoot>
             <tr className="bg-gray-50 font-semibold">
-              <td className="border p-2 text-right" colSpan={3}>Total</td>
+              <td className="border p-2 text-right" colSpan={totalLabelColSpan}>Total</td>
               <td className="border p-2 text-right">
                 {rows.reduce((s, r) => s + toInt(read(r, ["examined","patientsExamined","patients","noExamined"])), 0)}
               </td>
