@@ -178,11 +178,9 @@ const normalizeTextNameFields = (rows) =>
         return out;
       })
     : [];
+
 /* ========================================================================== */
-/* ViewReports (uses backend FY endpoint; Apr→selected; EB/VC no cumulative)  */
-/* ========================================================================== */
-/* ========================================================================== */
-/* ViewReports (FIXED: Cumulative = Fiscal YTD Apr→selected with fallback)    */
+/* ViewReports — Individual view (fixed fiscal YTD Apr→selected, no reset)    */
 /* ========================================================================== */
 function ViewReports({ reportData, month, year }) {
   const [doc, setDoc] = useState(reportData);
@@ -190,57 +188,111 @@ function ViewReports({ reportData, month, year }) {
   const [cumTotals, setCumTotals] = useState({});
   const flatRows = useMemo(() => buildFlatRows(sections), []);
 
-  const id = reportData?._id || reportData?.id;
-
-  // small helpers
+  // helpers
   const norm = (s) => String(s || "").trim().toLowerCase();
   const eq = (a, b) => norm(a) === norm(b);
 
-  // identity we aggregate by
+  // IMPORTANT: use calendar-ordered months for fiscal math
+  const CAL_MONTHS = [
+    "January","February","March","April","May","June",
+    "July","August","September","October","November","December"
+  ];
+  const calIndex = useMemo(
+    () => Object.fromEntries(CAL_MONTHS.map((m, i) => [m.toLowerCase(), i])),
+    []
+  );
+
   const baseDistrict = reportData?.district || "";
   const baseInstitution = reportData?.institution || "";
 
-  // 1) Hydrate this specific document by ID (no month fallback)
+  /* 1) Fetch the selected month’s document strictly by (D,I,M,Y) */
   useEffect(() => {
-    if (!id) return;
+    if (!baseDistrict || !baseInstitution || !month || !year) return;
+
     let cancelled = false;
+    const pickLatest = (arr) =>
+      arr.slice().sort(
+        (a, b) =>
+          new Date(b?.updatedAt || b?.createdAt || 0) -
+          new Date(a?.updatedAt || a?.createdAt || 0)
+      )[0];
+
     (async () => {
       try {
         setHydrating(true);
-        const res = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(id)}`);
-        const data = await res.json().catch(() => ({}));
-        if (!cancelled && res.ok && data && typeof data === "object") {
-          setDoc(data.doc || data);
+        const q =
+          `district=${encodeURIComponent(baseDistrict)}` +
+          `&institution=${encodeURIComponent(baseInstitution)}` +
+          `&month=${encodeURIComponent(month)}` +
+          `&year=${encodeURIComponent(year)}`;
+        const r = await fetch(`${API_BASE}/api/reports?${q}`);
+        const j = await r.json().catch(() => ({}));
+        const items = Array.isArray(j?.docs) ? j.docs : Array.isArray(j) ? j : [];
+
+        let filtered = items.filter(
+          (d) =>
+            eq(d?.district, baseDistrict) &&
+            eq(d?.institution, baseInstitution) &&
+            eq(d?.month, month) &&
+            String(d?.year || "") === String(year)
+        );
+
+        if (!filtered.length) {
+          // defensive fallback: list-all for D+I and then filter
+          const rAll = await fetch(
+            `${API_BASE}/api/reports?district=${encodeURIComponent(baseDistrict)}&institution=${encodeURIComponent(baseInstitution)}`
+          );
+          const jAll = await rAll.json().catch(() => ({}));
+          const allItems = Array.isArray(jAll?.docs) ? jAll.docs : Array.isArray(jAll) ? jAll : [];
+          filtered = allItems.filter(
+            (d) =>
+              eq(d?.district, baseDistrict) &&
+              eq(d?.institution, baseInstitution) &&
+              eq(d?.month, month) &&
+              String(d?.year || "") === String(year)
+          );
         }
+
+        const chosen = pickLatest(filtered);
+        if (!cancelled && chosen) setDoc(chosen || {});
       } finally {
         if (!cancelled) setHydrating(false);
       }
     })();
-    return () => { cancelled = true; };
-  }, [id]);
 
-  // 2) Compute fiscal YTD cumulative (April → selected month inclusive)
+    return () => { cancelled = true; };
+  }, [baseDistrict, baseInstitution, month, year]);
+
+  /* 2) Cumulative: correct fiscal Apr→selected (calendar order aware) */
   useEffect(() => {
     setCumTotals({});
-    if (!month || !year || !baseDistrict || !baseInstitution) return;
+    if (!baseDistrict || !baseInstitution || !month || !year) return;
 
     let cancelled = false;
 
-    // FIXED: correctly include Apr–Dec of previous FY when selected is Jan/Feb/Mar
-    const fiscalMonthsUpTo = (selMonth, selYear) => {
-      const idx = MONTHS.indexOf(selMonth); // 0..11 for Jan..Dec
-      if (idx < 0) return [];
+    const fiscalWindowPairs = (selMonth, selYearStr) => {
+      const mName = normMonth(selMonth);                   // normalize “jul”, “JULY”, etc.
+      const idx = calIndex[String(mName).toLowerCase()];   // 0..11 for Jan..Dec
+      if (idx == null) return [];
 
-      const arr = [];
+      const selYear = Number(selYearStr);
+      const pairs = [];
+
       if (idx <= 2) {
-        // Selected Jan/Feb/Mar of selYear → include Apr..Dec of (selYear-1) + Jan..selected of selYear
-        for (let i = 3; i <= 11; i++) arr.push({ month: MONTHS[i], year: String(Number(selYear) - 1) });
-        for (let i = 0; i <= idx; i++) arr.push({ month: MONTHS[i], year: String(selYear) });
+        // Jan/Feb/Mar of selYear → include Apr..Dec of (selYear-1) + Jan..selected of selYear
+        for (let i = calIndex["april"]; i <= calIndex["december"]; i++) {
+          pairs.push({ month: CAL_MONTHS[i], year: String(selYear - 1) });
+        }
+        for (let i = 0; i <= idx; i++) {
+          pairs.push({ month: CAL_MONTHS[i], year: String(selYear) });
+        }
       } else {
-        // Selected Apr..Dec → include Apr..selected of selYear
-        for (let i = 3; i <= idx; i++) arr.push({ month: MONTHS[i], year: String(selYear) });
+        // Apr..Dec of selYear → include Apr..selected of selYear
+        for (let i = calIndex["april"]; i <= idx; i++) {
+          pairs.push({ month: CAL_MONTHS[i], year: String(selYear) });
+        }
       }
-      return arr;
+      return pairs;
     };
 
     const fetchList = async (url) => {
@@ -248,7 +300,7 @@ function ViewReports({ reportData, month, year }) {
         const r = await fetch(url);
         if (!r.ok) return [];
         const j = await r.json().catch(() => ({}));
-        return Array.isArray(j) ? j : Array.isArray(j?.docs) ? j.docs : [];
+        return Array.isArray(j?.docs) ? j.docs : Array.isArray(j) ? j : [];
       } catch {
         return [];
       }
@@ -256,12 +308,12 @@ function ViewReports({ reportData, month, year }) {
 
     (async () => {
       try {
-        const q =
-          `district=${encodeURIComponent(baseDistrict)}` +
-          `&institution=${encodeURIComponent(baseInstitution)}`;
-        let list = await fetchList(`${API_BASE}/api/reports?${q}`);
+        // Get all docs for this District + Institution (single call preferred)
+        let list = await fetchList(
+          `${API_BASE}/api/reports?district=${encodeURIComponent(baseDistrict)}&institution=${encodeURIComponent(baseInstitution)}`
+        );
 
-        // Fallback: fetch all and filter locally if needed
+        // Fallback: /api/reports (unfiltered) if needed
         if (!Array.isArray(list) || list.length < 2) {
           const all = await fetchList(`${API_BASE}/api/reports`);
           list = Array.isArray(all)
@@ -269,27 +321,30 @@ function ViewReports({ reportData, month, year }) {
             : [];
         }
 
-        const sameInst = list.filter(
-          (d) => eq(d?.district, baseDistrict) && eq(d?.institution, baseInstitution)
-        );
-
-        const pairs = fiscalMonthsUpTo(month, String(year));
-        const wanted = new Set(pairs.map((p) => `${norm(p.month)}|${String(p.year)}`));
-
-        // pick latest doc per (month,year)
+        // Latest per (month,year) for this D+I
         const latestByMY = new Map();
-        for (const d of sameInst) {
-          const k = `${norm(d?.month)}|${String(d?.year || "")}`;
-          if (!wanted.has(k)) continue;
+        for (const d of list) {
+          if (!eq(d?.district, baseDistrict) || !eq(d?.institution, baseInstitution)) continue;
+          const m = normMonth(d?.month);
+          const y = String(d?.year || "");
+          const key = `${norm(m)}|${y}`;
           const ts = new Date(d?.updatedAt || d?.createdAt || 0).getTime();
-          const prev = latestByMY.get(k);
+          const prev = latestByMY.get(key);
           const prevTs = prev ? new Date(prev.updatedAt || prev.createdAt || 0).getTime() : -Infinity;
-          if (!prev || ts >= prevTs) latestByMY.set(k, d);
+          if (!prev || ts >= prevTs) latestByMY.set(key, d);
         }
 
-        // sum q1..qN across the picked months
+        // Keep only months in the fiscal window Apr→selected
+        const windowKeys = new Set(
+          fiscalWindowPairs(month, String(year)).map(
+            (p) => `${norm(normMonth(p.month))}|${String(p.year)}`
+          )
+        );
+
+        // Sum q1..qN across that window
         const sums = {};
-        for (const d of latestByMY.values()) {
+        for (const [key, d] of latestByMY.entries()) {
+          if (!windowKeys.has(key)) continue;
           const a = d?.answers || {};
           for (const [k, v] of Object.entries(a)) {
             if (/^q\d+$/.test(k)) {
@@ -307,9 +362,9 @@ function ViewReports({ reportData, month, year }) {
     })();
 
     return () => { cancelled = true; };
-  }, [baseDistrict, baseInstitution, month, year]);
+  }, [baseDistrict, baseInstitution, month, year, calIndex]);
 
-  // pull fields from hydrated doc for header + month column
+  /* 3) Render */
   const {
     answers: answersRaw = {},
     cumulative: cumulativeFromServer = {},
@@ -320,23 +375,26 @@ function ViewReports({ reportData, month, year }) {
     updatedAt,
   } = doc || {};
 
-  // robust table fields
   const normalizeTextNameFields = (rows) =>
     Array.isArray(rows)
       ? rows.map((row) => {
           const out = { ...(row || {}) };
           for (const k of Object.keys(out)) {
-            if (/name|centre|center/i.test(k) && (out[k] === 0 || out[k] === "0")) {
-              out[k] = "";
-            }
+            if (/name|centre|center/i.test(k) && (out[k] === 0 || out[k] === "0")) out[k] = "";
           }
           return out;
         })
       : [];
 
   const eyeBankData = normalizeTextNameFields(eyeBank || doc?.eyebank || doc?.eye_bank || []);
+
+  const vcRaw = visionCenter || doc?.visioncentre || doc?.vision_centre || [];
   const visionCenterData = normalizeTextNameFields(
-    visionCenter || doc?.visioncentre || doc?.vision_centre || []
+    Array.isArray(vcRaw)
+      ? vcRaw.filter(
+          (r) => !Object.values(r || {}).some((v) => typeof v === "string" && /total/i.test(v))
+        )
+      : []
   );
 
   // server cumulative (fallback only)
@@ -414,7 +472,6 @@ function ViewReports({ reportData, month, year }) {
                 return (
                   <tr key={`vc-${idx}`}>
                     <td colSpan={3} className="border p-1">
-                      {/* Individual view: hide Institution column */}
                       <VisionCenterTable data={visionCenterData} disabled cumulative showInstitution={false} />
                     </td>
                   </tr>
@@ -424,8 +481,6 @@ function ViewReports({ reportData, month, year }) {
                 qNumber += 1;
                 const key = `q${qNumber}`;
                 const monthVal = Number(answersRaw[key] ?? 0);
-
-                // Prefer computed fiscal YTD; fall back to server cumulative/answers
                 const cumVal =
                   cumTotals[key] !== undefined
                     ? Number(cumTotals[key] || 0)
@@ -458,6 +513,8 @@ function ViewReports({ reportData, month, year }) {
     </div>
   );
 }
+
+
 
 
 function ReportEntry({
