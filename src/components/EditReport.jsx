@@ -1,416 +1,323 @@
-// src/components/EditReport.jsx
+// ./components/EditReport.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { districtInstitutions } from "../data/districtInstitutions";
-import { sections } from "../data/questions";
-import QuestionInput from "./QuestionInput";
-import EyeBankTable from "./EyeBankTable";
-import VisionCenterTable from "./VisionCenterTable";
 import API_BASE from "../apiBase";
+import sections from "../data/questions";
 
+/* ------------------------------ Config ------------------------------ */
+// Change this to your real admin password (kept on frontend by request).
+const ADMIN_PASS = "451970";
+
+/* --------------------------- Month constants ------------------------ */
 const MONTHS = [
   "April","May","June","July","August","September",
-  "October","November","December","January","February","March"
+  "October","November","December","January","February","March",
 ];
-const YEARS = Array.from({ length: 10 }, (_, i) => `${2020 + i}`);
 
-// Build a full q1..q84 object, falling back to backup and then "0"
-function build84(current, backup) {
-  const out = {};
-  for (let i = 1; i <= 84; i++) {
-    const k = `q${i}`;
-    const v =
-      (current && current[k] != null ? current[k] : null) ??
-      (backup && backup[k] != null ? backup[k] : null) ??
-      "0";
-    out[k] = String(v);
+/* --------------------------- Helpers -------------------------------- */
+const norm = (s) => String(s || "").trim().toLowerCase();
+const eq   = (a, b) => norm(a) === norm(b);
+
+const getQs = (blk) =>
+  Array.isArray(blk?.questions) ? blk.questions
+  : Array.isArray(blk?.rows) ? blk.rows
+  : [];
+
+function buildFlatRows(secs) {
+  const out = [];
+  for (const sec of secs || []) {
+    for (const q of getQs(sec)) out.push({ kind: "q", row: q });
+    if (Array.isArray(sec?.subsections)) {
+      for (const sub of sec.subsections) {
+        for (const q of getQs(sub)) out.push({ kind: "q", row: q });
+      }
+    }
   }
   return out;
 }
 
-// Try to pull array of reports from any server shape
-function coerceArray(json) {
-  if (!json) return [];
-  if (Array.isArray(json)) return json;
-  if (Array.isArray(json.docs)) return json.docs;
-  if (json.doc) return [json.doc];
-  if (json.docs && typeof json.docs === "object") return Object.values(json.docs);
-  return [];
-}
+const orderedQuestions = (secs) =>
+  buildFlatRows(secs).filter((r) => r.kind === "q").map((r) => r.row);
 
-// Pick latest by updatedAt/createdAt
-function pickLatest(arr) {
-  return arr
-    .slice()
-    .sort(
-      (a, b) =>
-        new Date(b?.updatedAt || b?.createdAt || 0) -
-        new Date(a?.updatedAt || a?.createdAt || 0)
-    )[0];
-}
+/* ==================================================================== */
 
 export default function EditReport({ user }) {
-  const [district, setDistrict] = useState("");
-  const [institution, setInstitution] = useState("");
+  const [district, setDistrict] = useState(user?.district || "");
+  const [institution, setInstitution] = useState(user?.institution || "");
   const [month, setMonth] = useState("April");
-  const [year, setYear] = useState("2025");
+  const [year, setYear] = useState(String(new Date().getFullYear()));
 
-  const [reportId, setReportId] = useState(null);
+  const Q_ROWS = useMemo(() => orderedQuestions(sections), []);
+  const KEYS   = useMemo(() => Array.from({ length: Q_ROWS.length }, (_, i) => `q${i + 1}`), [Q_ROWS.length]);
 
-  // canonical originals from DB
-  const [originalAnswers, setOriginalAnswers] = useState({});
-  const [originalCumulative, setOriginalCumulative] = useState({});
-  const [eyeBank, setEyeBank] = useState([]);
-  const [visionCenter, setVisionCenter] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [doc, setDoc] = useState(null);
 
-  // editable working copies (prefilled)
-  const [answers, setAnswers] = useState({});
-  const [cumulative, setCumulative] = useState({});
+  // admin gate
+  const [pwd, setPwd] = useState("");
+  const [unlocked, setUnlocked] = useState(false);
 
-  // edit gate (simple local unlock)
-  const [password, setPassword] = useState("");
-  const [isUnlocked, setIsUnlocked] = useState(false);
+  // editable fields: month answers + (optional) cumulative
+  const [answers, setAnswers] = useState(() => KEYS.reduce((a, k) => ((a[k] = 0), a), {}));
+  const [cumulative, setCumulative] = useState(() => KEYS.reduce((a, k) => ((a[k] = 0), a), {}));
 
-  const [status, setStatus] = useState("");
+  // Fetch the latest report strictly by (district, institution, month, year)
+  const fetchSelected = async () => {
+    if (!district || !institution || !month || !year) return;
+    setLoading(true);
+    try {
+      const q =
+        `district=${encodeURIComponent(district)}` +
+        `&institution=${encodeURIComponent(institution)}` +
+        `&month=${encodeURIComponent(month)}` +
+        `&year=${encodeURIComponent(year)}`;
 
-  // Institution options for selected district
-  const instOptions = useMemo(
-    () => (district ? districtInstitutions[district] || [] : []),
-    [district]
-  );
+      const r = await fetch(`${API_BASE}/api/reports?${q}`);
+      const j = await r.json().catch(() => ({}));
+      const items = Array.isArray(j?.docs) ? j.docs : Array.isArray(j) ? j : [];
 
-  // Load saved report whenever the selection changes
-  useEffect(() => {
-    let cancelled = false;
-    if (!district || !institution || !month || !year) {
-      // reset everything if selection incomplete
-      setReportId(null);
-      setOriginalAnswers({});
-      setOriginalCumulative({});
-      setAnswers({});
-      setCumulative({});
-      setEyeBank([]);
-      setVisionCenter([]);
-      setStatus("");
-      return;
+      const mine = items.filter(
+        (d) =>
+          eq(d?.district, district) &&
+          eq(d?.institution, institution) &&
+          eq(d?.month, month) &&
+          String(d?.year || "") === String(year)
+      );
+      mine.sort(
+        (a, b) =>
+          new Date(b?.updatedAt || b?.createdAt || 0) -
+          new Date(a?.updatedAt || a?.createdAt || 0)
+      );
+      const chosen = mine[0] || null;
+      setDoc(chosen);
+
+      const a = chosen?.answers || {};
+      const c = chosen?.cumulative || {};
+
+      const ans = {};
+      const cum = {};
+      KEYS.forEach((k) => {
+        ans[k] = Number(a[k] ?? 0) || 0;
+        cum[k] = Number(c[k] ?? 0) || 0;
+      });
+      setAnswers(ans);
+      setCumulative(cum);
+    } catch (e) {
+      console.error("fetchSelected failed:", e);
+      alert("Could not fetch the selected report.");
+      setDoc(null);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    (async () => {
-      try {
-        const url =
-          `${API_BASE}/api/reports?` +
-          `district=${encodeURIComponent(district)}` +
-          `&institution=${encodeURIComponent(institution)}` +
-          `&month=${encodeURIComponent(month)}` +
-          `&year=${encodeURIComponent(year)}`;
-
-        const res = await fetch(url);
-        const json = await res.json().catch(() => ({}));
-        const items = coerceArray(json);
-
-        // strict match again in case server returned broader set
-        const strict = items.filter(
-          (d) =>
-            String(d?.district || "").trim().toLowerCase() ===
-              String(district).trim().toLowerCase() &&
-            String(d?.institution || "").trim().toLowerCase() ===
-              String(institution).trim().toLowerCase() &&
-            String(d?.month || "").trim().toLowerCase() ===
-              String(month).trim().toLowerCase() &&
-            String(d?.year || "") === String(year)
-        );
-
-        const found = pickLatest(strict.length ? strict : items);
-
-        if (cancelled) return;
-
-        if (found) {
-          const id = found._id || found.id || null;
-
-          const oa = found.answers || {};
-          const oc = found.cumulative || {};
-
-          // Prefill edit buffers with saved values (so inputs show values immediately)
-          const filledAns = build84(oa, {});
-          const filledCum = build84(oc, {});
-
-          setReportId(id);
-          setOriginalAnswers(oa);
-          setOriginalCumulative(oc);
-          setAnswers(filledAns);
-          setCumulative(filledCum);
-          setEyeBank(Array.isArray(found.eyeBank) ? found.eyeBank : []);
-          setVisionCenter(Array.isArray(found.visionCenter) ? found.visionCenter : []);
-          setStatus("✅ Report loaded.");
-        } else {
-          setReportId(null);
-          setOriginalAnswers({});
-          setOriginalCumulative({});
-          setAnswers(build84({}, {}));
-          setCumulative(build84({}, {}));
-          setEyeBank([]);
-          setVisionCenter([]);
-          setStatus("❌ No report found for this selection.");
-        }
-      } catch (e) {
-        console.error("Edit load failed:", e);
-        if (!cancelled) setStatus("❌ Could not load report.");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+  useEffect(() => {
+    fetchSelected();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [district, institution, month, year]);
 
-  const handleUnlock = () => {
-    // simple fixed password; change if you later wire to server
-    if (password === "1234") {
-      setIsUnlocked(true);
-      setStatus("🔓 Unlocked. You can edit now.");
-    } else {
-      setIsUnlocked(false);
-      setStatus("🔒 Wrong password.");
-    }
+  const handleChange = (key, val, setter) => {
+    const n = Number(val);
+    setter((prev) => ({ ...prev, [key]: Number.isFinite(n) ? n : 0 }));
   };
 
-  const handleClearPassword = () => {
-    setPassword("");
-    setIsUnlocked(false);
-    setStatus("🔒 Locked. Enter password to edit.");
-  };
-
-  const handleSave = async () => {
-    if (!reportId) {
-      setStatus("❌ No report loaded to update.");
+  // ADMIN SAVE: create a new record for same D/I/M/Y so it becomes the latest.
+  const saveAsLatest = async () => {
+    if (!unlocked) return;
+    if (!district || !institution || !month || !year) {
+      alert("Pick District, Institution, Month and Year.");
       return;
     }
-    if (!isUnlocked) {
-      setStatus("🔒 Locked. Unlock to save.");
-      return;
-    }
-
-    const payload = {
-      district,
-      institution,
-      month,
-      year,
-      answers: build84(answers, originalAnswers),
-      cumulative: build84(cumulative, originalCumulative),
-      eyeBank,
-      visionCenter,
-    };
 
     try {
-      const res = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(reportId)}`, {
-        method: "PUT",
+      const payload = {
+        district,
+        institution,
+        month,
+        year,
+        answers,    // numbers are OK; backend also accepts strings
+        cumulative, // optional; viewers have client fallback
+      };
+
+      const res = await fetch(`${API_BASE}/api/reports`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (res.ok) {
-        setStatus("✅ Report updated.");
-      } else {
-        const t = await res.text().catch(() => "");
-        setStatus(`❌ Failed to update report. ${t || ""}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.ok === false) {
+        console.error("Save failed:", data);
+        alert(`❌ Save failed: ${data?.error || res.status}`);
+        return;
       }
+      alert("✅ Saved a new latest version for this month.");
+      fetchSelected();
     } catch (e) {
-      console.error("Save failed:", e);
-      setStatus("❌ Network error while saving.");
+      console.error("Save error:", e);
+      alert("❌ Unexpected error during save. See console.");
     }
   };
 
-  // Quick list q1..q84
-  const qKeys = useMemo(() => Array.from({ length: 84 }, (_, i) => `q${i + 1}`), []);
+  const tryUnlock = () => {
+    if (pwd === ADMIN_PASS) {
+      setUnlocked(true);
+      alert("🔓 Admin editing enabled.");
+    } else {
+      setUnlocked(false);
+      alert("❌ Wrong password.");
+    }
+  };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto bg-white shadow-md rounded-lg">
-      <h2 className="text-xl font-semibold mb-4">Edit Saved Report</h2>
+    <div className="max-w-6xl mx-auto font-serif p-4">
+      <h2 className="text-2xl font-bold text-[#134074] mb-4">Edit Saved Report (Admin)</h2>
 
-      {/* Selectors */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
         <div>
-          <label className="block font-medium">District</label>
-          <select
-            value={district}
-            onChange={(e) => {
-              setDistrict(e.target.value);
-              setInstitution("");
-            }}
-            className="border rounded px-3 py-2 w-full"
-          >
-            <option value="">Select District</option>
-            {Object.keys(districtInstitutions).map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block font-medium">Institution</label>
-          <select
-            value={institution}
-            onChange={(e) => setInstitution(e.target.value)}
-            disabled={!district}
-            className="border rounded px-3 py-2 w-full disabled:opacity-50"
-          >
-            <option value="">Select Institution</option>
-            {instOptions.map((inst) => (
-              <option key={inst} value={inst}>
-                {inst}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block font-medium">Month</label>
-          <select
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            className="border rounded px-3 py-2 w-full"
-          >
-            {MONTHS.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block font-medium">Year</label>
-          <select
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            className="border rounded px-3 py-2 w-full"
-          >
-            {YEARS.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Unlock row */}
-      <div className="flex items-end gap-2 mb-2">
-        <div className="flex-1">
-          <label className="block font-medium">Enter Edit Password</label>
+          <label className="text-sm font-semibold">District</label>
           <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleUnlock()}
-            className="border rounded px-3 py-2 w-full"
+            className="w-full border rounded p-2"
+            value={district}
+            onChange={(e) => setDistrict(e.target.value)}
+            placeholder="District"
+            disabled={loading || !unlocked}
           />
         </div>
-        <button
-          onClick={handleUnlock}
-          className="px-4 py-2 h-[40px] bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
-          Unlock
-        </button>
-        <button
-          onClick={handleClearPassword}
-          className="px-4 py-2 h-[40px] bg-gray-100 rounded hover:bg-gray-200"
-        >
-          Clear / Change
-        </button>
+        <div>
+          <label className="text-sm font-semibold">Institution</label>
+          <input
+            className="w-full border rounded p-2"
+            value={institution}
+            onChange={(e) => setInstitution(e.target.value)}
+            placeholder="Institution"
+            disabled={loading || !unlocked}
+          />
+        </div>
+        <div>
+          <label className="text-sm font-semibold">Month</label>
+          <select
+            className="w-full border rounded p-2"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            disabled={loading || !unlocked}
+          >
+            {MONTHS.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-sm font-semibold">Year</label>
+          <input
+            className="w-full border rounded p-2"
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+            placeholder="2025"
+            disabled={loading || !unlocked}
+          />
+        </div>
+
+        {/* Admin unlock */}
+        <div>
+          <label className="text-sm font-semibold">Admin Password</label>
+          <div className="flex gap-2">
+            <input
+              type="password"
+              className="w-full border rounded p-2"
+              value={pwd}
+              onChange={(e) => setPwd(e.target.value)}
+              placeholder="••••••••"
+              disabled={unlocked}
+            />
+            <button
+              onClick={tryUnlock}
+              className={`px-3 py-2 rounded text-white ${unlocked ? "bg-green-600" : "bg-blue-600 hover:bg-blue-700"}`}
+              disabled={unlocked}
+            >
+              {unlocked ? "Unlocked" : "Unlock"}
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Status */}
-      {status && (
-        <div className="mb-4 text-gray-700">
-          {status}
+      <div className="flex items-center gap-3 mb-4">
+        <button
+          onClick={fetchSelected}
+          className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
+          disabled={loading}
+        >
+          {loading ? "Loading…" : "Reload"}
+        </button>
+        <button
+          onClick={saveAsLatest}
+          className={`px-4 py-2 rounded text-white ${unlocked ? "bg-emerald-600 hover:bg-emerald-700" : "bg-gray-400 cursor-not-allowed"}`}
+          disabled={loading || !unlocked}
+          title={unlocked ? "" : "Unlock with admin password to save"}
+        >
+          Save as Latest
+        </button>
+        {doc && (
+          <span className="text-sm text-gray-600">
+            Loaded: {doc.institution}, {doc.month} {doc.year}{" "}
+            {doc.updatedAt ? `(updated ${new Date(doc.updatedAt).toLocaleString()})` : ""}
+          </span>
+        )}
+      </div>
+
+      {/* Quick edit grid with REAL question labels */}
+      <div className="bg-white rounded-xl shadow border overflow-hidden">
+        <div className="px-4 py-2 border-b font-semibold">
+          Quick Edit — All Questions ({KEYS.length} items)
+        </div>
+
+        <div className="grid grid-cols-12 gap-0">
+          <div className="col-span-7 border p-2 font-semibold bg-gray-50">Description</div>
+          <div className="col-span-2 border p-2 font-semibold bg-gray-50 text-right">Month</div>
+          <div className="col-span-3 border p-2 font-semibold bg-gray-50 text-right">Cumulative</div>
+
+          {KEYS.map((k, i) => {
+            const label =
+              Q_ROWS[i]?.label ||
+              Q_ROWS[i]?.title ||
+              Q_ROWS[i]?.text ||
+              Q_ROWS[i]?.name ||
+              `Question ${i + 1}`;
+            return (
+              <React.Fragment key={k}>
+                <div className="col-span-7 border p-2">
+                  <div className="font-medium">{label}</div>
+                  <div className="text-xs text-gray-500">Key: {k}</div>
+                </div>
+
+                <div className="col-span-2 border p-2">
+                  <input
+                    type="number"
+                    className="w-full border rounded p-1 text-right"
+                    value={answers[k]}
+                    onChange={(e) => handleChange(k, e.target.value, setAnswers)}
+                    disabled={!unlocked}
+                  />
+                </div>
+
+                <div className="col-span-3 border p-2">
+                  <input
+                    type="number"
+                    className="w-full border rounded p-1 text-right"
+                    value={cumulative[k]}
+                    onChange={(e) => handleChange(k, e.target.value, setCumulative)}
+                    disabled={!unlocked}
+                  />
+                </div>
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
+
+      {!unlocked && (
+        <div className="mt-3 text-sm text-yellow-800 bg-yellow-100 border border-yellow-200 rounded px-3 py-2">
+          🔒 Enter the admin password and click <b>Unlock</b> to enable editing and saving.
         </div>
       )}
-
-      {/* Quick Edit table */}
-      <div className="border rounded mb-6 overflow-auto">
-        <div className="px-4 py-2 font-semibold">Quick Edit — All Questions (q1..q84)</div>
-        <table className="min-w-full border-t">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="border px-2 py-1 text-left w-24">Key</th>
-              <th className="border px-2 py-1 text-center">Month</th>
-              <th className="border px-2 py-1 text-center">Cumulative</th>
-            </tr>
-          </thead>
-          <tbody>
-            {qKeys.map((k) => (
-              <tr key={k}>
-                <td className="border px-2 py-1">{k}</td>
-                <td className="border px-2 py-1 text-center">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={6}
-                    disabled={!isUnlocked}
-                    value={answers[k] ?? ""}
-                    onChange={(e) =>
-                      setAnswers((prev) => ({ ...prev, [k]: e.target.value.replace(/[^0-9]/g, "") }))
-                    }
-                    className="w-[8ch] bg-gray-100 rounded px-2 py-1 text-right"
-                  />
-                </td>
-                <td className="border px-2 py-1 text-center">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={6}
-                    disabled={!isUnlocked}
-                    value={cumulative[k] ?? ""}
-                    onChange={(e) =>
-                      setCumulative((prev) => ({ ...prev, [k]: e.target.value.replace(/[^0-9]/g, "") }))
-                    }
-                    className="w-[8ch] bg-gray-100 rounded px-2 py-1 text-right"
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Full sectioned editor (optional, stays collapsed in your UI style) */}
-      {sections.map((sec, i) => (
-        <div key={i} className="border rounded p-4 mb-4">
-          <h3 className="font-semibold text-lg mb-2">{sec.title}</h3>
-          {sec.questions?.map((q) => (
-            <div key={q.key} className="mb-2">
-              <QuestionInput
-                q={q}
-                value={answers[q.key] || ""}
-                onChange={(val) =>
-                  setAnswers((prev) => ({ ...prev, [q.key]: val }))
-                }
-                disabled={!isUnlocked}
-              />
-            </div>
-          ))}
-
-          {sec.table === "eyeBank" && (
-            <EyeBankTable data={eyeBank} onChange={setEyeBank} disabled={!isUnlocked} />
-          )}
-          {sec.table === "visionCenter" && (
-            <VisionCenterTable data={visionCenter} onChange={setVisionCenter} disabled={!isUnlocked} />
-          )}
-        </div>
-      ))}
-
-      <div className="mt-6 flex justify-end">
-        <button
-          onClick={handleSave}
-          className="bg-emerald-600 text-white px-5 py-2 rounded hover:bg-emerald-700"
-        >
-          Save Changes
-        </button>
-      </div>
     </div>
   );
 }
