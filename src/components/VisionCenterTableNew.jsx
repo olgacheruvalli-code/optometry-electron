@@ -1,21 +1,21 @@
 // src/components/VisionCenterTableNew.jsx
 import React from "react";
 
-/* Debug: confirm this file is the one rendering */
-console.log("[VC] USING VisionCenterTableNew.jsx");
-
-/* Inline Excel helper (only used when showDownload=true) */
-const exportTable = async (tableId, filename = "export.xlsx") => {
-  const el = document.getElementById(tableId);
-  if (!el) return alert("Table not found: " + tableId);
-  const XLSX = await import("xlsx");
-  const wb = XLSX.utils.table_to_book(el, { sheet: "Sheet1" });
-  XLSX.writeFile(wb, filename);
-};
+/**
+ * VisionCenterTableNew — for INDIVIDUAL ENTRY + INDIVIDUAL VIEW ONLY.
+ * Always includes the extra column:
+ *   "No of Spectacles prescribed"
+ *
+ * Stable write keys onChange:
+ *   institution, visionCenter, examined, cataract, otherDiseases,
+ *   refractiveErrors, spectaclesPrescribed
+ *
+ * Back-compat reads many legacy/variant keys so old data renders fine.
+ */
 
 const NUM_ROWS = 10;
 
-// helpers
+// Helpers
 const readStr = (row, keys) => {
   for (const k of keys) {
     const v = row?.[k];
@@ -24,6 +24,7 @@ const readStr = (row, keys) => {
   }
   return "";
 };
+
 const readNum = (row, keys) => {
   for (const k of keys) {
     const v = row?.[k];
@@ -38,12 +39,7 @@ export default function VisionCenterTableNew({
   data = [],
   onChange,
   disabled = false,
-  showInstitution = true,      // hide in entry/individual, show in district tables
-  showDownload = false,
-  tableId = "visionCenterTable",
-  month,
-  year,
-  district,
+  showInstitution = false, // entry/view usually hides institution col
 }) {
   const rows = React.useMemo(() => {
     const base = Array.isArray(data) ? data.slice(0, NUM_ROWS) : [];
@@ -51,35 +47,47 @@ export default function VisionCenterTableNew({
     return base;
   }, [data]);
 
-  // Back-compat getters (accepts legacy keys; emits stable ones onChange)
+  // Back-compat getters
   const getInstitution = (r) =>
-    readStr(r, ["institution","institutionName","inst","nameOfInstitution","Name of Institution","NameOfInstitution"]);
+    readStr(r, [
+      "institution", "institutionName", "inst",
+      "nameOfInstitution", "Name of Institution", "NameOfInstitution",
+    ]);
 
   const getVCName = (r) =>
-    readStr(r, ["visionCenter","visionCentre","vcName","name","vision_center","visioncentre","Name of Vision Centre","NameOfVisionCentre"]);
+    readStr(r, [
+      "visionCenter", "visionCentre", "vcName", "name",
+      "vision_center", "visioncentre", "Name of Vision Centre", "NameOfVisionCentre",
+    ]);
 
   const getExamined = (r) =>
-    readNum(r, ["examined","patientsExamined","patients","No of patients examined","noPatientsExamined"]);
+    readNum(r, [
+      "examined", "patientsExamined", "patients",
+      "No of patients examined", "noPatientsExamined",
+    ]);
 
   const getCataract = (r) =>
-    readNum(r, ["cataract","cataractCases","cataractDetected","No of Cataract cases detected","noCataract"]);
+    readNum(r, [
+      "cataract", "cataractCases", "cataractDetected",
+      "No of Cataract cases detected", "noCataract",
+    ]);
 
   const getOther = (r) =>
-    readNum(r, ["otherDiseases","otherEyeDiseases","others","No of other eye diseases","noOtherDiseases"]);
+    readNum(r, [
+      "otherDiseases", "otherEyeDiseases", "others",
+      "No of other eye diseases", "noOtherDiseases",
+    ]);
 
   const getRefractive = (r) =>
-    readNum(r, ["refractiveErrors","refErrors","refractive","No of Refractive errors","noRefractiveErrors"]);
+    readNum(r, [
+      "refractiveErrors", "refErrors", "refractive",
+      "No of Refractive errors", "noRefractiveErrors",
+    ]);
 
-  // 🔹 NEW column: spectacles prescribed (with several alias keys)
   const getSpectacles = (r) =>
     readNum(r, [
-      "spectacles",
-      "spectaclesPrescribed",
-      "No. of spectacles presribed",
-      "No of spectacles presribed",
-      "No of Spectacles prescribed",
-      "noSpectacles",
-      "no_of_spectacles",
+      "spectaclesPrescribed", "spectacles", "specs",
+      "No of Spectacles prescribed", "No.of Spectacles prescribed",
     ]);
 
   const handle = (rowIdx, key, rawVal) => {
@@ -93,51 +101,37 @@ export default function VisionCenterTableNew({
     onChange(rowIdx, key, digits);
   };
 
-  // totals (for UI only)
-  const totals = rows.reduce(
-    (acc, r) => {
-      const add = (v, k) => (acc[k] += Number(v || 0) || 0);
-      add(getExamined(r),   "examined");
-      add(getCataract(r),   "cataract");
-      add(getOther(r),      "other");
-      add(getRefractive(r), "refractive");
-      add(getSpectacles(r), "spectacles");
-      return acc;
-    },
-    { examined: 0, cataract: 0, other: 0, refractive: 0, spectacles: 0 }
-  );
-
-  // how many text columns come before the numeric totals?
-  const labelColSpan = showInstitution ? 3 : 2; // Sl.No + (optional) Institution + Vision Centre
-
   return (
     <div className="overflow-x-auto">
-      <table id={tableId} className="table-auto w-full border border-black text-sm">
+      <table className="table-auto w-full border border-black text-sm">
         <thead>
           <tr className="bg-gray-100">
-            <th className="border p-1 w-[36px] text-center">Sl.<br/>No.</th>
-            {showInstitution && <th className="border p-1 text-left">Name of Institution</th>}
+            <th className="border p-1 w-[36px] text-center">#</th>
+            {showInstitution && (
+              <th className="border p-1 text-left">Name of Institution</th>
+            )}
             <th className="border p-1 text-left">Name of Vision Centre</th>
-            <th className="border p-1 text-right">No. of patients examined</th>
-            <th className="border p-1 text-right">No. of Cataract cases detected</th>
-            <th className="border p-1 text-right">No. of other eye diseases</th>
-            <th className="border p-1 text-right">No. of Refractive errors</th>
-            {/* 🔹 NEW header */}
-            <th className="border p-1 text-right">No. of Spectacles Prescribed</th>
+            <th className="border p-1 text-right">No of patients examined</th>
+            <th className="border p-1 text-right">No of Cataract cases detected</th>
+            <th className="border p-1 text-right">No of other eye diseases</th>
+            <th className="border p-1 text-right">No of Refractive errors</th>
+            <th className="border p-1 text-right">No of Spectacles prescribed</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row, i) => {
             const vInstitution = getInstitution(row);
-            const vVCName     = getVCName(row);
-            const vExamined   = getExamined(row);
-            const vCataract   = getCataract(row);
-            const vOther      = getOther(row);
+            const vVCName = getVCName(row);
+            const vExamined = getExamined(row);
+            const vCataract = getCataract(row);
+            const vOther = getOther(row);
             const vRefractive = getRefractive(row);
             const vSpectacles = getSpectacles(row);
+
             return (
               <tr key={i}>
                 <td className="border p-1 text-center">{i + 1}</td>
+
                 {showInstitution && (
                   <td className="border p-1">
                     <input
@@ -150,6 +144,7 @@ export default function VisionCenterTableNew({
                     />
                   </td>
                 )}
+
                 <td className="border p-1">
                   <input
                     type="text"
@@ -160,88 +155,72 @@ export default function VisionCenterTableNew({
                     placeholder="Enter vision centre name"
                   />
                 </td>
+
                 <td className="border p-1 text-right">
                   <input
                     type="text" inputMode="numeric" pattern="[0-9]*"
                     className="w-full border rounded px-2 py-1 text-right"
                     value={vExamined}
                     onChange={(e) => handle(i, "examined", e.target.value)}
-                    disabled={disabled} placeholder="0"
+                    disabled={disabled}
+                    placeholder="0"
                   />
                 </td>
+
                 <td className="border p-1 text-right">
                   <input
                     type="text" inputMode="numeric" pattern="[0-9]*"
                     className="w-full border rounded px-2 py-1 text-right"
                     value={vCataract}
                     onChange={(e) => handle(i, "cataract", e.target.value)}
-                    disabled={disabled} placeholder="0"
+                    disabled={disabled}
+                    placeholder="0"
                   />
                 </td>
+
                 <td className="border p-1 text-right">
                   <input
                     type="text" inputMode="numeric" pattern="[0-9]*"
                     className="w-full border rounded px-2 py-1 text-right"
                     value={vOther}
                     onChange={(e) => handle(i, "otherDiseases", e.target.value)}
-                    disabled={disabled} placeholder="0"
+                    disabled={disabled}
+                    placeholder="0"
                   />
                 </td>
+
                 <td className="border p-1 text-right">
                   <input
                     type="text" inputMode="numeric" pattern="[0-9]*"
                     className="w-full border rounded px-2 py-1 text-right"
                     value={vRefractive}
                     onChange={(e) => handle(i, "refractiveErrors", e.target.value)}
-                    disabled={disabled} placeholder="0"
+                    disabled={disabled}
+                    placeholder="0"
                   />
                 </td>
-                {/* 🔹 NEW cell */}
+
                 <td className="border p-1 text-right">
                   <input
                     type="text" inputMode="numeric" pattern="[0-9]*"
                     className="w-full border rounded px-2 py-1 text-right"
                     value={vSpectacles}
-                    onChange={(e) => handle(i, "spectacles", e.target.value)}
-                    disabled={disabled} placeholder="0"
+                    onChange={(e) =>
+                      handle(i, "spectaclesPrescribed", e.target.value)
+                    }
+                    disabled={disabled}
+                    placeholder="0"
                   />
                 </td>
               </tr>
             );
           })}
-
-          {/* Totals row (UI only) */}
-          <tr className="bg-gray-50 font-semibold">
-            <td className="border p-1 text-center" colSpan={labelColSpan}>Total</td>
-            <td className="border p-1 text-right">{totals.examined}</td>
-            <td className="border p-1 text-right">{totals.cataract}</td>
-            <td className="border p-1 text-right">{totals.other}</td>
-            <td className="border p-1 text-right">{totals.refractive}</td>
-            <td className="border p-1 text-right">{totals.spectacles}</td>
-          </tr>
         </tbody>
       </table>
 
-      {showDownload && (
-        <div className="mt-3 flex justify-end">
-          <button
-            onClick={() =>
-              exportTable(
-                tableId,
-                `VisionCenter_${district || ""}_${month || ""}-${year || ""}.xlsx`
-              )
-            }
-            className="px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
-          >
-            Download as Excel
-          </button>
-        </div>
-      )}
-
-      {/* Show the missing onChange warning only if the table is editable */}
-      {!onChange && !disabled && (
+      {!onChange && (
         <div className="mt-2 text-xs text-red-600">
-          VisionCenterTable is read-only because no <code>onChange</code> prop was provided.
+          VisionCenterTableNew is read-only because no <code>onChange</code> prop was provided.
         </div>
       )}
     </div>

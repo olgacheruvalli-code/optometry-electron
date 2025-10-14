@@ -1,5 +1,6 @@
 // src/components/VisionCenterTable.jsx
 import React from "react";
+console.log("[VC] USING *NEW* VisionCenterTable.jsx");
 
 /** Get the first defined, non-null value from possible keys */
 function read(row, keys, fallback = "") {

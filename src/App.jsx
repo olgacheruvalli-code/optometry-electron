@@ -12,10 +12,9 @@ import API_BASE from "./apiBase";
 import sections from "./data/questions";
 import { districtInstitutions } from "./data/districtInstitutions";
 import "./index.css";
-
 import MonthYearSelector from "./components/MonthYearSelector";
 import EyeBankTable from "./components/EyeBankTable";
-import VisionCenterTable from "./components/VisionCenterTable";
+import VisionCenterTableNew from "./components/VisionCenterTableNew";
 import QuestionInput from "./components/QuestionInput";
 import Login from "./components/Login";
 import MenuBar from "./components/MenuBar";
@@ -24,6 +23,7 @@ import ViewInstitutionWiseReport from "./components/ViewInstitutionWiseReport";
 import ViewDistrictTables from "./components/ViewDistrictTables";
 import EditReport from "./components/EditReport";
 import Register from "./components/Register";
+import { startFlute, stopFlute } from "./utils/sound";
 import EditGate from "./components/EditGate";
 import TestVisionCenter from "./components/TestVisionCenter";
 
@@ -590,6 +590,14 @@ function ReportEntry({
   const canSave = month && year;
   const canSaveThisCombo = canSave && !alreadySubmitted;
 
+  // 🔊 Start flute on mount; stop when leaving this page
+  React.useEffect(() => {
+    startFlute();
+    return () => {
+      stopFlute();
+    };
+  }, []);
+
   // ✅ Check if a report already exists for this Institution + Month + Year.
   React.useEffect(() => {
     let cancelled = false;
@@ -664,10 +672,12 @@ function ReportEntry({
         return;
       }
       alert(`✅ Saved for ${user.institution}, ${user.district}`);
-      // You can optionally navigate away or set a local flag; keeping page open for now.
+      // 🔇 Stop flute ONLY after a successful save
+      stopFlute();
     } catch (err) {
       console.error("Save error:", err);
       alert("❌ Unexpected error during save. See console.");
+      // keep flute playing so user can try again
     }
   };
 
@@ -776,10 +786,10 @@ function ReportEntry({
           />
         </div>
 
-        {/* Vision Center — Institution column removed via prop in the VC component */}
+        {/* Vision Center — ENTRY uses the NEW component with “Spectacles prescribed” */}
         <div className="mb-12">
           <h4 className="text-lg font-bold text-[#017d8a] mb-4">V. VISION CENTER</h4>
-          <VisionCenterTable
+          <VisionCenterTableNew
             data={visionCenter}
             onChange={handleTableChange(setVisionCenter)}
             disabled={disabled}
@@ -836,6 +846,7 @@ function ReportEntry({
     </div>
   );
 }
+
 
 
 /* ========================================================================== */
@@ -1462,7 +1473,7 @@ function App() {
           </>
         )}
 
-        {/* District Summary Tables */}
+        {/* District Summary Tables (UNCHANGED) */}
         {menu === "district-tables" && (
           <>
             <MonthYearSelector month={month} year={year} setMonth={setMonth} setYear={setYear} />
@@ -1472,7 +1483,6 @@ function App() {
                 month={month}
                 year={year}
                 district={selectedDistrict}
-                /* enable per-table Excel buttons ONLY in district tables */
                 showDownloadEB={true}
                 showDownloadVC={true}
               />
