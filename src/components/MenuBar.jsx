@@ -11,51 +11,52 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
       const isClickInsideAny = Object.values(submenuRefs.current).some(
         (ref) => ref && ref.contains(event.target)
       );
-    if (!isClickInsideAny) setOpenSubmenuKey(null);
+      if (!isClickInsideAny) setOpenSubmenuKey(null);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // -------------------- Connected Link builder (district-aware) --------------------
-  const norm = (s) => String(s || "").trim().toLowerCase();
+  /* --------------------------- Connected Links --------------------------- */
   const district = String(user?.district || "");
-  const isKozhikode = norm(district) === "kozhikode";
+  const districtLower = district.toLowerCase();
 
-  // items: if href is present -> open external; else disabled placeholder
-  const connectedLinks = [
-    {
-      key: "blind-register",
-      label: "Blind Register",
-      href: isKozhikode
-        ? "https://docs.google.com/spreadsheets/d/19MlrGzm6WYUEt7BRFP2VMxhUOzOd_C7sHloI7LBBXrI/edit?gid=0#gid=0"
-        : null,
-    },
-    {
-      key: "cataract-backlog",
-      label: "Cataract Backlog",
-      href: isKozhikode
-        ? "https://docs.google.com/spreadsheets/d/1DMOOQ3ZVyxPlgVhl3vI0huDcb1vuGNVkaPsokxdler4/edit?gid=0#gid=0"
-        : null,
-    },
-    {
-      key: "old-aged-spectacles",
-      label: "Old Aged – Spectacles",
-      href: isKozhikode
-        ? "https://docs.google.com/spreadsheets/d/1lNOg6bl5NJu2j8q-BVITfkdL3CWwsC65pWM29fioPhw/edit?gid=738688079#gid=738688079"
-        : null,
-    },
-    {
-      key: "school-children-spectacles",
-      label: "School Children – Spectacles",
-      href: isKozhikode
-        ? "https://docs.google.com/spreadsheets/d/1MDhuyGOamcoHv1Gl0hkcqeP86hQeY84O3X3KZvMx0pc/edit?gid=1604714197#gid=1604714197"
-        : null,
-    },
-  ];
-  // -------------------------------------------------------------------------------
+  // Default: empty links (other districts can be filled later)
+  const emptyLinks = {
+    blindRegister: "",
+    cataractBacklog: "",
+    oldAgedSpectacles: "",
+    schoolSpectacles: "",
+  };
 
-  // Only show "View/Edit Reports" if NOT DOC
+  // Per-district links. Filled only for Kozhikode as requested.
+  const connectedLinksMap = {
+    kozhikode: {
+      blindRegister:
+        "https://docs.google.com/spreadsheets/d/19MlrGzm6WYUEt7BRFP2VMxhUOzOd_C7sHloI7LBBXrI/edit?gid=0#gid=0",
+      cataractBacklog:
+        "https://docs.google.com/spreadsheets/d/1DMOOQ3ZVyxPlgVhl3vI0huDcb1vuGNVkaPsokxdler4/edit?gid=0#gid=0",
+      oldAgedSpectacles:
+        "https://docs.google.com/spreadsheets/d/1lNOg6bl5NJu2j8q-BVITfkdL3CWwsC65pWM29fioPhw/edit?gid=738688079#gid=738688079",
+      schoolSpectacles:
+        "https://docs.google.com/spreadsheets/d/1MDhuyGOamcoHv1Gl0hkcqeP86hQeY84O3X3KZvMx0pc/edit?gid=1604714197#gid=1604714197",
+    },
+  };
+
+  const connectedLinks = connectedLinksMap[districtLower] || emptyLinks;
+
+  // Helper to open external link (if available) or fall back to onMenu key
+  const openLinkOrMenu = (url, fallbackKey) => {
+    if (url) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      setOpenSubmenuKey(null);
+    } else {
+      setOpenSubmenuKey(null);
+      onMenu(fallbackKey);
+    }
+  };
+
+  /* ------------------------------- Menu --------------------------------- */
   const menuItems = [
     { key: "entry", label: "Report Entry" },
     ...(!isDistrictCoordinator ? [{ key: "view", label: "View/Edit Reports" }] : []),
@@ -77,18 +78,51 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
         { key: "other-diseases", label: "Details of Other Eye Diseases" },
         { key: "identified-cataract", label: "Number of Cataract Cases Identified" },
         { key: "test-vc", label: "Test VC Table" },
-        // new download items
+        // Downloads
         { key: "district-dl-inst", label: "Download Institution-wise (.xlsx)" },
         { key: "district-dl-ebvc", label: "Download Eye Bank & Vision Center (.xlsx)" },
       ],
     });
   }
 
-  // Replace "connected Link" submenu content with district-aware external links
+  // Connected Link (with two new submenus; removed “Vision Center Related Issues”)
   menuItems.push({
     key: "others-connected",
-    label: "connected Link",
-    subExternal: connectedLinks, // <-- mark as external list
+    label: "Connected Link",
+    sub: [
+      {
+        key: "blind-register",
+        label: "Blind Register",
+        onClick: () => openLinkOrMenu(connectedLinks.blindRegister, "blind-register"),
+      },
+      {
+        key: "cataract-backlog",
+        label: "Cataract Backlog",
+        onClick: () => openLinkOrMenu(connectedLinks.cataractBacklog, "cataract-backlog"),
+      },
+      {
+        key: "old-aged-spectacles",
+        label: "Old Aged - Spectacles",
+        onClick: () => openLinkOrMenu(connectedLinks.oldAgedSpectacles, "old-aged-spectacles"),
+      },
+      {
+        key: "school-spectacles",
+        label: "School Children - Spectacles",
+        onClick: () => openLinkOrMenu(connectedLinks.schoolSpectacles, "school-spectacles"),
+      },
+    ],
+  });
+
+  // NEW: Research / Deep Study
+  menuItems.push({
+    key: "research",
+    label: "Research/Deep Study",
+    sub: [
+      { key: "research-amblyopia", label: "Amblyopia" },
+      { key: "research-strabismus", label: "Strabismus" },
+      { key: "research-low-vision", label: "Low Vision" },
+      { key: "research-accommodative-spasm", label: "Accommodative Spasm" },
+    ],
   });
 
   return (
@@ -112,79 +146,47 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
       {/* Flat blue menu bar */}
       <div className="bg-[#396b84] flex items-center px-10 py-2 font-serif text-sm text-white">
         <div className="flex space-x-6 relative">
-          {menuItems.map((item) => {
-            const hasInternalSub = Array.isArray(item.sub);
-            const hasExternalSub = Array.isArray(item.subExternal);
-
-            if (hasInternalSub || hasExternalSub) {
-              return (
-                <div
-                  key={item.key}
-                  className="relative"
-                  ref={(el) => (submenuRefs.current[item.key] = el)}
+          {menuItems.map((item) =>
+            item.sub ? (
+              <div
+                key={item.key}
+                className="relative"
+                ref={(el) => (submenuRefs.current[item.key] = el)}
+              >
+                <button
+                  onClick={() =>
+                    setOpenSubmenuKey(openSubmenuKey === item.key ? null : item.key)
+                  }
+                  className={`px-4 py-2 rounded-md flex items-center gap-2 font-semibold tracking-wide transition ${
+                    active?.startsWith?.(item.key) ? "bg-[#2f5a70]" : "hover:bg-[#2f5a70]"
+                  }`}
                 >
-                  <button
-                    onClick={() =>
-                      setOpenSubmenuKey(openSubmenuKey === item.key ? null : item.key)
-                    }
-                    className={`px-4 py-2 rounded-md flex items-center gap-2 font-semibold tracking-wide transition ${
-                      active?.startsWith?.(item.key) ? "bg-[#2f5a70]" : "hover:bg-[#2f5a70]"
-                    }`}
-                  >
-                    {item.label}
-                    <ChevronDown className="w-4 h-4" />
-                  </button>
+                  {item.label}
+                  <ChevronDown className="w-4 h-4" />
+                </button>
 
-                  {openSubmenuKey === item.key && (
-                    <div className="absolute top-full mt-1 left-0 flex flex-col bg-[#396b84] text-white rounded-md shadow-lg z-50 min-w-[320px]">
-                      {/* Internal submenus (navigate inside app) */}
-                      {hasInternalSub &&
-                        item.sub.map((subItem) => (
-                          <button
-                            key={subItem.key}
-                            onClick={() => {
-                              setOpenSubmenuKey(null);
-                              onMenu(subItem.key);
-                            }}
-                            className="px-6 py-2 text-left hover:bg-[#2f5a70] whitespace-nowrap"
-                          >
-                            {subItem.label}
-                          </button>
-                        ))}
-
-                      {/* External submenus (open in new tab) */}
-                      {hasExternalSub &&
-                        item.subExternal.map((link) =>
-                          link.href ? (
-                            <a
-                              key={link.key}
-                              href={link.href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={() => setOpenSubmenuKey(null)}
-                              className="px-6 py-2 hover:bg-[#2f5a70] whitespace-nowrap"
-                              title={`${item.label} — ${district}`}
-                            >
-                              {link.label}
-                            </a>
-                          ) : (
-                            <span
-                              key={link.key}
-                              className="px-6 py-2 opacity-60 cursor-not-allowed whitespace-nowrap"
-                              title="Link will be added for this district soon"
-                            >
-                              {link.label} — (Coming soon for {district || "your district"})
-                            </span>
-                          )
-                        )}
-                    </div>
-                  )}
-                </div>
-              );
-            }
-
-            // simple button
-            return (
+                {openSubmenuKey === item.key && (
+                  <div className="absolute top-full mt-1 left-0 flex flex-col bg-[#396b84] text-white rounded-md shadow-lg z-50 min-w-[280px]">
+                    {item.sub.map((subItem) => (
+                      <button
+                        key={subItem.key}
+                        onClick={() => {
+                          if (typeof subItem.onClick === "function") {
+                            subItem.onClick();
+                          } else {
+                            setOpenSubmenuKey(null);
+                            onMenu(subItem.key);
+                          }
+                        }}
+                        className="px-6 py-2 text-left hover:bg-[#2f5a70] whitespace-nowrap"
+                      >
+                        {subItem.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
               <button
                 key={item.key}
                 onClick={() => onMenu(item.key)}
@@ -194,8 +196,8 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
               >
                 {item.label}
               </button>
-            );
-          })}
+            )
+          )}
         </div>
 
         <div className="ml-auto">
