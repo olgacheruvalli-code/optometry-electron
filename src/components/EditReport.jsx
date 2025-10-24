@@ -2,6 +2,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import API_BASE from "../apiBase";
 import sections from "../data/questions";
+import EyeBankTable from "./EyeBankTable";
+import VisionCenterTable from "./VisionCenterTable";
 
 /* ------------------------------ Config ------------------------------ */
 // Change this to your real admin password (kept on frontend by request).
@@ -16,6 +18,27 @@ const MONTHS = [
 /* --------------------------- Helpers -------------------------------- */
 const norm = (s) => String(s || "").trim().toLowerCase();
 const eq   = (a, b) => norm(a) === norm(b);
+
+/* normalize month labels like "sept" → "September" */
+const normMonth = (m) => {
+  if (!m) return m;
+  const s = String(m).trim().toLowerCase();
+  const map = {
+    january: "January", jan: "January",
+    february: "February", feb: "February",
+    march: "March", mar: "March",
+    april: "April", apr: "April",
+    may: "May",
+    june: "June", jun: "June",
+    july: "July", jul: "July",
+    august: "August", aug: "August",
+    september: "September", sep: "September", sept: "September",
+    october: "October", oct: "October",
+    november: "November", nov: "November",
+    december: "December", dec: "December",
+  };
+  return map[s] || m;
+};
 
 const getQs = (blk) =>
   Array.isArray(blk?.questions) ? blk.questions
@@ -37,6 +60,171 @@ function buildFlatRows(secs) {
 
 const orderedQuestions = (secs) =>
   buildFlatRows(secs).filter((r) => r.kind === "q").map((r) => r.row);
+
+/* ---------- generic table utils (safe for legacy shapes) ---------- */
+const normalizeTextNameFields = (rows) =>
+  Array.isArray(rows)
+    ? rows.map((row) => {
+        const out = { ...(row || {}) };
+        for (const k of Object.keys(out)) {
+          if (/name|centre|center|institution/i.test(k) && (out[k] === 0 || out[k] === "0")) {
+            out[k] = "";
+          }
+        }
+        return out;
+      })
+    : [];
+
+const sanitizeTableArray = (arr) =>
+  Array.isArray(arr)
+    ? arr.map((row) => {
+        const out = {};
+        for (const [k, v] of Object.entries(row || {})) {
+          if (v === null || v === undefined) {
+            out[k] = "";
+            continue;
+          }
+          if (typeof v === "number") {
+            out[k] = Number.isFinite(v) ? v : 0;
+            continue;
+          }
+          const s = String(v).trim();
+          out[k] = /^-?\d+(\.\d+)?$/.test(s) ? Number(s) : s;
+        }
+        return out;
+      })
+    : [];
+
+const someRowHasValues = (arr) =>
+  Array.isArray(arr) &&
+  arr.some((row) =>
+    Object.values(row || {}).some((v) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0;
+    })
+  );
+
+/* ---------- Vision Center normalize (in/out) ---------- */
+const vcNormalizeIn = (rows = []) =>
+  normalizeTextNameFields(rows).map((r) => {
+    const out = { ...r };
+
+    out.institution =
+      r.institution ||
+      r.institutionName ||
+      r["Name of Institution"] ||
+      r.nameOfInstitution ||
+      "";
+
+    out.visionCenter =
+      r.visionCenter ||
+      r.visionCentre ||
+      r["Name of Vision Centre"] ||
+      r.nameOfVisionCentre ||
+      r.name ||
+      "";
+
+    out.examined =
+      r.examined ??
+      r.patientsExamined ??
+      r.patients ??
+      r["No of patients examined"] ??
+      r.noPatientsExamined ??
+      0;
+
+    out.cataract =
+      r.cataract ??
+      r.cataractCases ??
+      r.cataractDetected ??
+      r["No of Cataract cases detected"] ??
+      r.noCataract ??
+      0;
+
+    out.otherDiseases =
+      r.otherDiseases ??
+      r.otherEyeDiseases ??
+      r.others ??
+      r["No of other eye diseases"] ??
+      r.noOtherDiseases ??
+      0;
+
+    out.refractiveErrors =
+      r.refractiveErrors ??
+      r.refErrors ??
+      r.refractive ??
+      r["No of Refractive errors"] ??
+      r.noRefractiveErrors ??
+      0;
+
+    // NEW column supported everywhere
+    out.spectacles =
+      r.spectacles ??
+      r.spectaclesPrescribed ??
+      r["No of Spectacles prescribed"] ??
+      r["No. of spectacles presribed"] ??
+      r.noSpectacles ??
+      r.no_of_spectacles ??
+      0;
+
+    return out;
+  });
+
+const vcNormalizeOut = sanitizeTableArray;
+
+/* ---------- Eye Bank normalize (in/out) ---------- */
+const ebNormalizeIn = (rows = []) =>
+  normalizeTextNameFields(rows).map((r) => ({
+    status:
+      r.status ||
+      r.Status ||
+      r.type ||
+      r.Type ||
+      r.name ||
+      r.Name ||
+      "",
+    eyesCollected:
+      Number(
+        r.eyesCollected ??
+          r["No of Eyes collected during the month"] ??
+          r.collected_eb ??
+          r.ecc_collected ??
+          0
+      ) || 0,
+    utilizedForKeratoplasty:
+      Number(
+        r.utilizedForKeratoplasty ??
+          r["No of Eyes utilized for Keratoplasty"] ??
+          r.kerato_eb ??
+          r.ecc_kerato ??
+          0
+      ) || 0,
+    usedForResearch:
+      Number(
+        r.usedForResearch ??
+          r["No of Eyes used for Research purpose"] ??
+          r.research_eb ??
+          r.ecc_research ??
+          0
+      ) || 0,
+    distributedToOtherInst:
+      Number(
+        r.distributedToOtherInst ??
+          r["No of Eyes distributed to other Institutions"] ??
+          r.distributed_eb ??
+          r.ecc_distributed ??
+          0
+      ) || 0,
+    pledgeForms:
+      Number(
+        r.pledgeForms ??
+          r["No of Eye Donation Pledge forms received"] ??
+          r.pledge_eb ??
+          r.ecc_pledge ??
+          0
+      ) || 0,
+  }));
+
+const ebNormalizeOut = sanitizeTableArray;
 
 /* ==================================================================== */
 
@@ -60,6 +248,10 @@ export default function EditReport({ user }) {
   const [answers, setAnswers] = useState(() => KEYS.reduce((a, k) => ((a[k] = 0), a), {}));
   const [cumulative, setCumulative] = useState(() => KEYS.reduce((a, k) => ((a[k] = 0), a), {}));
 
+  // NEW: tables state (Eye Bank 2 rows, Vision Center 10 rows)
+  const [eyeBank, setEyeBank] = useState([{},{ }]);
+  const [visionCenter, setVisionCenter] = useState(Array.from({ length: 10 }, () => ({})));
+
   // Fetch the latest report strictly by (district, institution, month, year)
   const fetchSelected = async () => {
     if (!district || !institution || !month || !year) return;
@@ -79,7 +271,7 @@ export default function EditReport({ user }) {
         (d) =>
           eq(d?.district, district) &&
           eq(d?.institution, institution) &&
-          eq(d?.month, month) &&
+          eq(normMonth(d?.month), normMonth(month)) &&
           String(d?.year || "") === String(year)
       );
       mine.sort(
@@ -90,9 +282,9 @@ export default function EditReport({ user }) {
       const chosen = mine[0] || null;
       setDoc(chosen);
 
+      // answers/cumulative
       const a = chosen?.answers || {};
       const c = chosen?.cumulative || {};
-
       const ans = {};
       const cum = {};
       KEYS.forEach((k) => {
@@ -101,10 +293,26 @@ export default function EditReport({ user }) {
       });
       setAnswers(ans);
       setCumulative(cum);
+
+      // tables
+      const ebIn = chosen?.eyeBank || chosen?.eyebank || chosen?.eye_bank || [];
+      const vcIn = chosen?.visionCenter || chosen?.visioncentre || chosen?.vision_centre || [];
+
+      const ebNorm = ebNormalizeIn(ebIn);
+      const vcNorm = vcNormalizeIn(vcIn);
+
+      setEyeBank((ebNorm.length ? ebNorm : [{}, {}]).slice(0, 2));
+      setVisionCenter(() => {
+        const base = vcNorm.slice(0, 10);
+        while (base.length < 10) base.push({});
+        return base;
+      });
     } catch (e) {
       console.error("fetchSelected failed:", e);
       alert("Could not fetch the selected report.");
       setDoc(null);
+      setEyeBank([{},{ }]);
+      setVisionCenter(Array.from({ length: 10 }, () => ({})));
     } finally {
       setLoading(false);
     }
@@ -118,6 +326,22 @@ export default function EditReport({ user }) {
   const handleChange = (key, val, setter) => {
     const n = Number(val);
     setter((prev) => ({ ...prev, [key]: Number.isFinite(n) ? n : 0 }));
+  };
+
+  // table change handlers
+  const handleEBChange = (rowIdx, key, value) => {
+    setEyeBank((prev) => {
+      const arr = [...prev];
+      arr[rowIdx] = { ...(arr[rowIdx] || {}), [key]: value };
+      return arr;
+    });
+  };
+  const handleVCChange = (rowIdx, key, value) => {
+    setVisionCenter((prev) => {
+      const arr = [...prev];
+      arr[rowIdx] = { ...(arr[rowIdx] || {}), [key]: value };
+      return arr;
+    });
   };
 
   // ADMIN SAVE: create a new record for same D/I/M/Y so it becomes the latest.
@@ -137,6 +361,11 @@ export default function EditReport({ user }) {
         answers,    // numbers are OK; backend also accepts strings
         cumulative, // optional; viewers have client fallback
       };
+
+      const ebOut = ebNormalizeOut(eyeBank);
+      const vcOut = vcNormalizeOut(visionCenter);
+      if (someRowHasValues(ebOut)) payload.eyeBank = ebOut;
+      if (someRowHasValues(vcOut)) payload.visionCenter = vcOut;
 
       const res = await fetch(`${API_BASE}/api/reports`, {
         method: "POST",
@@ -184,7 +413,7 @@ export default function EditReport({ user }) {
         </div>
         <div>
           <label className="text-sm font-semibold">Institution</label>
-          <input
+        <input
             className="w-full border rounded p-2"
             value={institution}
             onChange={(e) => setInstitution(e.target.value)}
@@ -261,6 +490,23 @@ export default function EditReport({ user }) {
             {doc.updatedAt ? `(updated ${new Date(doc.updatedAt).toLocaleString()})` : ""}
           </span>
         )}
+      </div>
+
+      {/* --- Eye Bank table (editable) --- */}
+      <div className="mb-10">
+        <h4 className="text-lg font-bold text-[#017d8a] mb-3">III. EYE BANK — Edit</h4>
+        <EyeBankTable data={eyeBank} onChange={handleEBChange} disabled={!unlocked} />
+      </div>
+
+      {/* --- Vision Center table (editable, with Spectacles column) --- */}
+      <div className="mb-10">
+        <h4 className="text-lg font-bold text-[#017d8a] mb-3">V. VISION CENTER — Edit</h4>
+        <VisionCenterTable
+          data={visionCenter}
+          onChange={handleVCChange}
+          disabled={!unlocked}
+          showInstitution={true}
+        />
       </div>
 
       {/* Quick edit grid with REAL question labels */}

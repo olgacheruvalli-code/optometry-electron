@@ -1,196 +1,135 @@
-// src/components/VisionCenterTable.jsx
 import React from "react";
-console.log("[VC] USING *NEW* VisionCenterTable.jsx");
 
-/** Get the first defined, non-null value from possible keys */
-function read(row, keys, fallback = "") {
+// helpers
+const read = (row, keys, fallback = "") => {
   for (const k of keys) {
     const v = row?.[k];
     if (v !== undefined && v !== null && v !== "") return v;
   }
   return fallback;
-}
-
-/** Coerce numeric-looking strings to integers for footer totals */
-function toInt(v) {
+};
+const toInt = (v) => {
   const n = Number(String(v ?? "").replace(/[^\d-]/g, ""));
   return Number.isFinite(n) ? n : 0;
-}
+};
 
 export default function VisionCenterTable({
   data = [],
   onChange,
   disabled = false,
-  showInstitution = true, // 👈 NEW: hide Institution column when false
+  showInstitution = false,
 }) {
   const rows = Array.isArray(data) ? data : [];
 
-  // Write only to canonical field; caller's setState should merge rows (spread)
-  const handle = (rowIdx, canonicalKey, value) => {
+  const handle = (rowIdx, key, value) => {
     if (!onChange) return;
-    onChange(rowIdx, canonicalKey, value);
+    onChange(rowIdx, key, value);
   };
 
-  // When Institution column is hidden, totals header colspan changes
-  const totalLabelColSpan = showInstitution ? 3 : 2;
+  const totals = rows.reduce(
+    (a, r) => {
+      a.patientsExamined += toInt(read(r, ["patientsExamined", "No of patients examined"], 0));
+      a.cataract        += toInt(read(r, ["cataract", "No of Cataract cases detected"], 0));
+      a.otherEye        += toInt(read(r, ["otherEye", "No of other eye diseases"], 0));
+      a.refractive      += toInt(read(r, ["refractive", "No of Refractive errors"], 0));
+      a.spectacles      += toInt(read(r, ["spectacles", "No of Spectacles Prescribed"], 0));
+      return a;
+    },
+    { patientsExamined: 0, cataract: 0, otherEye: 0, refractive: 0, spectacles: 0 }
+  );
 
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full border border-black text-sm">
         <thead>
-          <tr className="bg-gray-100">
-            <th className="border p-2 text-center">Sl. No.</th>
+          <tr className="bg-gray-100 text-left">
+            <th className="border border-black px-2 py-1 w-10">Sl.No.</th>
             {showInstitution && (
-              <th className="border p-2">Name of Institution</th>
+              <th className="border border-black px-2 py-1">Name of Institution</th>
             )}
-            <th className="border p-2">Name of Vision Centre</th>
-            <th className="border p-2 text-right">No. of patients examined</th>
-            <th className="border p-2 text-right">No. of Cataract cases detected</th>
-            <th className="border p-2 text-right">No. of other eye diseases</th>
-            <th className="border p-2 text-right">No. of Refractive errors</th>
+            <th className="border border-black px-2 py-1">Name of Vision Centre</th>
+            <th className="border border-black px-2 py-1">No. of patients examined</th>
+            <th className="border border-black px-2 py-1">No. of Cataract cases detected</th>
+            <th className="border border-black px-2 py-1">No. of other eye diseases</th>
+            <th className="border border-black px-2 py-1">No. of Refractive errors</th>
+            <th className="border border-black px-2 py-1">No. of Spectacles Prescribed</th>
           </tr>
         </thead>
+
         <tbody>
-          {rows.length === 0 ? (
-            <tr>
-              <td className="border p-2 text-center" colSpan={showInstitution ? 7 : 6}>
-                No rows. Add entries from the report entry page.
-              </td>
-            </tr>
-          ) : (
-            rows.map((row, i) => {
-              // Read with legacy aliases so old data shows up again
-              const vInstitution = read(row, [
-                "institution", "inst", "hospital", "institutionName", "nameOfInstitution"
-              ]);
-              const vCentre = read(row, [
-                "centre", "center", "visionCentre", "visionCenter", "vcName", "name", "vision_centre"
-              ]);
-              const vExamined = read(row, [
-                "examined", "patientsExamined", "patients", "noExamined"
-              ], "");
-              const vCataract = read(row, [
-                "cataract", "cataractDetected", "cat"
-              ], "");
-              const vOther = read(row, [
-                "other", "otherDiseases", "otherEyeDiseases"
-              ], "");
-              const vRefrac = read(row, [
-                "refrac", "refr", "refractiveErrors", "refraction"
-              ], "");
+          {Array.from({ length: Math.max(10, rows.length) }).map((_, i) => {
+            const r = rows[i] || {};
+            const sl = i + 1;
 
-              return (
-                <tr key={i}>
-                  <td className="border p-2 text-center">{i + 1}</td>
+            const institution = read(r, ["institution", "nameOfInstitution"], "");
+            const centerName = read(r, ["centerName", "visionCenter", "Name of Vision Centre"], "");
+            const patientsExamined = read(r, ["patientsExamined", "No of patients examined"], 0);
+            const cataract   = read(r, ["cataract", "No of Cataract cases detected"], 0);
+            const otherEye   = read(r, ["otherEye", "No of other eye diseases"], 0);
+            const refractive = read(r, ["refractive", "No of Refractive errors"], 0);
+            const spectacles = read(r, ["spectacles", "No of Spectacles Prescribed"], 0);
 
-                  {showInstitution && (
-                    <td className="border p-1">
-                      <input
-                        type="text"
-                        className="w-full border rounded px-2 py-1"
-                        value={vInstitution}
-                        onChange={(e) => handle(i, "institution", e.target.value)}
-                        disabled={disabled}
-                        placeholder="Institution name"
-                      />
-                    </td>
-                  )}
+            return (
+              <tr key={i}>
+                <td className="border border-black px-2 py-1 text-center">{sl}</td>
 
-                  <td className="border p-1">
+                {showInstitution && (
+                  <td className="border border-black px-2 py-1">
                     <input
                       type="text"
-                      className="w-full border rounded px-2 py-1"
-                      value={vCentre}
-                      onChange={(e) => handle(i, "centre", e.target.value)}
+                      className="w-full outline-none"
+                      value={institution}
+                      onChange={(e) => handle(i, "institution", e.target.value)}
                       disabled={disabled}
-                      placeholder="Vision centre name"
+                      placeholder="Enter institution"
                     />
                   </td>
+                )}
 
-                  <td className="border p-1 text-right">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      className="w-full border rounded px-2 py-1 text-right"
-                      value={String(vExamined)}
-                      onChange={(e) =>
-                        handle(i, "examined", e.target.value.replace(/\D/g, ""))
-                      }
-                      disabled={disabled}
-                      placeholder="0"
-                    />
-                  </td>
+                <td className="border border-black px-2 py-1">
+                  <input
+                    type="text"
+                    className="w-full outline-none"
+                    value={centerName}
+                    onChange={(e) => handle(i, "centerName", e.target.value)}
+                    disabled={disabled}
+                    placeholder="Enter vision centre name"
+                  />
+                </td>
 
-                  <td className="border p-1 text-right">
+                {[
+                  ["patientsExamined", patientsExamined],
+                  ["cataract", cataract],
+                  ["otherEye", otherEye],
+                  ["refractive", refractive],
+                  ["spectacles", spectacles],
+                ].map(([key, val]) => (
+                  <td key={key} className="border border-black px-2 py-1">
                     <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      className="w-full border rounded px-2 py-1 text-right"
-                      value={String(vCataract)}
-                      onChange={(e) =>
-                        handle(i, "cataract", e.target.value.replace(/\D/g, ""))
-                      }
+                      type="number"
+                      className="w-full text-right outline-none"
+                      value={val}
+                      onChange={(e) => handle(i, key, e.target.value)}
                       disabled={disabled}
-                      placeholder="0"
                     />
                   </td>
+                ))}
+              </tr>
+            );
+          })}
 
-                  <td className="border p-1 text-right">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      className="w-full border rounded px-2 py-1 text-right"
-                      value={String(vOther)}
-                      onChange={(e) =>
-                        handle(i, "other", e.target.value.replace(/\D/g, ""))
-                      }
-                      disabled={disabled}
-                      placeholder="0"
-                    />
-                  </td>
-
-                  <td className="border p-1 text-right">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      className="w-full border rounded px-2 py-1 text-right"
-                      value={String(vRefrac)}
-                      onChange={(e) =>
-                        handle(i, "refrac", e.target.value.replace(/\D/g, ""))
-                      }
-                      disabled={disabled}
-                      placeholder="0"
-                    />
-                  </td>
-                </tr>
-              );
-            })
-          )}
+          <tr className="bg-gray-50 font-semibold">
+            <td className="border border-black px-2 py-1 text-center" colSpan={showInstitution ? 2 : 1}>
+              Total
+            </td>
+            <td className="border border-black px-2 py-1" />
+            <td className="border border-black px-2 py-1 text-right">{totals.patientsExamined}</td>
+            <td className="border border-black px-2 py-1 text-right">{totals.cataract}</td>
+            <td className="border border-black px-2 py-1 text-right">{totals.otherEye}</td>
+            <td className="border border-black px-2 py-1 text-right">{totals.refractive}</td>
+            <td className="border border-black px-2 py-1 text-right">{totals.spectacles}</td>
+          </tr>
         </tbody>
-
-        {rows.length > 0 && (
-          <tfoot>
-            <tr className="bg-gray-50 font-semibold">
-              <td className="border p-2 text-right" colSpan={totalLabelColSpan}>Total</td>
-              <td className="border p-2 text-right">
-                {rows.reduce((s, r) => s + toInt(read(r, ["examined","patientsExamined","patients","noExamined"])), 0)}
-              </td>
-              <td className="border p-2 text-right">
-                {rows.reduce((s, r) => s + toInt(read(r, ["cataract","cataractDetected","cat"])), 0)}
-              </td>
-              <td className="border p-2 text-right">
-                {rows.reduce((s, r) => s + toInt(read(r, ["other","otherDiseases","otherEyeDiseases"])), 0)}
-              </td>
-              <td className="border p-2 text-right">
-                {rows.reduce((s, r) => s + toInt(read(r, ["refrac","refr","refractiveErrors","refraction"])), 0)}
-              </td>
-            </tr>
-          </tfoot>
-        )}
       </table>
     </div>
   );

@@ -1,249 +1,501 @@
-// src/components/VisionCenterTableNew.jsx
-import React from "react";
+// src/components/ViewDistrictTables.jsx
+import React, { useEffect, useMemo, useState } from "react";
+import API_BASE from "../apiBase";
+import sections from "../data/questions";
+import EyeBankTable from "./EyeBankTable";
 
-/* Debug: confirm this file is the one rendering */
-console.log("[VC] USING VisionCenterTableNew.jsx");
+/* ----------------------------- helpers ------------------------------ */
 
-/* Inline Excel helper (only used when showDownload=true) */
-const exportTable = async (tableId, filename = "export.xlsx") => {
-  const el = document.getElementById(tableId);
-  if (!el) return alert("Table not found: " + tableId);
-  const XLSX = await import("xlsx");
-  const wb = XLSX.utils.table_to_book(el, { sheet: "Sheet1" });
-  XLSX.writeFile(wb, filename);
-};
-
-const NUM_ROWS = 10;
-
-// helpers
-const readStr = (row, keys) => {
-  for (const k of keys) {
-    const v = row?.[k];
-    if (typeof v === "string") return v;
-    if (v != null && typeof v?.toString === "function") return v.toString();
-  }
-  return "";
-};
-const readNum = (row, keys) => {
-  for (const k of keys) {
-    const v = row?.[k];
-    if (v === "" || v == null) return "";
-    const n = Number(v);
-    if (Number.isFinite(n)) return String(n);
-  }
-  return "";
-};
-
-export default function VisionCenterTableNew({
-  data = [],
-  onChange,
-  disabled = false,
-  showInstitution = true,      // hide in entry/individual, show in district tables
-  showDownload = false,
-  tableId = "visionCenterTable",
-  month,
-  year,
-  district,
-}) {
-  const rows = React.useMemo(() => {
-    const base = Array.isArray(data) ? data.slice(0, NUM_ROWS) : [];
-    while (base.length < NUM_ROWS) base.push({});
-    return base;
-  }, [data]);
-
-  // Back-compat getters (accepts legacy keys; emits stable ones onChange)
-  const getInstitution = (r) =>
-    readStr(r, ["institution","institutionName","inst","nameOfInstitution","Name of Institution","NameOfInstitution"]);
-
-  const getVCName = (r) =>
-    readStr(r, ["visionCenter","visionCentre","vcName","name","vision_center","visioncentre","Name of Vision Centre","NameOfVisionCentre"]);
-
-  const getExamined = (r) =>
-    readNum(r, ["examined","patientsExamined","patients","No of patients examined","noPatientsExamined"]);
-
-  const getCataract = (r) =>
-    readNum(r, ["cataract","cataractCases","cataractDetected","No of Cataract cases detected","noCataract"]);
-
-  const getOther = (r) =>
-    readNum(r, ["otherDiseases","otherEyeDiseases","others","No of other eye diseases","noOtherDiseases"]);
-
-  const getRefractive = (r) =>
-    readNum(r, ["refractiveErrors","refErrors","refractive","No of Refractive errors","noRefractiveErrors"]);
-
-  // 🔹 NEW column: spectacles prescribed (with several alias keys)
-  const getSpectacles = (r) =>
-    readNum(r, [
-      "spectacles",
-      "spectaclesPrescribed",
-      "No. of spectacles presribed",
-      "No of spectacles presribed",
-      "No of Spectacles prescribed",
-      "noSpectacles",
-      "no_of_spectacles",
-    ]);
-
-  const handle = (rowIdx, key, rawVal) => {
-    if (!onChange) return;
-    if (key === "institution" || key === "visionCenter") {
-      const cleaned = (rawVal || "").replace(/[^a-zA-Z0-9 \-\/,.\(\)]/g, "");
-      onChange(rowIdx, key, cleaned);
-      return;
+function extractRowKeyMatrix(section) {
+  const rows = Array.isArray(section?.rows) ? section.rows : [];
+  return rows.map((row) => {
+    const keys = [];
+    for (const [k, v] of Object.entries(row || {})) {
+      if (k.endsWith("Key") && typeof v === "string" && v.trim()) keys.push(v);
     }
-    const digits = String(rawVal || "").replace(/\D/g, "");
-    onChange(rowIdx, key, digits);
+    return keys;
+  });
+}
+const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
+function addRowInto(targetRow, sourceRow, numericOnlyKeys = null) {
+  if (!sourceRow || typeof sourceRow !== "object") return;
+  for (const [k, v] of Object.entries(sourceRow)) {
+    if (Array.isArray(numericOnlyKeys) && numericOnlyKeys.length && !numericOnlyKeys.includes(k))
+      continue;
+    const n = num(v);
+    if (n || n === 0) targetRow[k] = num(targetRow[k]) + n;
+  }
+}
+const fixedLengthArray = (len) => Array.from({ length: len }, () => ({}));
+
+function prettyMetric(k = "") {
+  const s = String(k).replace(/[_\-]+/g, " ").toLowerCase();
+  if (/(patients.*examined|examined)/i.test(s)) return "No of patients examined";
+  if (/cataract/i.test(s)) return "No of Cataract cases detected";
+  if (/(other).*dise/i.test(s)) return "No of other eye diseases";
+  if (/refract/i.test(s)) return "No of Refractive errors";
+  if (/spectacle/i.test(s)) return "No of Spectacles Prescribed";
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function metricRank(k = "") {
+  const s = String(k).toLowerCase();
+  if (s.includes("examined") || /patients/.test(s)) return 1;
+  if (s.includes("cataract")) return 2;
+  if (s.includes("other") && s.includes("dise")) return 3;
+  if (s.includes("refract")) return 4;
+  if (s.includes("spectacle")) return 5;
+  return 99;
+}
+
+/* Canonical metric keys we render */
+const VC_METRIC_KEYS = [
+  "examined",
+  "cataract",
+  "other_diseases",
+  "refractive_errors",
+  "spectacles_prescribed",
+];
+
+/* Value pickers */
+const isNonEmpty = (v) => v !== undefined && v !== null && String(v).trim() !== "";
+const pickStr = (...vals) => {
+  for (const v of vals) if (isNonEmpty(v)) return String(v).trim();
+  return "";
+};
+const pickNum = (...vals) => {
+  for (const v of vals) {
+    if (v !== undefined && v !== null && String(v) !== "" && Number.isFinite(Number(v))) {
+      return Number(v);
+    }
+  }
+  return 0;
+};
+
+/* ----------------- render-time resolvers (use RAW row first) --------------- */
+
+const getNameFromRow = (rowObj) => {
+  const raw = rowObj?.__raw || {};
+  const data = rowObj?.__data || {};
+  const idx = rowObj?.__idx;
+
+  // 1) exact vc_{i}_name if we know the row index
+  if (idx != null) {
+    const v = raw[`vc_${idx}_name`];
+    if (isNonEmpty(v)) return String(v).trim();
+  }
+
+  // 2) any vc_*_name
+  for (const k of Object.keys(raw)) {
+    const kl = k.toLowerCase();
+    if (/^vc_\d+_name$/.test(kl) && isNonEmpty(raw[k])) return String(raw[k]).trim();
+  }
+
+  // 3) other *_name OR *centre/*center keys with non-empty values
+  for (const k of Object.keys(raw)) {
+    const kl = k.toLowerCase();
+    if ((/_name$/.test(kl) || /(centre|center)$/.test(kl)) && isNonEmpty(raw[k])) {
+      return String(raw[k]).trim();
+    }
+  }
+
+  // 4) fallbacks from normalized data
+  return pickStr(data.name);
+};
+
+const getMetricFromRow = (rowObj, which /* "refractive" | "spectacles" */) => {
+  const raw = rowObj?.__raw || {};
+  const data = rowObj?.__data || {};
+  const idx = rowObj?.__idx;
+
+  const tryKeys = (obj, keys) => {
+    for (const k of keys) {
+      const v = Number(obj[k]);
+      if (Number.isFinite(v)) return v;
+    }
+    return 0;
   };
 
-  // totals (for UI only)
-  const totals = rows.reduce(
-    (acc, r) => {
-      const add = (v, k) => (acc[k] += Number(v || 0) || 0);
-      add(getExamined(r),   "examined");
-      add(getCataract(r),   "cataract");
-      add(getOther(r),      "other");
-      add(getRefractive(r), "refractive");
-      add(getSpectacles(r), "spectacles");
-      return acc;
+  if (which === "refractive") {
+    // 1) prefer vc_{i}_refractive_errors
+    if (idx != null) {
+      const v = tryKeys(raw, [
+        `vc_${idx}_refractive_errors`,
+        `vc_${idx}_refractive_error`,
+        `vc_${idx}_refraction`,
+      ]);
+      if (v) return v;
+    }
+    // 2) any vc_* matches
+    const vcKeys = Object.keys(raw).filter((k) =>
+      /^vc_\d+_/.test(k) && /(refract|refraction)/i.test(k)
+    );
+    const v2 = tryKeys(raw, vcKeys);
+    if (v2) return v2;
+
+    // 3) generic/raw fallbacks
+    const v3 = tryKeys(raw, ["refractive_errors", "refractive_error", "refraction"]);
+    if (v3) return v3;
+
+    // 4) normalized
+    return Number(data.refractive_errors) || 0;
+  }
+
+  if (which === "spectacles") {
+    // 1) prefer vc_{i}_spectacles_prescribed
+    if (idx != null) {
+      const v = tryKeys(raw, [
+        `vc_${idx}_spectacles_prescribed`,
+        `vc_${idx}_spectacle_prescribed`,
+        `vc_${idx}_spectacles`,
+      ]);
+      if (v) return v;
+    }
+    // 2) any vc_* matches
+    const vcKeys = Object.keys(raw).filter((k) =>
+      /^vc_\d+_/.test(k) && /(spectacle|spectacles)/i.test(k) && /(prescrib|scribe)?/i.test(k)
+    );
+    const v2 = tryKeys(raw, vcKeys);
+    if (v2) return v2;
+
+    // 3) generic/raw fallbacks
+    const v3 = tryKeys(raw, ["spectacles_prescribed", "spectacle_prescribed", "spectacles"]);
+    if (v3) return v3;
+
+    // 4) normalized
+    return Number(data.spectacles_prescribed) || 0;
+  }
+
+  return 0;
+};
+
+/* ----------------------- Strict zero defaults ----------------------- */
+
+const ZERO_EYE_BANK = [
+  {
+    status: "Eye Bank",
+    eyesCollected: 0,
+    utilizedForKeratoplasty: 0,
+    usedForResearch: 0,
+    distributedToOtherInst: 0,
+    pledgeForms: 0,
+  },
+  {
+    status: "Eye Collection Centre",
+    eyesCollected: 0,
+    utilizedForKeratoplasty: 0,
+    usedForResearch: 0,
+    distributedToOtherInst: 0,
+    pledgeForms: 0,
+  },
+];
+
+// one placeholder VC row showing zeros (so the table displays 0s instead of “No data”)
+const ZERO_VC_ROWS = [
+  {
+    __institution: "",
+    __raw: { vc_1_name: "" },
+    __idx: 1,
+    __data: {
+      name: "",
+      examined: 0,
+      cataract: 0,
+      other_diseases: 0,
+      refractive_errors: 0,
+      spectacles_prescribed: 0,
     },
-    { examined: 0, cataract: 0, other: 0, refractive: 0, spectacles: 0 }
+  },
+];
+
+/* ===================================================================== */
+
+export default function ViewDistrictTables({ user, month, year }) {
+  const district = user?.district || "";
+
+  const eyeBankSection = useMemo(
+    () => sections.find((s) => s?.title?.toLowerCase().includes("eye bank")),
+    []
+  );
+  const visionCenterSection = useMemo(
+    () => sections.find((s) => (s?.title || "").toLowerCase().match(/vision (center|centre)/)),
+    []
   );
 
-  // how many text columns come before the numeric totals?
-  const labelColSpan = showInstitution ? 3 : 2; // Sl.No + (optional) Institution + Vision Centre
+  const ebRowKeys = useMemo(() => extractRowKeyMatrix(eyeBankSection), [eyeBankSection]);
+
+  const [ebTotals, setEbTotals] = useState(() =>
+    fixedLengthArray((eyeBankSection?.rows || []).length)
+  );
+  const [vcRows, setVcRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [errText, setErrText] = useState("");
+
+  useEffect(() => {
+    if (!district || !month || !year) return;
+
+    let cancelled = false;
+
+    const fetchList = async (url) => {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) return [];
+        const j = await r.json().catch(() => ({}));
+        return Array.isArray(j) ? j : Array.isArray(j?.docs) ? j.docs : [];
+      } catch {
+        return [];
+      }
+    };
+
+    // keys from questions.js for row i; fallback to vc_{i}_*
+    const vcKeyset = (i) => {
+      const idx = i + 1;
+      const cfg = Array.isArray(visionCenterSection?.rows) ? visionCenterSection.rows[i] : null;
+      return {
+        nameKey: cfg?.nameKey ?? cfg?.NameKey ?? `vc_${idx}_name`,
+        examinedKey: cfg?.patientsExaminedKey ?? `vc_${idx}_examined`,
+        cataractKey: cfg?.cataractDetectedKey ?? `vc_${idx}_cataract`,
+        otherDiseasesKey: cfg?.otherEyeDiseasesKey ?? `vc_${idx}_other_diseases`,
+        refractiveErrorsKey: cfg?.refractiveErrorsKey ?? `vc_${idx}_refractive_errors`,
+        spectaclesPrescribedKey: cfg?.spectaclesPrescribedKey ?? `vc_${idx}_spectacles_prescribed`,
+      };
+    };
+
+    // Map any VC row to canonical fields; keep RAW + 1-based index for render
+    const mapRowToCanonical = (row, i) => {
+      const r = row || {};
+      const ks = vcKeyset(i);
+      const idx = i + 1;
+
+      return {
+        name: pickStr(r[ks.nameKey], r[`vc_${idx}_name`], r.name),
+        examined: pickNum(
+          r[ks.examinedKey],
+          r[`vc_${idx}_examined`],
+          r.examined,
+          r.patients_examined,
+          r.patientsExamined
+        ),
+        cataract: pickNum(
+          r[ks.cataractKey],
+          r[`vc_${idx}_cataract`],
+          r.cataract,
+          r.cataractDetected,
+          r.cataract_cases
+        ),
+        other_diseases: pickNum(
+          r[ks.otherDiseasesKey],
+          r[`vc_${idx}_other_diseases`],
+          r.other_diseases,
+          r.otherDiseases
+        ),
+        // leave refractive/spectacles to render-time resolver as well
+        refractive_errors: pickNum(
+          r[ks.refractiveErrorsKey],
+          r[`vc_${idx}_refractive_errors`],
+          r.refractive_errors,
+          r.refractive_error,
+          r.refraction
+        ),
+        spectacles_prescribed: pickNum(
+          r[ks.spectaclesPrescribedKey],
+          r[`vc_${idx}_spectacles_prescribed`],
+          r.spectacles_prescribed,
+          r.spectacle_prescribed,
+          r.spectacles
+        ),
+        __raw: r,
+        __idx: idx,
+      };
+    };
+
+    (async () => {
+      setLoading(true);
+      setErrText("");
+      try {
+        // STRICT: only fetch with district, month, year (no district-less fallback)
+        const q =
+          `district=${encodeURIComponent(district)}` +
+          `&month=${encodeURIComponent(month)}` +
+          `&year=${encodeURIComponent(year)}`;
+
+        const list = await fetchList(`${API_BASE}/api/reports?${q}`);
+
+        // if API returns nothing for this district, display zeros (don’t fetch anything else)
+        if (!Array.isArray(list) || !list.length) {
+          setEbTotals(ZERO_EYE_BANK);
+          setVcRows(ZERO_VC_ROWS);
+          return;
+        }
+
+        // Filter again defensively (stricter guard)
+        const source = list.filter(
+          (d) =>
+            String(d?.district || "").trim().toLowerCase() ===
+              String(district).trim().toLowerCase() &&
+            String(d?.month || "").trim().toLowerCase() ===
+              String(month).trim().toLowerCase() &&
+            String(d?.year || "") === String(year)
+        );
+
+        if (!source.length) {
+          setEbTotals(ZERO_EYE_BANK);
+          setVcRows(ZERO_VC_ROWS);
+          return;
+        }
+
+        /* Eye Bank totals */
+        const ebOut = fixedLengthArray((eyeBankSection?.rows || []).length);
+        source.forEach((rep) => {
+          const eb = rep?.eyeBank || rep?.eyebank || rep?.eye_bank || [];
+          for (let i = 0; i < ebOut.length; i++) {
+            const srcRow = eb[i];
+            if (!srcRow) continue;
+            addRowInto(ebOut[i], srcRow, ebRowKeys[i]);
+          }
+        });
+
+        /* Vision Centre rows */
+        const vcOut = [];
+        source.forEach((rep) => {
+          const instName = String(rep?.institution || "").trim();
+
+          let vc =
+            rep?.visionCenter ||
+            rep?.visionCentre ||
+            rep?.vision_centre ||
+            rep?.visioncentre ||
+            [];
+
+          // Rebuild from answers if array missing
+          if (!Array.isArray(vc) || !vc.length) {
+            const a = rep?.answers || {};
+            const rebuilt = [];
+            for (let j = 1; j <= 25; j++) {
+              const rowObj = {
+                [`vc_${j}_name`]: a[`vc_${j}_name`],
+                [`vc_${j}_examined`]: a[`vc_${j}_examined`],
+                [`vc_${j}_cataract`]: a[`vc_${j}_cataract`],
+                [`vc_${j}_other_diseases`]: a[`vc_${j}_other_diseases`],
+                [`vc_${j}_refractive_errors`]: a[`vc_${j}_refractive_errors`],
+                [`vc_${j}_spectacles_prescribed`]: a[`vc_${j}_spectacles_prescribed`],
+              };
+              const anyNum = Object.values(rowObj).some(
+                (v) => Number.isFinite(Number(v)) && Number(v) !== 0
+              );
+              if (String(rowObj[`vc_${j}_name`] || "").trim() !== "" || anyNum) rebuilt.push(rowObj);
+            }
+            vc = rebuilt;
+          }
+
+          if (!Array.isArray(vc) || !vc.length) return;
+
+          vc.forEach((row, i) => {
+            const canon = mapRowToCanonical(row, i);
+            const hasAny =
+              String(canon.name || "").trim() !== "" ||
+              VC_METRIC_KEYS.some((k) => num(canon[k]) !== 0);
+            if (hasAny) {
+              vcOut.push({
+                __institution: instName || "Unknown Institution",
+                __data: canon,
+                __raw: canon.__raw,
+                __idx: canon.__idx, // 1-based index in that report
+              });
+            }
+          });
+        });
+
+        // If still empty for this district, show a single zero row instead of “No data”
+        if (!vcOut.length) {
+          setVcRows(ZERO_VC_ROWS);
+        } else {
+          vcOut.sort((a, b) => {
+            const ai = (a.__institution || "").toLowerCase();
+            const bi = (b.__institution || "").toLowerCase();
+            if (ai < bi) return -1;
+            if (ai > bi) return 1;
+            const an = String(getNameFromRow(a) || "").toLowerCase();
+            const bn = String(getNameFromRow(b) || "").toLowerCase();
+            return an.localeCompare(bn, undefined, { numeric: true });
+          });
+          setVcRows(vcOut);
+        }
+
+        setEbTotals(ebOut.some((r) => Object.keys(r).length) ? ebOut : ZERO_EYE_BANK);
+      } catch (e) {
+        console.error("District tables fetch failed:", e);
+        setErrText("Failed to load district tables. See console for details.");
+        setEbTotals(ZERO_EYE_BANK);
+        setVcRows(ZERO_VC_ROWS);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [district, month, year, eyeBankSection, visionCenterSection]);
+
+  /* ------------------------------ renderers ------------------------------ */
+  const renderDistrictVisionCenterTable = () => {
+    return (
+      <div className="overflow-x-auto">
+        <table className="min-w-full border">
+          <thead>
+            <tr className="bg-gray-50">
+              <th className="border px-2 py-1 text-left w-14">SL. NO</th>
+              <th className="border px-2 py-1 text-left">Institution</th>
+              <th className="border px-2 py-1 text-left">Name of Vision Centre</th>
+              {VC_METRIC_KEYS.slice().sort((a, b) => metricRank(a) - metricRank(b)).map((key) => (
+                <th key={key} className="border px-2 py-1 text-center">
+                  {prettyMetric(key)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {vcRows.map((row, idx) => {
+              const d = row.__data || {};
+              return (
+                <tr key={idx}>
+                  <td className="border px-2 py-1 text-center">{idx + 1}</td>
+                  <td className="border px-2 py-1">{row.__institution || ""}</td>
+
+                  {/* Column 3 — resolve from RAW first */}
+                  <td className="border px-2 py-1">{getNameFromRow(row)}</td>
+
+                  {/* Cols 4–6 from canonical; 7–8 via RAW-first resolvers */}
+                  <td className="border px-2 py-1 text-right">{num(d.examined)}</td>
+                  <td className="border px-2 py-1 text-right">{num(d.cataract)}</td>
+                  <td className="border px-2 py-1 text-right">{num(d.other_diseases)}</td>
+                  <td className="border px-2 py-1 text-right">{getMetricFromRow(row, "refractive")}</td>
+                  <td className="border px-2 py-1 text-right">{getMetricFromRow(row, "spectacles")}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   return (
-    <div className="overflow-x-auto">
-      <table id={tableId} className="table-auto w-full border border-black text-sm">
-        <thead>
-          <tr className="bg-gray-100">
-            <th className="border p-1 w-[36px] text-center">Sl.<br/>No.</th>
-            {showInstitution && <th className="border p-1 text-left">Name of Institution</th>}
-            <th className="border p-1 text-left">Name of Vision Centre</th>
-            <th className="border p-1 text-right">No. of patients examined</th>
-            <th className="border p-1 text-right">No. of Cataract cases detected</th>
-            <th className="border p-1 text-right">No. of other eye diseases</th>
-            <th className="border p-1 text-right">No. of Refractive errors</th>
-            {/* 🔹 NEW header */}
-            <th className="border p-1 text-right">No. of Spectacles Prescribed</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => {
-            const vInstitution = getInstitution(row);
-            const vVCName     = getVCName(row);
-            const vExamined   = getExamined(row);
-            const vCataract   = getCataract(row);
-            const vOther      = getOther(row);
-            const vRefractive = getRefractive(row);
-            const vSpectacles = getSpectacles(row);
-            return (
-              <tr key={i}>
-                <td className="border p-1 text-center">{i + 1}</td>
-                {showInstitution && (
-                  <td className="border p-1">
-                    <input
-                      type="text"
-                      className="w-full border rounded px-2 py-1"
-                      value={vInstitution}
-                      onChange={(e) => handle(i, "institution", e.target.value)}
-                      disabled={disabled}
-                      placeholder="Enter institution name"
-                    />
-                  </td>
-                )}
-                <td className="border p-1">
-                  <input
-                    type="text"
-                    className="w-full border rounded px-2 py-1"
-                    value={vVCName}
-                    onChange={(e) => handle(i, "visionCenter", e.target.value)}
-                    disabled={disabled}
-                    placeholder="Enter vision centre name"
-                  />
-                </td>
-                <td className="border p-1 text-right">
-                  <input
-                    type="text" inputMode="numeric" pattern="[0-9]*"
-                    className="w-full border rounded px-2 py-1 text-right"
-                    value={vExamined}
-                    onChange={(e) => handle(i, "examined", e.target.value)}
-                    disabled={disabled} placeholder="0"
-                  />
-                </td>
-                <td className="border p-1 text-right">
-                  <input
-                    type="text" inputMode="numeric" pattern="[0-9]*"
-                    className="w-full border rounded px-2 py-1 text-right"
-                    value={vCataract}
-                    onChange={(e) => handle(i, "cataract", e.target.value)}
-                    disabled={disabled} placeholder="0"
-                  />
-                </td>
-                <td className="border p-1 text-right">
-                  <input
-                    type="text" inputMode="numeric" pattern="[0-9]*"
-                    className="w-full border rounded px-2 py-1 text-right"
-                    value={vOther}
-                    onChange={(e) => handle(i, "otherDiseases", e.target.value)}
-                    disabled={disabled} placeholder="0"
-                  />
-                </td>
-                <td className="border p-1 text-right">
-                  <input
-                    type="text" inputMode="numeric" pattern="[0-9]*"
-                    className="w-full border rounded px-2 py-1 text-right"
-                    value={vRefractive}
-                    onChange={(e) => handle(i, "refractiveErrors", e.target.value)}
-                    disabled={disabled} placeholder="0"
-                  />
-                </td>
-                {/* 🔹 NEW cell */}
-                <td className="border p-1 text-right">
-                  <input
-                    type="text" inputMode="numeric" pattern="[0-9]*"
-                    className="w-full border rounded px-2 py-1 text-right"
-                    value={vSpectacles}
-                    onChange={(e) => handle(i, "spectacles", e.target.value)}
-                    disabled={disabled} placeholder="0"
-                  />
-                </td>
-              </tr>
-            );
-          })}
+    <div className="space-y-10">
+      <div className="text-center text-lg font-bold">
+        District Tables — {district} ({month} {year})
+      </div>
 
-          {/* Totals row (UI only) */}
-          <tr className="bg-gray-50 font-semibold">
-            <td className="border p-1 text-center" colSpan={labelColSpan}>Total</td>
-            <td className="border p-1 text-right">{totals.examined}</td>
-            <td className="border p-1 text-right">{totals.cataract}</td>
-            <td className="border p-1 text-right">{totals.other}</td>
-            <td className="border p-1 text-right">{totals.refractive}</td>
-            <td className="border p-1 text-right">{totals.spectacles}</td>
-          </tr>
-        </tbody>
-      </table>
+      {loading && <div className="text-center text-sm text-gray-600">Loading district tables…</div>}
+      {errText && <div className="text-center text-sm text-red-600">{errText}</div>}
 
-      {showDownload && (
-        <div className="mt-3 flex justify-end">
-          <button
-            onClick={() =>
-              exportTable(
-                tableId,
-                `VisionCenter_${district || ""}_${month || ""}-${year || ""}.xlsx`
-              )
-            }
-            className="px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
-          >
-            Download as Excel
-          </button>
-        </div>
-      )}
+      <section>
+        <h3 className="text-base font-semibold mb-2">III. EYE BANK — District Total</h3>
+        <EyeBankTable data={ebTotals} disabled cumulative />
+      </section>
 
-      {/* Show the missing onChange warning only if the table is editable */}
-      {!onChange && !disabled && (
-        <div className="mt-2 text-xs text-red-600">
-          VisionCenterTable is read-only because no <code>onChange</code> prop was provided.
-        </div>
-      )}
+      <section>
+        <h3 className="text-base font-semibold mb-2">V. VISION CENTER — District Total</h3>
+        {renderDistrictVisionCenterTable()}
+      </section>
     </div>
   );
 }

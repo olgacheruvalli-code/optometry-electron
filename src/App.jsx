@@ -14,7 +14,7 @@ import { districtInstitutions } from "./data/districtInstitutions";
 import "./index.css";
 import MonthYearSelector from "./components/MonthYearSelector";
 import EyeBankTable from "./components/EyeBankTable";
-import VisionCenterTableNew from "./components/VisionCenterTableNew";
+import VisionCenterTable from "./components/VisionCenterTable";
 import QuestionInput from "./components/QuestionInput";
 import Login from "./components/Login";
 import MenuBar from "./components/MenuBar";
@@ -183,16 +183,17 @@ const normalizeTextNameFields = (rows) =>
 /* ViewReports — Individual view (fixed fiscal YTD Apr→selected, no reset)    */
 /* ========================================================================== */
 function ViewReports({ reportData, month, year }) {
+  const { useState, useEffect, useMemo } = React;
+
   const [doc, setDoc] = useState(reportData);
   const [hydrating, setHydrating] = useState(false);
   const [cumTotals, setCumTotals] = useState({});
   const flatRows = useMemo(() => buildFlatRows(sections), []);
 
-  // helpers
+  // ---------- helpers ----------
   const norm = (s) => String(s || "").trim().toLowerCase();
   const eq = (a, b) => norm(a) === norm(b);
 
-  // IMPORTANT: use calendar-ordered months for fiscal math
   const CAL_MONTHS = [
     "January","February","March","April","May","June",
     "July","August","September","October","November","December"
@@ -201,6 +202,20 @@ function ViewReports({ reportData, month, year }) {
     () => Object.fromEntries(CAL_MONTHS.map((m, i) => [m.toLowerCase(), i])),
     []
   );
+  const normMonth = (m) => {
+    if (m == null) return "";
+    const s = String(m).trim();
+    if (!s) return "";
+    if (/^\d{1,2}$/.test(s)) {
+      const n = Math.max(1, Math.min(12, parseInt(s, 10)));
+      return CAL_MONTHS[n - 1];
+    }
+    const lower = s.toLowerCase();
+    for (const name of CAL_MONTHS) {
+      if (name.toLowerCase().startsWith(lower)) return name;
+    }
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  };
 
   const baseDistrict = reportData?.district || "";
   const baseInstitution = reportData?.institution || "";
@@ -211,11 +226,13 @@ function ViewReports({ reportData, month, year }) {
 
     let cancelled = false;
     const pickLatest = (arr) =>
-      arr.slice().sort(
-        (a, b) =>
-          new Date(b?.updatedAt || b?.createdAt || 0) -
-          new Date(a?.updatedAt || a?.createdAt || 0)
-      )[0];
+      arr
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(b?.updatedAt || b?.createdAt || 0) -
+            new Date(a?.updatedAt || a?.createdAt || 0)
+        )[0];
 
     (async () => {
       try {
@@ -240,10 +257,16 @@ function ViewReports({ reportData, month, year }) {
         if (!filtered.length) {
           // defensive fallback: list-all for D+I and then filter
           const rAll = await fetch(
-            `${API_BASE}/api/reports?district=${encodeURIComponent(baseDistrict)}&institution=${encodeURIComponent(baseInstitution)}`
+            `${API_BASE}/api/reports?district=${encodeURIComponent(
+              baseDistrict
+            )}&institution=${encodeURIComponent(baseInstitution)}`
           );
           const jAll = await rAll.json().catch(() => ({}));
-          const allItems = Array.isArray(jAll?.docs) ? jAll.docs : Array.isArray(jAll) ? jAll : [];
+          const allItems = Array.isArray(jAll?.docs)
+            ? jAll.docs
+            : Array.isArray(jAll)
+            ? jAll
+            : [];
           filtered = allItems.filter(
             (d) =>
               eq(d?.district, baseDistrict) &&
@@ -260,10 +283,12 @@ function ViewReports({ reportData, month, year }) {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [baseDistrict, baseInstitution, month, year]);
 
-  /* 2) Cumulative: correct fiscal Apr→selected (calendar order aware) */
+  /* 2) Cumulative: fiscal Apr→selected (calendar order aware) */
   useEffect(() => {
     setCumTotals({});
     if (!baseDistrict || !baseInstitution || !month || !year) return;
@@ -271,15 +296,15 @@ function ViewReports({ reportData, month, year }) {
     let cancelled = false;
 
     const fiscalWindowPairs = (selMonth, selYearStr) => {
-      const mName = normMonth(selMonth);                   // normalize “jul”, “JULY”, etc.
-      const idx = calIndex[String(mName).toLowerCase()];   // 0..11 for Jan..Dec
+      const mName = normMonth(selMonth);
+      const idx = calIndex[String(mName).toLowerCase()]; // 0..11
       if (idx == null) return [];
 
       const selYear = Number(selYearStr);
       const pairs = [];
 
       if (idx <= 2) {
-        // Jan/Feb/Mar of selYear → include Apr..Dec of (selYear-1) + Jan..selected of selYear
+        // Jan/Feb/Mar of selYear → Apr..Dec of (selYear-1) + Jan..selected of selYear
         for (let i = calIndex["april"]; i <= calIndex["december"]; i++) {
           pairs.push({ month: CAL_MONTHS[i], year: String(selYear - 1) });
         }
@@ -287,7 +312,7 @@ function ViewReports({ reportData, month, year }) {
           pairs.push({ month: CAL_MONTHS[i], year: String(selYear) });
         }
       } else {
-        // Apr..Dec of selYear → include Apr..selected of selYear
+        // Apr..Dec of selYear → Apr..selected of selYear
         for (let i = calIndex["april"]; i <= idx; i++) {
           pairs.push({ month: CAL_MONTHS[i], year: String(selYear) });
         }
@@ -310,14 +335,18 @@ function ViewReports({ reportData, month, year }) {
       try {
         // Get all docs for this District + Institution (single call preferred)
         let list = await fetchList(
-          `${API_BASE}/api/reports?district=${encodeURIComponent(baseDistrict)}&institution=${encodeURIComponent(baseInstitution)}`
+          `${API_BASE}/api/reports?district=${encodeURIComponent(
+            baseDistrict
+          )}&institution=${encodeURIComponent(baseInstitution)}`
         );
 
         // Fallback: /api/reports (unfiltered) if needed
         if (!Array.isArray(list) || list.length < 2) {
           const all = await fetchList(`${API_BASE}/api/reports`);
           list = Array.isArray(all)
-            ? all.filter((d) => eq(d?.district, baseDistrict) && eq(d?.institution, baseInstitution))
+            ? all.filter(
+                (d) => eq(d?.district, baseDistrict) && eq(d?.institution, baseInstitution)
+              )
             : [];
         }
 
@@ -330,7 +359,9 @@ function ViewReports({ reportData, month, year }) {
           const key = `${norm(m)}|${y}`;
           const ts = new Date(d?.updatedAt || d?.createdAt || 0).getTime();
           const prev = latestByMY.get(key);
-          const prevTs = prev ? new Date(prev.updatedAt || prev.createdAt || 0).getTime() : -Infinity;
+          const prevTs = prev
+            ? new Date(prev.updatedAt || prev.createdAt || 0).getTime()
+            : -Infinity;
           if (!prev || ts >= prevTs) latestByMY.set(key, d);
         }
 
@@ -361,7 +392,9 @@ function ViewReports({ reportData, month, year }) {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [baseDistrict, baseInstitution, month, year, calIndex]);
 
   /* 3) Render */
@@ -386,9 +419,28 @@ function ViewReports({ reportData, month, year }) {
         })
       : [];
 
-  const eyeBankData = normalizeTextNameFields(eyeBank || doc?.eyebank || doc?.eye_bank || []);
+  // ✅ Eye Bank — include legacy keys so older data appears
+  const eyeBankData = normalizeTextNameFields(
+    doc?.eyeBank ||
+      doc?.eyebank ||
+      doc?.eye_bank ||
+      doc?.eyeBankData || // legacy
+      doc?.bank ||        // legacy
+      doc?.eb ||          // legacy
+      []
+  );
 
-  const vcRaw = visionCenter || doc?.visioncentre || doc?.vision_centre || [];
+  // ✅ Vision Centre — include legacy keys so older data appears
+  const vcRaw =
+    doc?.visionCenter ||     // current
+    doc?.visioncentre ||     // alt spelling
+    doc?.vision_centre ||    // snake
+    doc?.visionCenterData || // legacy
+    doc?.vcenter ||          // legacy
+    doc?.vc ||               // legacy
+    doc?.vcData ||           // legacy
+    [];
+
   const visionCenterData = normalizeTextNameFields(
     Array.isArray(vcRaw)
       ? vcRaw.filter(
@@ -446,16 +498,24 @@ function ViewReports({ reportData, month, year }) {
             let qNumber = 0;
             return flatRows.map((item, idx) => {
               if (item.kind === "header") {
+                const label = String(item.label ?? "").trim();
+                if (!label) return null; // hide blank header rows
                 return (
                   <tr key={`h-${idx}`}>
-                    <td colSpan={3} className="border p-1 font-bold bg-gray-100">{item.label}</td>
+                    <td colSpan={3} className="border p-1 font-bold bg-gray-100">
+                      {label}
+                    </td>
                   </tr>
                 );
               }
               if (item.kind === "subheader") {
+                const label = String(item.label ?? "").trim();
+                if (!label) return null; // hide blank subheaders
                 return (
                   <tr key={`sh-${idx}`}>
-                    <td colSpan={3} className="border p-1 font-semibold bg-gray-50">{item.label}</td>
+                    <td colSpan={3} className="border p-1 font-semibold bg-gray-50">
+                      {label}
+                    </td>
                   </tr>
                 );
               }
@@ -472,14 +532,25 @@ function ViewReports({ reportData, month, year }) {
                 return (
                   <tr key={`vc-${idx}`}>
                     <td colSpan={3} className="border p-1">
-                      <VisionCenterTable data={visionCenterData} disabled cumulative showInstitution={false} />
+                      {/* Unified VisionCenterTable includes "No. of Spectacles Prescribed" */}
+                      <VisionCenterTable
+                        data={visionCenterData}
+                        disabled
+                        showInstitution={false}
+                      />
                     </td>
                   </tr>
                 );
               }
               if (item.kind === "q") {
+                // Keep numbering in sync with saved data even if label is blank
                 qNumber += 1;
+                const label = String(item.row?.label ?? "").trim();
                 const key = `q${qNumber}`;
+
+                // If label is empty, hide the row visually but DO NOT skip the index
+                if (!label) return null;
+
                 const monthVal = Number(answersRaw[key] ?? 0);
                 const cumVal =
                   cumTotals[key] !== undefined
@@ -488,7 +559,7 @@ function ViewReports({ reportData, month, year }) {
 
                 return (
                   <tr key={`r-${idx}`}>
-                    <td className="border p-1">{item.row.label}</td>
+                    <td className="border p-1">{label}</td>
                     <td className="border p-1 text-right">{monthVal}</td>
                     <td className="border p-1 text-right">{cumVal}</td>
                   </tr>
@@ -516,7 +587,8 @@ function ViewReports({ reportData, month, year }) {
 
 
 
-
+// App.jsx (inside the file) — replace your existing ReportEntry with this one.
+// App.jsx — replace ONLY the ReportEntry component with this version
 function ReportEntry({
   user,
   initialAnswers = {},
@@ -526,7 +598,7 @@ function ReportEntry({
   initialYear = "",
   disabled = false,
 }) {
-  // helper used in your snippets: normalize a block's questions/rows to {id,label}
+  // helper: normalize a block's questions/rows to {id,label}
   const getQs = (blk) =>
     (Array.isArray(blk?.questions)
       ? blk.questions
@@ -576,27 +648,26 @@ function ReportEntry({
               .map((k) => [row[k], ""])
           )
         )
-      : [{ name: "", examined: "" }, { name: "", examined: "" }]
+      : [{ centerName: "", patientsExamined: "" }, { centerName: "", patientsExamined: "" }]
   );
 
   const [month, setMonth] = React.useState(initialMonth);
   const [year, setYear] = React.useState(initialYear);
   const [mode, setMode] = React.useState("edit");
 
-  // NEW: detect existing submission but DO NOT lock; just warn & block save
+  // detect existing submission; warn & block save (does not lock UI)
   const [alreadySubmitted, setAlreadySubmitted] = React.useState(false);
 
   const isDoc = user?.institution?.startsWith("DOC ");
   const canSave = month && year;
   const canSaveThisCombo = canSave && !alreadySubmitted;
 
-  // 🔊 Start flute on mount; stop when leaving this page
+  /* ----------------------- 🔊 Flute: start/stop here ----------------------- */
   React.useEffect(() => {
-    startFlute();
-    return () => {
-      stopFlute();
-    };
+    startFlute();             // tries to play; if blocked, it fails silently
+    return () => stopFlute(); // always stop when leaving entry page
   }, []);
+  /* ------------------------------------------------------------------------ */
 
   // ✅ Check if a report already exists for this Institution + Month + Year.
   React.useEffect(() => {
@@ -622,7 +693,9 @@ function ReportEntry({
     };
     go();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [user?.district, user?.institution, month, year]);
 
   const confirm = async () => {
@@ -630,9 +703,10 @@ function ReportEntry({
       alert("Please select both Month and Year before saving.");
       return;
     }
-
     if (alreadySubmitted) {
-      alert("A report for this Month & Year already exists for your institution. Please pick another Month/Year.");
+      alert(
+        "A report for this Month & Year already exists for your institution. Please pick another Month/Year."
+      );
       return;
     }
 
@@ -672,7 +746,7 @@ function ReportEntry({
         return;
       }
       alert(`✅ Saved for ${user.institution}, ${user.district}`);
-      // 🔇 Stop flute ONLY after a successful save
+      // stop flute only after successful save
       stopFlute();
     } catch (err) {
       console.error("Save error:", err);
@@ -691,7 +765,7 @@ function ReportEntry({
       });
     };
 
-  // Prevent mouse-wheel changing numeric values; also hide spinners on this page only
+  // Prevent mouse-wheel changing numeric values; hide spinners on this page only
   const handleWheelBlock = (e) => {
     const t = e.target;
     if (t && t.tagName === "INPUT" && t.type === "number") {
@@ -702,7 +776,7 @@ function ReportEntry({
 
   return (
     <div className="a4-wrapper font-serif" onWheel={handleWheelBlock}>
-      {/* Hide number spinners only on this page */}
+      {/* (Removed hidden <audio> tag — sound.js manages audio globally) */}
       <style>{`
         .a4-wrapper input[type="number"]::-webkit-outer-spin-button,
         .a4-wrapper input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -727,7 +801,6 @@ function ReportEntry({
           />
         </div>
 
-        {/* Warning if an entry already exists for this combo */}
         {alreadySubmitted && (
           <div className="mb-4 px-3 py-2 rounded bg-yellow-100 text-yellow-900 border border-yellow-300">
             ⚠️ A report for <b>{month}</b> <b>{year}</b> already exists for your institution.
@@ -736,45 +809,54 @@ function ReportEntry({
         )}
 
         {/* Question Sections */}
-        {sections.filter((s) => !s.table).map((s) => (
-          <div key={s.title || Math.random()} className="mb-12">
-            {s.title && <h4 className="text-lg font-bold text-[#017d8a] mb-4">{s.title}</h4>}
+        {sections
+          .filter((s) => !s.table)
+          .map((s) => (
+            <div key={s.title || Math.random()} className="mb-12">
+              {s.title && (
+                <h4 className="text-lg font-bold text-[#017d8a] mb-4">{s.title}</h4>
+              )}
 
-            {/* top-level questions/rows */}
-            {getQs(s).length > 0 && (
-              <div className="flex flex-col gap-6">
-                {getQs(s).map((q) => (
-                  <div className="mb-2" key={q.id || q.label}>
-                    <QuestionInput
-                      q={q}
-                      value={answers[q.id] || ""}
-                      onChange={(val) => setAnswers((a) => ({ ...a, [q.id]: val }))}
-                      disabled={disabled}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* subsections */}
-            {Array.isArray(s.subsections) && s.subsections.map((sub) => (
-              <div key={sub.title || Math.random()} className="mt-10">
-                {sub.title && <h5 className="font-bold text-[#017d8a] mb-4">{sub.title}</h5>}
-                <div className="flex flex-col space-y-8">
-                  {getQs(sub).map((q) => (
-                    <QuestionInput
-                      key={q.id || q.label}
-                      q={q}
-                      value={answers[q.id] || ""}
-                      onChange={(val) => setAnswers((a) => ({ ...a, [q.id]: val }))}
-                      disabled={disabled}
-                    />
+              {/* top-level questions/rows */}
+              {getQs(s).length > 0 && (
+                <div className="flex flex-col gap-6">
+                  {getQs(s).map((q) => (
+                    <div className="mb-2" key={q.id || q.label}>
+                      <QuestionInput
+                        q={q}
+                        value={answers[q.id] || ""}
+                        onChange={(val) => setAnswers((a) => ({ ...a, [q.id]: val }))}
+                        disabled={disabled}
+                      />
+                    </div>
                   ))}
                 </div>
-              </div>
-            ))}
-          </div>
-        ))}
+              )}
+
+              {/* subsections */}
+              {Array.isArray(s.subsections) &&
+                s.subsections.map((sub) => (
+                  <div key={sub.title || Math.random()} className="mt-10">
+                    {sub.title && (
+                      <h5 className="font-bold text-[#017d8a] mb-4">{sub.title}</h5>
+                    )}
+                    <div className="flex flex-col space-y-8">
+                      {getQs(sub).map((q) => (
+                        <QuestionInput
+                          key={q.id || q.label}
+                          q={q}
+                          value={answers[q.id] || ""}
+                          onChange={(val) =>
+                            setAnswers((a) => ({ ...a, [q.id]: val }))
+                          }
+                          disabled={disabled}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          ))}
 
         {/* Eye Bank */}
         <div className="mb-12">
@@ -786,10 +868,10 @@ function ReportEntry({
           />
         </div>
 
-        {/* Vision Center — ENTRY uses the NEW component with “Spectacles prescribed” */}
+        {/* Vision Center — unified component with “Spectacles Prescribed” */}
         <div className="mb-12">
           <h4 className="text-lg font-bold text-[#017d8a] mb-4">V. VISION CENTER</h4>
-          <VisionCenterTableNew
+          <VisionCenterTable
             data={visionCenter}
             onChange={handleTableChange(setVisionCenter)}
             disabled={disabled}
@@ -846,6 +928,7 @@ function ReportEntry({
     </div>
   );
 }
+
 
 
 
