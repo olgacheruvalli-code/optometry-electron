@@ -25,6 +25,7 @@ import EditReport from "./components/EditReport";
 import Register from "./components/Register";
 import { startFlute, stopFlute } from "./utils/sound";
 import EditGate from "./components/EditGate";
+import SearchReports from "./components/SearchReports";
 import TestVisionCenter from "./components/TestVisionCenter";
 
 /* ----------------------------- Month constants ---------------------------- */
@@ -1622,6 +1623,16 @@ function App() {
             <EditReport user={user} />
           </EditGate>
         )}
+        {menu === "search" && (
+  <SearchReports
+    user={user}
+    onOpen={(report) => {
+      setCurrent(report || null);
+      setMenu("view");   // re-use the existing viewer
+    }}
+  />
+)}
+
 
         {menu === "test-vc" && <TestVisionCenter />}
 
