@@ -1,3 +1,4 @@
+// src/components/Login.jsx
 import React, { useState, useMemo } from "react";
 import API_BASE from "../apiBase";
 import { districtInstitutions } from "../data/districtInstitutions";
@@ -15,13 +16,21 @@ export default function Login({ onLogin, onShowRegister }) {
   // Use the curated list (which already includes DOC <district>) — no DC injection.
   const institutionOptions = useMemo(() => {
     if (!district) return [];
-    const base = Array.isArray(districtInstitutions[district]) ? districtInstitutions[district] : [];
-    const seen = new Set(); const out = [];
+    const base = Array.isArray(districtInstitutions[district])
+      ? districtInstitutions[district]
+      : [];
+    const seen = new Set();
+    const out = [];
     for (const name of base) {
-      const s = String(name || "").trim(); if (!s) continue;
-      const k = s.toLowerCase(); if (!seen.has(k)) { seen.add(k); out.push(s); }
+      const s = String(name || "").trim();
+      if (!s) continue;
+      const k = s.toLowerCase();
+      if (!seen.has(k)) {
+        seen.add(k);
+        out.push(s);
+      }
     }
-    out.sort((a,b)=>a.localeCompare(b, undefined, { sensitivity:"base" }));
+    out.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
     return out;
   }, [district]);
 
@@ -35,7 +44,8 @@ export default function Login({ onLogin, onShowRegister }) {
       return;
     }
 
-    setError(""); setIsLoading(true);
+    setError("");
+    setIsLoading(true);
 
     const payload = { institution: institution.trim(), district: district.trim(), password };
     const controller = new AbortController();
@@ -51,10 +61,13 @@ export default function Login({ onLogin, onShowRegister }) {
 
       const raw = await res.text();
       let data = {};
-      try { data = raw ? JSON.parse(raw) : {}; } catch {}
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {}
 
       if (!res.ok) {
-        const msg = data?.error || raw || `HTTP ${res.status} ${res.statusText || ""}`.trim();
+        const msg =
+          data?.error || raw || `HTTP ${res.status} ${res.statusText || ""}`.trim();
         throw new Error(msg);
       }
 
@@ -64,9 +77,11 @@ export default function Login({ onLogin, onShowRegister }) {
       }
       onLogin(user);
     } catch (err) {
-      setError(err?.name === "AbortError"
-        ? "Login request timed out. Please try again."
-        : (err?.message || "Login failed."));
+      setError(
+        err?.name === "AbortError"
+          ? "Login request timed out. Please try again."
+          : err?.message || "Login failed."
+      );
       console.error("Login error:", err);
     } finally {
       clearTimeout(t);
@@ -87,20 +102,29 @@ export default function Login({ onLogin, onShowRegister }) {
             Optometry Monthly Reporting
           </h2>
 
-          <div className="text-[10px] text-gray-500 text-center break-all">
-            API: {API_BASE}
-          </div>
+          {/* 🔒 API line shown only during local development */}
+          {process.env.NODE_ENV === "development" && (
+            <div className="text-[10px] text-gray-500 text-center break-all">
+              API: {API_BASE}
+            </div>
+          )}
 
           {/* District */}
           <label className="block text-sm text-gray-700">District</label>
           <select
             value={district}
-            onChange={(e) => { setDistrict(e.target.value); setInstitution(""); setError(""); }}
+            onChange={(e) => {
+              setDistrict(e.target.value);
+              setInstitution("");
+              setError("");
+            }}
             className="w-full px-3 py-2 rounded bg-gray-100 text-gray-800 focus:outline-none"
           >
             <option value="">Select District</option>
             {Object.keys(districtInstitutions).map((d) => (
-              <option key={d} value={d}>{d}</option>
+              <option key={d} value={d}>
+                {d}
+              </option>
             ))}
           </select>
 
@@ -108,13 +132,18 @@ export default function Login({ onLogin, onShowRegister }) {
           <label className="block text-sm text-gray-700">Institution</label>
           <select
             value={institution}
-            onChange={(e) => { setInstitution(e.target.value); setError(""); }}
+            onChange={(e) => {
+              setInstitution(e.target.value);
+              setError("");
+            }}
             disabled={!district}
             className="w-full px-3 py-2 rounded bg-gray-100 text-gray-800 focus:outline-none disabled:opacity-50"
           >
             <option value="">Select Institution</option>
             {institutionOptions.map((i) => (
-              <option key={i} value={i}>{i}</option>
+              <option key={i} value={i}>
+                {i}
+              </option>
             ))}
           </select>
 
@@ -123,8 +152,13 @@ export default function Login({ onLogin, onShowRegister }) {
           <input
             type="password"
             value={password}
-            onChange={(e) => { setPassword(e.target.value); setError(""); }}
-            onKeyDown={(e) => { if (e.key === "Enter") handleLogin(); }}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setError("");
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleLogin();
+            }}
             className="w-full px-3 py-2 rounded bg-gray-100 text-gray-800 focus:outline-none"
             autoComplete="current-password"
           />
@@ -140,7 +174,11 @@ export default function Login({ onLogin, onShowRegister }) {
           </button>
 
           <div className="text-center mt-2">
-            <button onClick={onShowRegister} className="text-sm text-blue-600 hover:underline" type="button">
+            <button
+              onClick={onShowRegister}
+              className="text-sm text-blue-600 hover:underline"
+              type="button"
+            >
               New Optometrist? Register here
             </button>
           </div>
@@ -161,7 +199,11 @@ export default function Login({ onLogin, onShowRegister }) {
 
         {/* Right: Image */}
         <div className="w-full md:w-1/2 bg-[#0b2e59]/5">
-          <img src={rightImage} alt="Optometrist examining patient" className="object-cover w-full h-full" />
+          <img
+            src={rightImage}
+            alt="Optometrist examining patient"
+            className="object-cover w-full h-full"
+          />
         </div>
       </div>
     </div>
