@@ -27,6 +27,9 @@ import { startFlute, stopFlute } from "./utils/sound";
 import EditGate from "./components/EditGate";
 import SearchReports from "./components/SearchReports";
 import TestVisionCenter from "./components/TestVisionCenter";
+// Wake up Render backend when app starts
+fetch("https://optometry-backend-iiuk.onrender.com/api/ping").catch(() => {});
+
 
 /* ----------------------------- Month constants ---------------------------- */
 const MONTHS = [

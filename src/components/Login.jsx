@@ -1,4 +1,3 @@
-// src/components/Login.jsx
 import React, { useState, useMemo } from "react";
 import API_BASE from "../apiBase";
 import { districtInstitutions } from "../data/districtInstitutions";
@@ -13,7 +12,6 @@ export default function Login({ onLogin, onShowRegister }) {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Use the curated list (which already includes DOC <district>) — no DC injection.
   const institutionOptions = useMemo(() => {
     if (!district) return [];
     const base = Array.isArray(districtInstitutions[district])
@@ -49,7 +47,7 @@ export default function Login({ onLogin, onShowRegister }) {
 
     const payload = { institution: institution.trim(), district: district.trim(), password };
     const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 12_000);
+    const t = setTimeout(() => controller.abort(), 12000);
 
     try {
       const res = await fetch(`${API_BASE}/api/login`, {
@@ -66,8 +64,7 @@ export default function Login({ onLogin, onShowRegister }) {
       } catch {}
 
       if (!res.ok) {
-        const msg =
-          data?.error || raw || `HTTP ${res.status} ${res.statusText || ""}`.trim();
+        const msg = data?.error || raw || `HTTP ${res.status} ${res.statusText || ""}`.trim();
         throw new Error(msg);
       }
 
@@ -75,6 +72,7 @@ export default function Login({ onLogin, onShowRegister }) {
       if (!user || !user.district || !user.institution) {
         throw new Error("Malformed login response from server.");
       }
+
       onLogin(user);
     } catch (err) {
       setError(
@@ -94,7 +92,7 @@ export default function Login({ onLogin, onShowRegister }) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#e9f1f8] to-[#f7fafc] font-serif p-4">
+    <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-b from-[#e9f1f8] to-[#f7fafc] font-serif p-4">
       <div className="flex flex-col md:flex-row bg-white rounded-2xl shadow-xl overflow-hidden w-full max-w-5xl border border-gray-100">
         {/* Left: Form */}
         <div className="w-full md:w-1/2 p-6 md:p-8 space-y-4 bg-white">
@@ -102,7 +100,7 @@ export default function Login({ onLogin, onShowRegister }) {
             Optometry Monthly Reporting
           </h2>
 
-          {/* 🔒 API line shown only during local development */}
+          {/* API shown only in dev mode */}
           {process.env.NODE_ENV === "development" && (
             <div className="text-[10px] text-gray-500 text-center break-all">
               API: {API_BASE}
@@ -206,6 +204,16 @@ export default function Login({ onLogin, onShowRegister }) {
           />
         </div>
       </div>
+
+      {/* ✅ Simple loader overlay (added only this) */}
+      {isLoading && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="flex flex-col items-center">
+            <div className="w-12 h-12 border-4 border-t-4 border-gray-200 border-t-green-700 rounded-full animate-spin"></div>
+            <p className="mt-3 text-white font-medium animate-pulse">Signing you in...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

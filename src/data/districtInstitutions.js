@@ -39,10 +39,10 @@ const baseInstitutions = {
     "CHC Chungathara", "CHC Edapal", "CHC Kalikavu", "District Hospital Nilambur", "THQH Tirurangadi"
   ],
   Kozhikode: [
-    "CHC Mukkam", "CHC orkkattery", "CHC Narikkuni", "District Hospital Vadakara", "Taluk Hospital Perambra",
-    "CHC ulliery", "General Hospital Kozhikod", "CHC Thalakkulathur", "CHC Thiruvallur", "CHC Olavanna",
+    "CHC Mukkam", "CHC orkkattery", "BFHC Narikkuni ", "District Hospital Vadakara", "Taluk Hospital Perambra",
+    "CHC ulliery", "General Hospital Kozhikod", "CHC Thalakkulathur", "CHC Thiruvallur", "BFHC Olavanna ",
     "Taluk Hospital Farook", "CHC Cheruvannur", "Taluk Hospital Thamarassery",
-    "Taluk Hospital Koyilandy", "CHC Thiruvangoor", "Taluk Hospital Balussery", "PHC Meppayur",
+    "TH QH koyilandy", "BFHC Thiruvangoor", "Taluk Hospital Balussery", "PHC Meppayur",
     "CHC Melady", "CHC Valayam", "Taluk Hospital Kuttiadi", "Taluk Hospital Nadapuram",
     "CHC Cheruvadi","MCH Unit Cheroopa", "District Mobile Unit"
   ],
