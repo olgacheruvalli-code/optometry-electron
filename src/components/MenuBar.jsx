@@ -71,10 +71,10 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
       label: "District Report",
       sub: [
         { key: "district-institutions", label: "View Institution-wise Report" },
+        { key: "district-tables", label: "Eye Bank Performance & Vision Center Performance" },
         { key: "performance-cataract", label: "Performance Of Cataract Surgery" },
         { key: "op-eye-diseases", label: "OP & Other Eye Diseases" },
         { key: "seh-spectacles-eyebank", label: "SEHP & Spectacles to Old Aged, Eye Bank" },
-        { key: "district-tables", label: "Eye Bank Performance & Vision Center Performance" },
         { key: "other-diseases", label: "Details of Other Eye Diseases" },
         { key: "identified-cataract", label: "Number of Cataract Cases Identified" },
         { key: "test-vc", label: "Test VC Table" },

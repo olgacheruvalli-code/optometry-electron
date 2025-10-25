@@ -30,8 +30,23 @@ export default function ViewInstitutionWiseReport({
   year,
 }) {
   return (
-    <div className="relative overflow-auto max-h-[70vh] rounded border border-gray-300">
-      {/* 👇 give the table a stable id */}
+    <div className="relative overflow-auto max-h-[70vh] rounded border border-gray-300 p-2">
+      {/* ✅ Single working download button at the TOP */}
+      <div className="mb-3 flex justify-end">
+        <button
+          onClick={() =>
+            exportTable(
+              "instWiseTable",
+              `Institution-wise_${month || ""}-${year || ""}.xlsx`
+            )
+          }
+          className="px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+        >
+          Download as Excel
+        </button>
+      </div>
+
+      {/* 👇 table has a stable id */}
       <table
         id="instWiseTable"
         className="min-w-[1000px] w-full text-sm border-collapse"
@@ -114,21 +129,6 @@ export default function ViewInstitutionWiseReport({
           ))}
         </tbody>
       </table>
-
-      {/* ✅ Download as Excel button */}
-      <div className="mt-3 flex justify-end">
-        <button
-          onClick={() =>
-            exportTable(
-              "instWiseTable",
-              `Institution-wise_${month || ""}-${year || ""}.xlsx`
-            )
-          }
-          className="px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
-        >
-          Download as Excel
-        </button>
-      </div>
     </div>
   );
 }

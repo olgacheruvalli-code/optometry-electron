@@ -999,7 +999,7 @@ function App() {
 
     const monthIdx = Object.fromEntries(MONTHS.map((m, i) => [m.toLowerCase(), i]));
     const selIdx = monthIdx[String(month).toLowerCase()];
-    if (selIdx == null || selIdx < 0) return;
+  if (selIdx == null || selIdx < 0) return;
     const fiscalStartYear = selIdx >= 9 ? Number(year) - 1 : Number(year);
 
     const fiscalPairs = [];
@@ -1483,24 +1483,7 @@ function App() {
         {menu === "district-institutions" && (
           <>
             <MonthYearSelector month={month} year={year} setMonth={setMonth} setYear={setYear} />
-            {userRole === "DOC" && (
-              <div className="no-print flex flex-wrap items-center justify-center gap-3 mb-4">
-                <button
-                  className="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white"
-                  onClick={downloadInstitutionWiseXLSX}
-                  disabled={!month || !year}
-                >
-                  ⬇️ Download Institution-wise (.xlsx)
-                </button>
-                <button
-                  className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white"
-                  onClick={downloadEyeBankVisionCenterXLSX}
-                  disabled={!month || !year}
-                >
-                  ⬇️ Download Eye Bank & Vision Center (.xlsx)
-                </button>
-              </div>
-            )}
+            {/* ⛔️ Removed the two old download buttons here */}
             {month && year ? (
               <ViewInstitutionWiseReport
                 questions={Q_ROWS.map((q) => q.label)}
@@ -1556,7 +1539,7 @@ function App() {
           </>
         )}
 
-        {/* District Summary Tables (UNCHANGED) */}
+        {/* District Summary Tables */}
         {menu === "district-tables" && (
           <>
             <MonthYearSelector month={month} year={year} setMonth={setMonth} setYear={setYear} />

@@ -79,27 +79,20 @@ const getNameFromRow = (rowObj) => {
   const data = rowObj?.__data || {};
   const idx = rowObj?.__idx;
 
-  // 1) exact vc_{i}_name if we know the row index
   if (idx != null) {
     const v = raw[`vc_${idx}_name`];
     if (isNonEmpty(v)) return String(v).trim();
   }
-
-  // 2) any vc_*_name
   for (const k of Object.keys(raw)) {
     const kl = k.toLowerCase();
     if (/^vc_\d+_name$/.test(kl) && isNonEmpty(raw[k])) return String(raw[k]).trim();
   }
-
-  // 3) other *_name OR *centre/*center keys with non-empty values
   for (const k of Object.keys(raw)) {
     const kl = k.toLowerCase();
     if ((/_name$/.test(kl) || /(centre|center)$/.test(kl)) && isNonEmpty(raw[k])) {
       return String(raw[k]).trim();
     }
   }
-
-  // 4) fallbacks from normalized data
   return pickStr(data.name);
 };
 
@@ -117,7 +110,6 @@ const getMetricFromRow = (rowObj, which /* "refractive" | "spectacles" */) => {
   };
 
   if (which === "refractive") {
-    // 1) prefer vc_{i}_refractive_errors
     if (idx != null) {
       const v = tryKeys(raw, [
         `vc_${idx}_refractive_errors`,
@@ -126,23 +118,19 @@ const getMetricFromRow = (rowObj, which /* "refractive" | "spectacles" */) => {
       ]);
       if (v) return v;
     }
-    // 2) any vc_* matches
     const vcKeys = Object.keys(raw).filter((k) =>
       /^vc_\d+_/.test(k) && /(refract|refraction)/i.test(k)
     );
     const v2 = tryKeys(raw, vcKeys);
     if (v2) return v2;
 
-    // 3) generic/raw fallbacks
     const v3 = tryKeys(raw, ["refractive_errors", "refractive_error", "refraction"]);
     if (v3) return v3;
 
-    // 4) normalized
     return Number(data.refractive_errors) || 0;
   }
 
   if (which === "spectacles") {
-    // 1) prefer vc_{i}_spectacles_prescribed
     if (idx != null) {
       const v = tryKeys(raw, [
         `vc_${idx}_spectacles_prescribed`,
@@ -151,18 +139,15 @@ const getMetricFromRow = (rowObj, which /* "refractive" | "spectacles" */) => {
       ]);
       if (v) return v;
     }
-    // 2) any vc_* matches
     const vcKeys = Object.keys(raw).filter((k) =>
       /^vc_\d+_/.test(k) && /(spectacle|spectacles)/i.test(k) && /(prescrib|scribe)?/i.test(k)
     );
     const v2 = tryKeys(raw, vcKeys);
     if (v2) return v2;
 
-    // 3) generic/raw fallbacks
     const v3 = tryKeys(raw, ["spectacles_prescribed", "spectacle_prescribed", "spectacles"]);
     if (v3) return v3;
 
-    // 4) normalized
     return Number(data.spectacles_prescribed) || 0;
   }
 
@@ -190,7 +175,6 @@ const ZERO_EYE_BANK = [
   },
 ];
 
-// one placeholder VC row showing zeros (so the table displays 0s instead of “No data”)
 const ZERO_VC_ROWS = [
   {
     __institution: "",
@@ -206,6 +190,19 @@ const ZERO_VC_ROWS = [
     },
   },
 ];
+
+/* -------------------------- Excel Exporter -------------------------- */
+/** Export the first <table> inside a container div to .xlsx */
+async function exportDivTable(containerId, filename, sheetName = "Sheet1") {
+  const el = document.getElementById(containerId);
+  if (!el) return alert("Table container not found: " + containerId);
+  const table = el.querySelector("table") || el; // EyeBankTable renders a table inside
+  const XLSX = await import("xlsx");
+  const wb = XLSX.utils.table_to_book(table, { sheet: sheetName });
+  const ws = wb.Sheets[sheetName];
+  if (ws) ws["!freeze"] = { xSplit: 1, ySplit: 1 }; // nice default
+  XLSX.writeFile(wb, filename);
+}
 
 /* ===================================================================== */
 
@@ -246,7 +243,6 @@ export default function ViewDistrictTables({ user, month, year }) {
       }
     };
 
-    // keys from questions.js for row i; fallback to vc_{i}_*
     const vcKeyset = (i) => {
       const idx = i + 1;
       const cfg = Array.isArray(visionCenterSection?.rows) ? visionCenterSection.rows[i] : null;
@@ -260,7 +256,6 @@ export default function ViewDistrictTables({ user, month, year }) {
       };
     };
 
-    // Map any VC row to canonical fields; keep RAW + 1-based index for render
     const mapRowToCanonical = (row, i) => {
       const r = row || {};
       const ks = vcKeyset(i);
@@ -288,7 +283,6 @@ export default function ViewDistrictTables({ user, month, year }) {
           r.other_diseases,
           r.otherDiseases
         ),
-        // leave refractive/spectacles to render-time resolver as well
         refractive_errors: pickNum(
           r[ks.refractiveErrorsKey],
           r[`vc_${idx}_refractive_errors`],
@@ -320,14 +314,12 @@ export default function ViewDistrictTables({ user, month, year }) {
 
         const list = await fetchList(`${API_BASE}/api/reports?${q}`);
 
-        // if API returns nothing for this district, display zeros (don’t fetch anything else)
         if (!Array.isArray(list) || !list.length) {
           setEbTotals(ZERO_EYE_BANK);
           setVcRows(ZERO_VC_ROWS);
           return;
         }
 
-        // Filter again defensively (stricter guard)
         const source = list.filter(
           (d) =>
             String(d?.district || "").trim().toLowerCase() ===
@@ -366,7 +358,6 @@ export default function ViewDistrictTables({ user, month, year }) {
             rep?.visioncentre ||
             [];
 
-          // Rebuild from answers if array missing
           if (!Array.isArray(vc) || !vc.length) {
             const a = rep?.answers || {};
             const rebuilt = [];
@@ -399,13 +390,12 @@ export default function ViewDistrictTables({ user, month, year }) {
                 __institution: instName || "Unknown Institution",
                 __data: canon,
                 __raw: canon.__raw,
-                __idx: canon.__idx, // 1-based index in that report
+                __idx: canon.__idx,
               });
             }
           });
         });
 
-        // If still empty for this district, show a single zero row instead of “No data”
         if (!vcOut.length) {
           setVcRows(ZERO_VC_ROWS);
         } else {
@@ -438,7 +428,7 @@ export default function ViewDistrictTables({ user, month, year }) {
   /* ------------------------------ renderers ------------------------------ */
   const renderDistrictVisionCenterTable = () => {
     return (
-      <div className="overflow-x-auto">
+      <div id="vcDistrictWrap" className="overflow-x-auto">
         <table className="min-w-full border">
           <thead>
             <tr className="bg-gray-50">
@@ -459,11 +449,7 @@ export default function ViewDistrictTables({ user, month, year }) {
                 <tr key={idx}>
                   <td className="border px-2 py-1 text-center">{idx + 1}</td>
                   <td className="border px-2 py-1">{row.__institution || ""}</td>
-
-                  {/* Column 3 — resolve from RAW first */}
                   <td className="border px-2 py-1">{getNameFromRow(row)}</td>
-
-                  {/* Cols 4–6 from canonical; 7–8 via RAW-first resolvers */}
                   <td className="border px-2 py-1 text-right">{num(d.examined)}</td>
                   <td className="border px-2 py-1 text-right">{num(d.cataract)}</td>
                   <td className="border px-2 py-1 text-right">{num(d.other_diseases)}</td>
@@ -487,13 +473,45 @@ export default function ViewDistrictTables({ user, month, year }) {
       {loading && <div className="text-center text-sm text-gray-600">Loading district tables…</div>}
       {errText && <div className="text-center text-sm text-red-600">{errText}</div>}
 
+      {/* Eye Bank */}
       <section>
-        <h3 className="text-base font-semibold mb-2">III. EYE BANK — District Total</h3>
-        <EyeBankTable data={ebTotals} disabled cumulative />
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-base font-semibold">III. EYE BANK — District Total</h3>
+          <button
+            className="px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+            onClick={() =>
+              exportDivTable(
+                "ebDistrictWrap",
+                `EyeBank_${district}_${month || ""}-${year || ""}.xlsx`,
+                "Eye Bank"
+              )
+            }
+          >
+            Download as Excel
+          </button>
+        </div>
+        <div id="ebDistrictWrap">
+          <EyeBankTable data={ebTotals} disabled cumulative />
+        </div>
       </section>
 
+      {/* Vision Center */}
       <section>
-        <h3 className="text-base font-semibold mb-2">V. VISION CENTER — District Total</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-base font-semibold">V. VISION CENTER — District Total</h3>
+          <button
+            className="px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+            onClick={() =>
+              exportDivTable(
+                "vcDistrictWrap",
+                `VisionCenter_${district}_${month || ""}-${year || ""}.xlsx`,
+                "Vision Center"
+              )
+            }
+          >
+            Download as Excel
+          </button>
+        </div>
         {renderDistrictVisionCenterTable()}
       </section>
     </div>
