@@ -5,72 +5,83 @@ const mongoose = require("mongoose");
 
 /* ======================= Config ======================= */
 const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/optometry";
+const MONGO_URI =
+  process.env.MONGO_URI || "mongodb://127.0.0.1:27017/optometry";
 
-const ORIGINS_RAW = process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || "";
-const ALLOWED_ORIGINS = ORIGINS_RAW.split(",").map(s => s.trim()).filter(Boolean);
+const ORIGINS_RAW =
+  process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || "";
+const ALLOWED_ORIGINS = ORIGINS_RAW.split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 const FISCAL_MONTHS = [
-  "April","May","June","July","August","September",
-  "October","November","December","January","February","March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+  "January",
+  "February",
+  "March",
 ];
 const ALL_QUESTION_KEYS = Array.from({ length: 84 }, (_, i) => `q${i + 1}`);
 
 /* ======================= Name Normalization ======================= */
-const sanitize = (s="") =>
-  String(s).replace(/\s+/g," ").trim();
+const sanitize = (s = "") => String(s).replace(/\s+/g, " ").trim();
+const lowerSan = (s = "") => sanitize(s).toLowerCase();
 
-const lowerSan = (s="") => sanitize(s).toLowerCase();
-
-/* Canonical keys and their aliases */
 const CANON = {
   "chc narikkuni": ["chc narikkuni", "bfhc narikkuni"],
   "chc olavanna": ["chc olavanna", "bfhc olavanna"],
   "chc thiruvangoor": ["chc thiruvangoor", "bfhc thiruvangoor"],
-  "taluk hospital koyilandy": ["taluk hospital koyilandy", "thqh koyilandy"],
+  "taluk hospital koyilandy": [
+    "taluk hospital koyilandy",
+    "thqh koyilandy",
+  ],
 };
 
-/* fast lookup of alias -> canonical */
 const ALIAS_TO_CANON = (() => {
   const map = new Map();
   for (const [canon, aliases] of Object.entries(CANON)) {
-    aliases.forEach(a => map.set(lowerSan(a), canon));
+    aliases.forEach((a) => map.set(lowerSan(a), canon));
   }
   return map;
 })();
 
-/* normalize to canonical (if known); else return sanitized original (lowercased) */
-const normInstKey = (name="") => {
+const normInstKey = (name = "") => {
   const s = lowerSan(name);
   return ALIAS_TO_CANON.get(s) || s;
 };
 
-/* Build case/whitespace-tolerant regexes for Mongo queries for all aliases of a name */
-const instRegexOR = (name="") => {
+const instRegexOR = (name = "") => {
   const canon = normInstKey(name);
   const aliases = new Set([canon]);
   for (const [c, list] of Object.entries(CANON)) {
-    if (c === canon || list.some(a => normInstKey(a) === canon)) {
-      list.forEach(a => aliases.add(normInstKey(a)));
+    if (c === canon || list.some((a) => normInstKey(a) === canon)) {
+      list.forEach((a) => aliases.add(normInstKey(a)));
     }
   }
-  // Convert back into tolerant regex patterns
-  const patterns = Array.from(aliases).map(a => {
-    // expand to original display variants we know
-    const displayList = Object.entries(CANON)
-      .find(([c]) => c === a)?.[1] || [a];
-
-    return displayList.map(disp => {
-      const parts = sanitize(disp).split(" ").map(p => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-      // tolerate multiple spaces between words; ignore leading/trailing spaces
-      const body = parts.join("\\s+");
-      return new RegExp(`^\\s*${body}\\s*$`, "i");
-    });
-  }).flat();
-
-  // Fallback to a simple tolerant regex for the raw input as well
+  const patterns = Array.from(aliases)
+    .map((a) => {
+      const displayList =
+        Object.entries(CANON).find(([c]) => c === a)?.[1] || [a];
+      return displayList.map((disp) => {
+        const parts = sanitize(disp)
+          .split(" ")
+          .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+        const body = parts.join("\\s+");
+        return new RegExp(`^\\s*${body}\\s*$`, "i");
+      });
+    })
+    .flat();
   if (!patterns.length) {
-    const parts = sanitize(name).split(" ").map(p => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const parts = sanitize(name)
+      .split(" ")
+      .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     patterns.push(new RegExp(`^\\s*${parts.join("\\s+")}\\s*$`, "i"));
   }
   return patterns;
@@ -78,7 +89,8 @@ const instRegexOR = (name="") => {
 
 /* ======================= Other Helpers ======================= */
 const _num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-const _answersTo84Array = (ans = {}) => ALL_QUESTION_KEYS.map((k) => _num(ans[k]));
+const _answersTo84Array = (ans = {}) =>
+  ALL_QUESTION_KEYS.map((k) => _num(ans[k]));
 const _sum84 = (a = [], b = []) => {
   const n = Math.max(a.length, b.length);
   const out = new Array(n).fill(0);
@@ -101,7 +113,8 @@ const _ensure84OnDoc = (doc) => {
   return d;
 };
 
-const _fiscalStartYear = (m, y) => (["January","February","March"].includes(m) ? (+y - 1) : (+y));
+const _fiscalStartYear = (m, y) =>
+  ["January", "February", "March"].includes(m) ? +y - 1 : +y;
 function _fiscalWindow(toMonth, toYear) {
   const startY = _fiscalStartYear(toMonth, toYear);
   const window = [];
@@ -116,27 +129,43 @@ function _fiscalWindow(toMonth, toYear) {
 function normalizeMonth(m = "") {
   const s = lowerSan(m);
   const map = {
-    jan: "January", feb: "February", mar: "March", apr: "April", may: "May",
-    jun: "June", jul: "July", aug: "August", sep: "September", sept: "September",
-    oct: "October", nov: "November", dec: "December",
+    jan: "January",
+    feb: "February",
+    mar: "March",
+    apr: "April",
+    may: "May",
+    jun: "June",
+    jul: "July",
+    aug: "August",
+    sep: "September",
+    sept: "September",
+    oct: "October",
+    nov: "November",
+    dec: "December",
   };
   const key = s.slice(0, 3);
   return map[key] || sanitize(m);
 }
 
 /* ======================= Mongoose ======================= */
-const ReportSchema = new mongoose.Schema({
-  district: { type: String, required: true },
-  institution: { type: String, required: true },
-  month: { type: String, required: true, enum: FISCAL_MONTHS },
-  year: { type: String, required: true },
-  answers: { type: Object, default: {} },
-  cumulative: { type: Object, default: {} },
-  eyeBank: { type: Array, default: [] },
-  visionCenter: { type: Array, default: [] },
-}, { versionKey: false, timestamps: true });
+const ReportSchema = new mongoose.Schema(
+  {
+    district: { type: String, required: true },
+    institution: { type: String, required: true },
+    month: { type: String, required: true, enum: FISCAL_MONTHS },
+    year: { type: String, required: true },
+    answers: { type: Object, default: {} },
+    cumulative: { type: Object, default: {} },
+    eyeBank: { type: Array, default: [] },
+    visionCenter: { type: Array, default: [] },
+  },
+  { versionKey: false, timestamps: true }
+);
 
-ReportSchema.index({ district: 1, institution: 1, month: 1, year: 1 }, { unique: true });
+ReportSchema.index(
+  { district: 1, institution: 1, month: 1, year: 1 },
+  { unique: true }
+);
 const Report = mongoose.model("Report", ReportSchema);
 
 /* ======================= Express App ======================= */
@@ -151,15 +180,18 @@ const corsOptions = {
     if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
     return cb(null, false);
   },
-  methods: ["GET","HEAD","POST","PUT","PATCH","DELETE","OPTIONS"],
-  allowedHeaders: ["Content-Type","Authorization"],
+  methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
   credentials: false,
   maxAge: 86400,
   optionsSuccessStatus: 204,
 };
 app.use(cors(corsOptions));
 app.options(/^\/api\/.*$/, cors(corsOptions));
-app.use((req, res, next) => { res.header("Vary", "Origin"); next(); });
+app.use((req, res, next) => {
+  res.header("Vary", "Origin");
+  next();
+});
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -175,7 +207,7 @@ app.use((req, res, next) => {
 
 /* ======================= Diagnostics ======================= */
 app.get("/api/health", (req, res) =>
-  res.json({ ok: true, startedAt, version: "v7-institution-alias-robust" })
+  res.json({ ok: true, startedAt, version: "v8-visioncenter-normalized" })
 );
 
 /* ======================= API: Reports ======================= */
@@ -187,13 +219,17 @@ app.get("/api/reports", async (req, res) => {
     const year = req.query.year ? String(req.query.year) : undefined;
 
     const q = {};
-    if (district) q.district = new RegExp(`^\\s*${sanitize(district).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i");
+    if (district)
+      q.district = new RegExp(
+        `^\\s*${sanitize(district).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`,
+        "i"
+      );
     if (month) q.month = month;
     if (year) q.year = year;
 
     if (institution) {
       const pats = instRegexOR(institution);
-      q.$or = pats.map(rx => ({ institution: rx }));
+      q.$or = pats.map((rx) => ({ institution: rx }));
     }
 
     const docs = await Report.find(q).lean();
@@ -210,16 +246,20 @@ app.get("/api/district-institution-report", async (req, res) => {
     const district = sanitize(req.query.district || "");
     const month = normalizeMonth(req.query.month || "");
     const year = String(req.query.year || "");
-    if (!district || !month || !year) {
-      return res.status(400).json({ ok: false, error: "missing_params" });
-    }
+    if (!district || !month || !year)
+      return res
+        .status(400)
+        .json({ ok: false, error: "missing_params" });
 
     const docs = await Report.find({
-      district: new RegExp(`^\\s*${sanitize(district).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i"),
+      district: new RegExp(
+        `^\\s*${sanitize(district).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`,
+        "i"
+      ),
     }).lean();
 
-    // latest by (normInstKey, month, year)
-    const keyFor = (inst, m, y) => `${normInstKey(inst)}|${m.toLowerCase()}|${y}`;
+    const keyFor = (inst, m, y) =>
+      `${normInstKey(inst)}|${m.toLowerCase()}|${y}`;
     const latest = new Map();
     for (const d of docs) {
       const k = keyFor(d.institution, d.month, d.year);
@@ -228,41 +268,57 @@ app.get("/api/district-institution-report", async (req, res) => {
       if (!prev || ts > prev._ts) latest.set(k, { ...d, _ts: ts });
     }
 
-    // display institution list (canonicalized), exclude DOC/DC
-    const instNames = Array.from(new Set(
-      docs
-        .map(d => sanitize(d.institution))
-        .filter(n => n && !/^doc\s|^dc\s/i.test(n))
-        .map(n => {
-          // return a nice display name: the *canonical* display for its norm key
-          const nk = normInstKey(n);
-          // pick the first alias in CANON that matches the key, else use sanitized original
-          const aliasList = Object.entries(CANON).find(([c]) => c === nk)?.[1];
-          return aliasList ? sanitize(aliasList[0]) : sanitize(n);
-        })
-    )).sort((a,b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    const instNames = Array.from(
+      new Set(
+        docs
+          .map((d) => sanitize(d.institution))
+          .filter((n) => n && !/^doc\s|^dc\s/i.test(n))
+          .map((n) => {
+            const nk = normInstKey(n);
+            const aliasList = Object.entries(CANON).find(([c]) => c === nk)?.[1];
+            return aliasList ? sanitize(aliasList[0]) : sanitize(n);
+          })
+      )
+    ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
     const window = _fiscalWindow(month, year);
 
     const institutionData = instNames.map((dispName) => {
       const nk = normInstKey(dispName);
+      const sel = latest.get(`${nk}|${month.toLowerCase()}|${year}`);
+      const monthData = _answersTo84Array((sel && sel.answers) || {});
 
-      // selected month
-      const monthData = _answersTo84Array(
-        latest.get(`${nk}|${month.toLowerCase()}|${year}`)?.answers || {}
-      );
+      // ✅ normalize visionCenter
+      const visionCenter = (sel?.visionCenter || []).map((vc) => ({
+        centerName:
+          vc.centerName ||
+          vc.visionCenter ||
+          vc.visionCentre ||
+          vc.name ||
+          vc["Name of Vision Centre"] ||
+          "",
+        patientsExamined:
+          vc.patientsExamined || vc["No of patients examined"] || 0,
+        cataract: vc.cataract || vc["No of Cataract cases detected"] || 0,
+        otherEye: vc.otherEye || vc["No of other eye diseases"] || 0,
+        refractive: vc.refractive || vc["No of Refractive errors"] || 0,
+        spectacles:
+          vc.spectacles || vc["No of Spectacles Prescribed"] || 0,
+      }));
 
-      // cumulative
       let cumulativeData = new Array(ALL_QUESTION_KEYS.length).fill(0);
       for (const p of window) {
         const d = latest.get(`${nk}|${p.month.toLowerCase()}|${p.year}`);
-        if (d) cumulativeData = _sum84(cumulativeData, _answersTo84Array(d.answers));
+        if (d)
+          cumulativeData = _sum84(
+            cumulativeData,
+            _answersTo84Array(d.answers)
+          );
       }
 
-      return { institution: dispName, monthData, cumulativeData };
+      return { institution: dispName, monthData, cumulativeData, visionCenter };
     });
 
-    // district totals
     let districtMonth = new Array(ALL_QUESTION_KEYS.length).fill(0);
     let districtCum = new Array(ALL_QUESTION_KEYS.length).fill(0);
     for (const row of institutionData) {
@@ -276,7 +332,10 @@ app.get("/api/district-institution-report", async (req, res) => {
       month,
       year,
       institutionData,
-      districtPerformance: { monthData: districtMonth, cumulativeData: districtCum },
+      districtPerformance: {
+        monthData: districtMonth,
+        cumulativeData: districtCum,
+      },
     });
   } catch (e) {
     console.error("GET /api/district-institution-report error:", e);
@@ -292,14 +351,18 @@ app.get("/api/institution-fy-cumulative", async (req, res) => {
     const month = normalizeMonth(req.query.month || "");
     const year = String(req.query.year || "");
 
-    if (!district || !institutionRaw || !month || !year) {
-      return res.status(400).json({ ok: false, error: "missing_params" });
-    }
+    if (!district || !institutionRaw || !month || !year)
+      return res
+        .status(400)
+        .json({ ok: false, error: "missing_params" });
 
     const pats = instRegexOR(institutionRaw);
     const docs = await Report.find({
-      district: new RegExp(`^\\s*${sanitize(district).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i"),
-      $or: pats.map(rx => ({ institution: rx })),
+      district: new RegExp(
+        `^\\s*${sanitize(district).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`,
+        "i"
+      ),
+      $or: pats.map((rx) => ({ institution: rx })),
     }).lean();
 
     const window = _fiscalWindow(month, year);
@@ -318,7 +381,8 @@ app.get("/api/institution-fy-cumulative", async (req, res) => {
       const d = latest.get(key(p.month, p.year));
       if (!d) continue;
       const a = _normalize84(d.answers || {});
-      for (const [k2, v] of Object.entries(a)) sums[k2] = (sums[k2] || 0) + (Number(v) || 0);
+      for (const [k2, v] of Object.entries(a))
+        sums[k2] = (sums[k2] || 0) + (Number(v) || 0);
     }
 
     const sel = latest.get(key(month, year));
@@ -329,7 +393,15 @@ app.get("/api/institution-fy-cumulative", async (req, res) => {
       return list ? sanitize(list[0]) : sanitize(institutionRaw);
     })();
 
-    res.json({ ok: true, district, institution: displayName, month, year, cumulative: sums, monthAnswers });
+    res.json({
+      ok: true,
+      district,
+      institution: displayName,
+      month,
+      year,
+      cumulative: sums,
+      monthAnswers,
+    });
   } catch (e) {
     console.error("GET /api/institution-fy-cumulative error:", e);
     res.status(500).json({ ok: false, error: "server_error" });
@@ -337,10 +409,20 @@ app.get("/api/institution-fy-cumulative", async (req, res) => {
 });
 
 /* ======================= 404 ======================= */
-app.use((req, res) => res.status(404).json({ ok: false, error: "route_not_found", path: req.path }));
+app.use((req, res) =>
+  res
+    .status(404)
+    .json({ ok: false, error: "route_not_found", path: req.path })
+);
 
 /* ======================= Start ======================= */
-app.listen(PORT, "0.0.0.0", () => console.log(`🚀 API listening on port ${PORT}`));
-mongoose.connect(MONGO_URI, { dbName: "optometry" })
-  .then(() => { dbReady = true; console.log("✅ Mongo connected"); })
-  .catch(e => console.error("❌ Mongo connect failed:", e.message));
+app.listen(PORT, "0.0.0.0", () =>
+  console.log(`🚀 API listening on port ${PORT}`)
+);
+mongoose
+  .connect(MONGO_URI, { dbName: "optometry" })
+  .then(() => {
+    dbReady = true;
+    console.log("✅ Mongo connected");
+  })
+  .catch((e) => console.error("❌ Mongo connect failed:", e.message));
