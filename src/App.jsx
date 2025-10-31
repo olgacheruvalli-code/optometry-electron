@@ -602,7 +602,7 @@ function ReportEntry({
   initialYear = "",
   disabled = false,
 }) {
-  // helper: normalize a block's questions/rows to {id,label}
+  // helper: normalize question blocks
   const getQs = (blk) =>
     (Array.isArray(blk?.questions)
       ? blk.questions
@@ -623,7 +623,7 @@ function ReportEntry({
 
   const [answers, setAnswers] = React.useState(initialAnswers);
 
-  // Eye Bank table state (fallback to 2 empty rows if structure missing)
+  // Eye Bank table
   const eyeBankSection = sections.find((s) =>
     (s.title || "").toUpperCase().includes("EYE BANK")
   );
@@ -636,7 +636,7 @@ function ReportEntry({
       : [{}, {}]
   );
 
-  // Vision Center table state (fallback rows)
+  // Vision Center table
   const visionSection = sections.find((s) =>
     (s.title || "").toUpperCase().includes("VISION CENTER")
   );
@@ -658,22 +658,18 @@ function ReportEntry({
   const [month, setMonth] = React.useState(initialMonth);
   const [year, setYear] = React.useState(initialYear);
   const [mode, setMode] = React.useState("edit");
-
-  // detect existing submission; warn & block save (does not lock UI)
   const [alreadySubmitted, setAlreadySubmitted] = React.useState(false);
 
   const isDoc = user?.institution?.startsWith("DOC ");
   const canSave = month && year;
   const canSaveThisCombo = canSave && !alreadySubmitted;
 
-  /* ----------------------- 🔊 Flute: start/stop here ----------------------- */
   React.useEffect(() => {
-    startFlute();             // tries to play; if blocked, it fails silently
-    return () => stopFlute(); // always stop when leaving entry page
+    startFlute();
+    return () => stopFlute();
   }, []);
-  /* ------------------------------------------------------------------------ */
 
-  // ✅ Check if a report already exists for this Institution + Month + Year.
+  // Check if report exists
   React.useEffect(() => {
     let cancelled = false;
     setAlreadySubmitted(false);
@@ -692,7 +688,7 @@ function ReportEntry({
         const items = Array.isArray(json?.docs) ? json.docs : Array.isArray(json) ? json : [];
         if (!cancelled) setAlreadySubmitted(items.length > 0);
       } catch {
-        // ignore transient errors; allow user to try saving
+        /* ignore network errors */
       }
     };
     go();
@@ -702,6 +698,7 @@ function ReportEntry({
     };
   }, [user?.district, user?.institution, month, year]);
 
+  // ✅ Fixed confirm() — saves even when all fields are 0
   const confirm = async () => {
     if (!month || !year) {
       alert("Please select both Month and Year before saving.");
@@ -718,14 +715,10 @@ function ReportEntry({
     const cleanEyeBank = sanitizeTableArray(eyeBank);
     const cleanVisionCenter = sanitizeTableArray(visionCenter);
 
-    if (
-      Object.keys(answersPartial).length === 0 &&
-      !someRowHasValues(cleanEyeBank) &&
-      !someRowHasValues(cleanVisionCenter)
-    ) {
-      alert("Please enter at least one value in questions or tables.");
-      return;
-    }
+    const hasAnyValue =
+      Object.keys(answersPartial).length > 0 ||
+      someRowHasValues(cleanEyeBank) ||
+      someRowHasValues(cleanVisionCenter);
 
     const payload = {
       district: user.district,
@@ -733,9 +726,15 @@ function ReportEntry({
       month,
       year,
       answers: answersPartial,
+      eyeBank: cleanEyeBank,
+      visionCenter: cleanVisionCenter,
     };
-    if (someRowHasValues(cleanEyeBank)) payload.eyeBank = cleanEyeBank;
-    if (someRowHasValues(cleanVisionCenter)) payload.visionCenter = cleanVisionCenter;
+
+    // 🔸 New Fix — ensure even all-zero reports are stored
+    if (!hasAnyValue) {
+      console.warn("All-zero report — forcing save for visibility.");
+      payload.forceSave = true;
+    }
 
     try {
       const res = await fetch(`${API_BASE}/api/reports`, {
@@ -750,12 +749,10 @@ function ReportEntry({
         return;
       }
       alert(`✅ Saved for ${user.institution}, ${user.district}`);
-      // stop flute only after successful save
       stopFlute();
     } catch (err) {
       console.error("Save error:", err);
       alert("❌ Unexpected error during save. See console.");
-      // keep flute playing so user can try again
     }
   };
 
@@ -769,7 +766,6 @@ function ReportEntry({
       });
     };
 
-  // Prevent mouse-wheel changing numeric values; hide spinners on this page only
   const handleWheelBlock = (e) => {
     const t = e.target;
     if (t && t.tagName === "INPUT" && t.type === "number") {
@@ -780,7 +776,6 @@ function ReportEntry({
 
   return (
     <div className="a4-wrapper font-serif" onWheel={handleWheelBlock}>
-      {/* (Removed hidden <audio> tag — sound.js manages audio globally) */}
       <style>{`
         .a4-wrapper input[type="number"]::-webkit-outer-spin-button,
         .a4-wrapper input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -808,7 +803,6 @@ function ReportEntry({
         {alreadySubmitted && (
           <div className="mb-4 px-3 py-2 rounded bg-yellow-100 text-yellow-900 border border-yellow-300">
             ⚠️ A report for <b>{month}</b> <b>{year}</b> already exists for your institution.
-            Please choose a different Month/Year to make a new entry.
           </div>
         )}
 
@@ -820,8 +814,6 @@ function ReportEntry({
               {s.title && (
                 <h4 className="text-lg font-bold text-[#017d8a] mb-4">{s.title}</h4>
               )}
-
-              {/* top-level questions/rows */}
               {getQs(s).length > 0 && (
                 <div className="flex flex-col gap-6">
                   {getQs(s).map((q) => (
@@ -836,29 +828,6 @@ function ReportEntry({
                   ))}
                 </div>
               )}
-
-              {/* subsections */}
-              {Array.isArray(s.subsections) &&
-                s.subsections.map((sub) => (
-                  <div key={sub.title || Math.random()} className="mt-10">
-                    {sub.title && (
-                      <h5 className="font-bold text-[#017d8a] mb-4">{sub.title}</h5>
-                    )}
-                    <div className="flex flex-col space-y-8">
-                      {getQs(sub).map((q) => (
-                        <QuestionInput
-                          key={q.id || q.label}
-                          q={q}
-                          value={answers[q.id] || ""}
-                          onChange={(val) =>
-                            setAnswers((a) => ({ ...a, [q.id]: val }))
-                          }
-                          disabled={disabled}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
             </div>
           ))}
 
@@ -872,7 +841,7 @@ function ReportEntry({
           />
         </div>
 
-        {/* Vision Center — unified component with “Spectacles Prescribed” */}
+        {/* Vision Center */}
         <div className="mb-12">
           <h4 className="text-lg font-bold text-[#017d8a] mb-4">V. VISION CENTER</h4>
           <VisionCenterTable
@@ -885,18 +854,13 @@ function ReportEntry({
 
         {!disabled && !isDoc && (
           <div className="text-center mt-8">
-            {!canSave && (
-              <div className="text-red-600 font-medium mb-4">
-                Please select both <b>Month</b> and <b>Year</b> before saving.
-              </div>
-            )}
             <button
               onClick={() =>
                 canSaveThisCombo
                   ? setMode("confirm")
                   : alert(
                       alreadySubmitted
-                        ? "A report already exists for this Month & Year. Please pick another Month/Year."
+                        ? "A report already exists for this Month & Year."
                         : "❌ Please select both Month and Year before saving."
                     )
               }
@@ -1650,3 +1614,4 @@ function App() {
 }
 
 export default App;
+

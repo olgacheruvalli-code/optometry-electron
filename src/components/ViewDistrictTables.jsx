@@ -131,9 +131,28 @@ const toArrayFromArrayLike = (row) => {
   return entries.map(([, v]) => v);
 };
 
+/* ----------------- fiscal year helpers ------------------------------- */
+const MONTHS = [
+  "april","may","june","july","august","september","october","november","december","january","february","march"
+];
+const monthToFYIndex = (m) => MONTHS.indexOf(String(m||"").toLowerCase());
+const isJanFebMar = (m) => ["january","february","march"].includes(String(m||"").toLowerCase());
+const fyStartYearFor = (m, y) => (isJanFebMar(m) ? Number(y) - 1 : Number(y));
+function monthsUpTo(m, y) {
+  const idx = monthToFYIndex(m);
+  const startYear = fyStartYearFor(m, y);
+  const list = [];
+  for (let i = 0; i <= idx; i++) {
+    const mon = MONTHS[i];
+    // for Jan–Mar the calendar year is startYear+1
+    const calYear = ["january","february","march"].includes(mon) ? startYear + 1 : startYear;
+    list.push({ month: mon, year: calYear });
+  }
+  return list;
+}
+
 /* ----------------- render-time resolvers ------------------------------- */
 
-// Strong name resolver (covers many aliases)
 const getNameFromRow = (rowObj) => {
   const raw = rowObj?.__raw || {};
   const data = rowObj?.__data || {};
@@ -176,7 +195,6 @@ const getNameFromRow = (rowObj) => {
   const loose = scanLoose(raw, isNameKeyNK, true);
   if (loose) return loose;
 
-  // ultra-safe fallback: first short string field
   for (const v of Object.values(raw)) {
     if (typeof v === "string" && v.trim() && v.trim().length <= 40) return v.trim();
   }
@@ -287,13 +305,11 @@ const ZERO_VC_ROWS = [
 ];
 
 /* -------------------------- Excel Exporter -------------------------- */
-/** Export the first <table> inside container as .xlsx with a heading row */
 async function exportDivTableWithHeading(containerId, filename, sheetName, headingText) {
   const el = document.getElementById(containerId);
   if (!el) return alert("Table container not found: " + containerId);
   const table = el.querySelector("table") || el;
 
-  // Clone and inject a heading row that spans the full width
   const clone = table.cloneNode(true);
   const colCount = clone.tHead
     ? clone.tHead.rows[0].cells.length
@@ -320,7 +336,7 @@ async function exportDivTableWithHeading(containerId, filename, sheetName, headi
   const XLSX = await import("xlsx");
   const wb = XLSX.utils.table_to_book(clone, { sheet: sheetName });
   const ws = wb.Sheets[sheetName];
-  if (ws) ws["!freeze"] = { xSplit: 1, ySplit: 2 }; // keep heading + header visible
+  if (ws) ws["!freeze"] = { xSplit: 1, ySplit: 2 };
   XLSX.writeFile(wb, filename);
 }
 
@@ -344,6 +360,12 @@ export default function ViewDistrictTables({ user, month, year }) {
     fixedLengthArray((eyeBankSection?.rows || []).length)
   );
   const [vcRows, setVcRows] = useState([]);
+  const [vcTotalsMonth, setVcTotalsMonth] = useState({
+    examined: 0, cataract: 0, other_diseases: 0, refractive_errors: 0, spectacles_prescribed: 0,
+  });
+  const [vcTotalsCum, setVcTotalsCum] = useState({
+    examined: 0, cataract: 0, other_diseases: 0, refractive_errors: 0, spectacles_prescribed: 0,
+  });
   const [loading, setLoading] = useState(false);
   const [errText, setErrText] = useState("");
 
@@ -376,23 +398,19 @@ export default function ViewDistrictTables({ user, month, year }) {
       };
     };
 
-    // choose the more plausible interpretation: normal [other,refractive] vs swapped
+    // choose best (normal vs swapped) for other/refractive in array-like rows
     const chooseBestOtherRefrac = (o, r, altO, altR) => {
       const scoreA = (o ? 1 : 0) + (r ? 1 : 0);
       const scoreB = (altO ? 1 : 0) + (altR ? 1 : 0);
       return scoreB > scoreA ? { other: altO, refractive: altR } : { other: o, refractive: r };
     };
 
-    // map a VC row to canonical fields (handles objects, array-like, or rebuilt)
     const mapRowToCanonical = (row, i) => {
       const idx = i + 1;
 
-      // ---------- ARRAY-LIKE branch ----------
       if (isArrayLikeRow(row)) {
         const arr = toArrayFromArrayLike(row).map(parseAnyNum);
 
-        // Normal order: [examined, cataract, other, refractive, spectacles]
-        // Some months might swap [other,refractive]; decide automatically.
         const examined = arr[0] ?? 0;
         const cataract = arr[1] ?? 0;
 
@@ -416,7 +434,6 @@ export default function ViewDistrictTables({ user, month, year }) {
         };
       }
 
-      // ---------- OBJECT branch ----------
       const r = row || {};
       const ks = vcKeyset(i);
 
@@ -523,8 +540,7 @@ export default function ViewDistrictTables({ user, month, year }) {
         scanLoose(r, isRefractiveNK)
       );
 
-      // safeguard: if one of them is suspiciously always zero while the other has value,
-      // try swapping and pick the variant with more non-zero fields.
+      // safeguard against swapped fields
       const picked = ((o, rf) => {
         const altO = rf, altR = o;
         const scoreA = (o ? 1 : 0) + (rf ? 1 : 0);
@@ -555,10 +571,19 @@ export default function ViewDistrictTables({ user, month, year }) {
       };
     };
 
+    const sumInto = (acc, d) => {
+      acc.examined += parseAnyNum(d.examined) || 0;
+      acc.cataract += parseAnyNum(d.cataract) || 0;
+      acc.other_diseases += parseAnyNum(d.other_diseases) || 0;
+      acc.refractive_errors += parseAnyNum(d.refractive_errors) || 0;
+      acc.spectacles_prescribed += parseAnyNum(d.spectacles_prescribed) || 0;
+    };
+
     (async () => {
       setLoading(true);
       setErrText("");
       try {
+        /* ---------- MONTH VIEW (exact month) ---------- */
         const q =
           `district=${encodeURIComponent(district)}` +
           `&month=${encodeURIComponent(month)}` +
@@ -569,40 +594,130 @@ export default function ViewDistrictTables({ user, month, year }) {
         if (!Array.isArray(list) || !list.length) {
           setEbTotals(ZERO_EYE_BANK);
           setVcRows(ZERO_VC_ROWS);
-          return;
-        }
+          setVcTotalsMonth({ examined:0, cataract:0, other_diseases:0, refractive_errors:0, spectacles_prescribed:0 });
+        } else {
+          const source = list.filter(
+            (d) =>
+              String(d?.district || "").trim().toLowerCase() ===
+                String(district).trim().toLowerCase() &&
+              String(d?.month || "").trim().toLowerCase() ===
+                String(month).trim().toLowerCase() &&
+              String(d?.year || "") === String(year)
+          );
 
-        const source = list.filter(
-          (d) =>
-            String(d?.district || "").trim().toLowerCase() ===
-              String(district).trim().toLowerCase() &&
-            String(d?.month || "").trim().toLowerCase() ===
-              String(month).trim().toLowerCase() &&
-            String(d?.year || "") === String(year)
-        );
+          const ebOut = fixedLengthArray((eyeBankSection?.rows || []).length);
+          const vcOut = [];
+          source.forEach((rep) => {
+            // Eye Bank totals
+            const eb = rep?.eyeBank || rep?.eyebank || rep?.eye_bank || [];
+            for (let i = 0; i < ebOut.length; i++) {
+              const srcRow = eb[i];
+              if (!srcRow) continue;
+              addRowInto(ebOut[i], srcRow, ebRowKeys[i]);
+            }
 
-        if (!source.length) {
-          setEbTotals(ZERO_EYE_BANK);
-          setVcRows(ZERO_VC_ROWS);
-          return;
-        }
+            // VC rows
+            const instName = String(rep?.institution || "").trim();
+            let vc =
+              rep?.visionCenter ||
+              rep?.visionCentre ||
+              rep?.vision_centre ||
+              rep?.visioncentre ||
+              [];
 
-        /* Eye Bank totals */
-        const ebOut = fixedLengthArray((eyeBankSection?.rows || []).length);
-        source.forEach((rep) => {
-          const eb = rep?.eyeBank || rep?.eyebank || rep?.eye_bank || [];
-          for (let i = 0; i < ebOut.length; i++) {
-            const srcRow = eb[i];
-            if (!srcRow) continue;
-            addRowInto(ebOut[i], srcRow, ebRowKeys[i]);
+            const rowsAreArrayLike =
+              Array.isArray(vc) && vc.length && (Array.isArray(vc[0]) || isArrayLikeRow(vc[0]));
+            if (!Array.isArray(vc) || !vc.length || rowsAreArrayLike) {
+              const a = rep?.answers || {};
+              const rebuilt = [];
+              for (let j = 1; j <= 25; j++) {
+                const rowObj = {
+                  [`vc_${j}_name`]:
+                    a[`vc_${j}_name`] ?? a[`vc${j}_name`] ?? a[`vc_${j}_vcName`] ?? a[`vc_${j}_centerName`] ??
+                    a[`vc_${j}_centreName`] ?? a[`vc_${j}_visionCenter`] ?? a[`vc_${j}_visionCentre`] ??
+                    a[`vc_${j}_vision_center_name`] ?? a[`vc_${j}_nameOfVisionCentre`] ?? a[`vc_${j}_nameOfVisionCenter`] ?? "",
+                  [`vc_${j}_examined`]:
+                    a[`vc_${j}_examined`] ?? a[`vc${j}_examined`] ?? a[`vc_${j}_patients_examined`] ??
+                    a[`vc_${j}_patientsExamined`] ?? 0,
+                  [`vc_${j}_cataract`]: a[`vc_${j}_cataract`] ?? 0,
+                  [`vc_${j}_other_diseases`]:
+                    a[`vc_${j}_other_diseases`] ?? a[`vc_${j}_otherEyeDiseases`] ?? a[`vc_${j}_otherEye`] ?? 0,
+                  [`vc_${j}_refractive_errors`]:
+                    a[`vc_${j}_refractive_errors`] ?? a[`vc_${j}_refractive_error`] ??
+                    a[`vc_${j}_refraction`] ?? a[`vc_${j}_refraction_done`] ?? a[`vc_${j}_refraction_cases`] ?? 0,
+                  [`vc_${j}_spectacles_prescribed`]:
+                    a[`vc_${j}_spectacles_prescribed`] ?? a[`vc_${j}_spectacles`] ?? 0,
+                };
+                const anyNum = Object.values(rowObj).some((v) => typeof v === "number" && v !== 0);
+                if (String(rowObj[`vc_${j}_name`] || "").trim() !== "" || anyNum) rebuilt.push(rowObj);
+              }
+              vc = rebuilt;
+            }
+
+            if (!Array.isArray(vc) || !vc.length) return;
+
+            vc.forEach((row, i) => {
+              const canon = mapRowToCanonical(row, i);
+              const hasAny =
+                String(canon.name || "").trim() !== "" ||
+                VC_METRIC_KEYS.some((k) => parseAnyNum(canon[k]) !== 0);
+              if (hasAny) {
+                vcOut.push({
+                  __institution: instName || "Unknown Institution",
+                  __data: canon,
+                  __raw: row,
+                  __idx: canon.__idx,
+                });
+              }
+            });
+          });
+
+          // sort + set rows
+          if (!vcOut.length) {
+            setVcRows(ZERO_VC_ROWS);
+            setVcTotalsMonth({ examined:0, cataract:0, other_diseases:0, refractive_errors:0, spectacles_prescribed:0 });
+          } else {
+            vcOut.sort((a, b) => {
+              const ai = (a.__institution || "").toLowerCase();
+              const bi = (b.__institution || "").toLowerCase();
+              if (ai < bi) return -1;
+              if (ai > bi) return 1;
+              const an = String(getNameFromRow(a) || "").toLowerCase();
+              const bn = String(getNameFromRow(b) || "").toLowerCase();
+              return an.localeCompare(bn, undefined, { numeric: true });
+            });
+            setVcRows(vcOut);
+
+            // monthly totals from displayed rows
+            const t = { examined:0, cataract:0, other_diseases:0, refractive_errors:0, spectacles_prescribed:0 };
+            vcOut.forEach((row) => sumInto(t, row.__data || {}));
+            setVcTotalsMonth(t);
           }
+
+          setEbTotals(ebOut.some((r) => Object.keys(r).length) ? ebOut : ZERO_EYE_BANK);
+        }
+
+        /* ---------- CUMULATIVE (Apr -> selected month) ---------- */
+        const fyStart = fyStartYearFor(month, year);
+        const monthsWanted = monthsUpTo(month, year)
+          .map(({ month: m, year: y }) => `${m}-${y}`);
+
+        // fetch full FY (simple approach: query by district & each relevant year)
+        const listFY1 = await fetchList(`${API_BASE}/api/reports?district=${encodeURIComponent(district)}&year=${fyStart}`);
+        const listFY2 = await fetchList(`${API_BASE}/api/reports?district=${encodeURIComponent(district)}&year=${fyStart+1}`);
+
+        const allFY = [...(Array.isArray(listFY1)?listFY1:[]), ...(Array.isArray(listFY2)?listFY2:[])];
+
+        // filter to Apr->selected
+        const sourceCum = allFY.filter((d) => {
+          const key = `${String(d?.month||"").toLowerCase()}-${d?.year}`;
+          return monthsWanted.includes(key);
         });
 
-        /* Vision Centre rows */
-        const vcOut = [];
-        source.forEach((rep) => {
-          const instName = String(rep?.institution || "").trim();
+        // accumulate VC totals across these months
+        const totCum = { examined:0, cataract:0, other_diseases:0, refractive_errors:0, spectacles_prescribed:0 };
 
+        sourceCum.forEach((rep) => {
           let vc =
             rep?.visionCenter ||
             rep?.visionCentre ||
@@ -616,125 +731,44 @@ export default function ViewDistrictTables({ user, month, year }) {
             const a = rep?.answers || {};
             const rebuilt = [];
             for (let j = 1; j <= 25; j++) {
-              const name =
-                a[`vc_${j}_name`] ??
-                a[`vc${j}_name`] ??
-                a[`VC_${j}_name`] ??
-                a[`VC${j}_name`] ??
-                a[`vc_${j}_vcName`] ??
-                a[`vc${j}_vcName`] ??
-                a[`vc_${j}_centerName`] ??
-                a[`vc${j}_centerName`] ??
-                a[`vc_${j}_centreName`] ??
-                a[`vc${j}_centreName`] ??
-                a[`vc_${j}_visionCenter`] ??
-                a[`vc${j}_visionCenter`] ??
-                a[`vc_${j}_visionCentre`] ??
-                a[`vc${j}_visionCentre`] ??
-                a[`vc_${j}_vision_center_name`] ??
-                a[`vc${j}_vision_center_name`] ??
-                a[`vc_${j}_nameOfVisionCentre`] ??
-                a[`vc_${j}_nameOfVisionCenter`] ??
-                "";
-
-              const examined =
-                a[`vc_${j}_examined`] ??
-                a[`vc${j}_examined`] ??
-                a[`vc_${j}_patients_examined`] ??
-                a[`vc${j}_patients_examined`] ??
-                a[`vc_${j}_patientsExamined`] ??
-                a[`vc${j}_patientsExamined`] ??
-                a[`vc${j}_examinedCases`] ??
-                a[`vc${j}_examined_today`] ??
-                0;
-
-              const cataract = a[`vc_${j}_cataract`] ?? a[`vc${j}_cataract`] ?? 0;
-
-              const other =
-                a[`vc_${j}_other_diseases`] ??
-                a[`vc${j}_other_diseases`] ??
-                a[`vc_${j}_otherEyeDiseases`] ??
-                a[`vc${j}_otherEyeDiseases`] ??
-                a[`vc_${j}_otherEye`] ??
-                a[`vc${j}_otherEye`] ??
-                0;
-
-              const refractive =
-                a[`vc_${j}_refractive_errors`] ??
-                a[`vc${j}_refractive_errors`] ??
-                a[`vc_${j}_refractive_error`] ??
-                a[`vc${j}_refractive_error`] ??
-                a[`vc_${j}_refraction`] ??
-                a[`vc${j}_refraction`] ??
-                a[`vc_${j}_refraction_done`] ??
-                a[`vc${j}_refraction_done`] ??
-                a[`vc_${j}_refraction_cases`] ??
-                a[`vc${j}_refraction_cases`] ??
-                0;
-
-              const spectacles =
-                a[`vc_${j}_spectacles_prescribed`] ??
-                a[`vc${j}_spectacles_prescribed`] ??
-                a[`vc_${j}_spectacles`] ??
-                a[`vc${j}_spectacles`] ??
-                0;
-
               const rowObj = {
-                [`vc_${j}_name`]: name,
-                [`vc_${j}_examined`]: parseAnyNum(examined),
-                [`vc_${j}_cataract`]: parseAnyNum(cataract),
-                [`vc_${j}_other_diseases`]: parseAnyNum(other),
-                [`vc_${j}_refractive_errors`]: parseAnyNum(refractive),
-                [`vc_${j}_spectacles_prescribed`]: parseAnyNum(spectacles),
+                [`vc_${j}_name`]:
+                  a[`vc_${j}_name`] ?? a[`vc${j}_name`] ?? a[`vc_${j}_vcName`] ?? a[`vc_${j}_centerName`] ??
+                  a[`vc_${j}_centreName`] ?? a[`vc_${j}_visionCenter`] ?? a[`vc_${j}_visionCentre`] ??
+                  a[`vc_${j}_vision_center_name`] ?? a[`vc_${j}_nameOfVisionCentre`] ?? a[`vc_${j}_nameOfVisionCenter`] ?? "",
+                [`vc_${j}_examined`]:
+                  a[`vc_${j}_examined`] ?? a[`vc${j}_examined`] ?? a[`vc_${j}_patients_examined`] ??
+                  a[`vc_${j}_patientsExamined`] ?? 0,
+                [`vc_${j}_cataract`]: a[`vc_${j}_cataract`] ?? 0,
+                [`vc_${j}_other_diseases`]:
+                  a[`vc_${j}_other_diseases`] ?? a[`vc_${j}_otherEyeDiseases`] ?? a[`vc_${j}_otherEye`] ?? 0,
+                [`vc_${j}_refractive_errors`]:
+                  a[`vc_${j}_refractive_errors`] ?? a[`vc_${j}_refractive_error`] ??
+                  a[`vc_${j}_refraction`] ?? a[`vc_${j}_refraction_done`] ?? a[`vc_${j}_refraction_cases`] ?? 0,
+                [`vc_${j}_spectacles_prescribed`]:
+                  a[`vc_${j}_spectacles_prescribed`] ?? a[`vc_${j}_spectacles`] ?? 0,
               };
-
-              const anyNum = Object.values(rowObj).some(
-                (v) => typeof v === "number" && v !== 0
-              );
+              const anyNum = Object.values(rowObj).some((v) => typeof v === "number" && v !== 0);
               if (String(rowObj[`vc_${j}_name`] || "").trim() !== "" || anyNum) rebuilt.push(rowObj);
             }
             vc = rebuilt;
           }
 
-          if (!Array.isArray(vc) || !vc.length) return;
-
           vc.forEach((row, i) => {
             const canon = mapRowToCanonical(row, i);
-            const hasAny =
-              String(canon.name || "").trim() !== "" ||
-              VC_METRIC_KEYS.some((k) => parseAnyNum(canon[k]) !== 0);
-            if (hasAny) {
-              vcOut.push({
-                __institution: instName || "Unknown Institution",
-                __data: canon,
-                __raw: row,
-                __idx: canon.__idx,
-              });
-            }
+            sumInto(totCum, canon);
           });
         });
 
-        if (!vcOut.length) {
-          setVcRows(ZERO_VC_ROWS);
-        } else {
-          vcOut.sort((a, b) => {
-            const ai = (a.__institution || "").toLowerCase();
-            const bi = (b.__institution || "").toLowerCase();
-            if (ai < bi) return -1;
-            if (ai > bi) return 1;
-            const an = String(getNameFromRow(a) || "").toLowerCase();
-            const bn = String(getNameFromRow(b) || "").toLowerCase();
-            return an.localeCompare(bn, undefined, { numeric: true });
-          });
-          setVcRows(vcOut);
-        }
+        setVcTotalsCum(totCum);
 
-        setEbTotals(ebOut.some((r) => Object.keys(r).length) ? ebOut : ZERO_EYE_BANK);
       } catch (e) {
         console.error("District tables fetch failed:", e);
         setErrText("Failed to load district tables. See console for details.");
         setEbTotals(ZERO_EYE_BANK);
         setVcRows(ZERO_VC_ROWS);
+        setVcTotalsMonth({ examined:0, cataract:0, other_diseases:0, refractive_errors:0, spectacles_prescribed:0 });
+        setVcTotalsCum({ examined:0, cataract:0, other_diseases:0, refractive_errors:0, spectacles_prescribed:0 });
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -746,6 +780,8 @@ export default function ViewDistrictTables({ user, month, year }) {
   }, [district, month, year, eyeBankSection, visionCenterSection]);
 
   /* ------------------------------ renderers ------------------------------ */
+  const heading = `District Tables — ${district} (${month} ${year})`;
+
   const renderDistrictVisionCenterTable = () => {
     return (
       <div id="vcDistrictWrap" className="overflow-x-auto">
@@ -766,32 +802,47 @@ export default function ViewDistrictTables({ user, month, year }) {
             {vcRows.map((row, idx) => {
               const d = row.__data || {};
               const name = getNameFromRow(row);
-              const examined = parseAnyNum(d.examined) || 0;
-              const cataract = parseAnyNum(d.cataract) || 0;
-              const other = parseAnyNum(d.other_diseases) || 0;
-              const refractive = parseAnyNum(d.refractive_errors) || 0;
-              const spectacles = parseAnyNum(d.spectacles_prescribed) || 0;
-
               return (
                 <tr key={idx}>
                   <td className="border px-2 py-1 text-center">{idx + 1}</td>
                   <td className="border px-2 py-1">{row.__institution || ""}</td>
                   <td className="border px-2 py-1">{name}</td>
-                  <td className="border px-2 py-1 text-right">{examined}</td>
-                  <td className="border px-2 py-1 text-right">{cataract}</td>
-                  <td className="border px-2 py-1 text-right">{other}</td>
-                  <td className="border px-2 py-1 text-right">{refractive}</td>
-                  <td className="border px-2 py-1 text-right">{spectacles}</td>
+                  <td className="border px-2 py-1 text-right">{parseAnyNum(d.examined) || 0}</td>
+                  <td className="border px-2 py-1 text-right">{parseAnyNum(d.cataract) || 0}</td>
+                  <td className="border px-2 py-1 text-right">{parseAnyNum(d.other_diseases) || 0}</td>
+                  <td className="border px-2 py-1 text-right">{parseAnyNum(d.refractive_errors) || 0}</td>
+                  <td className="border px-2 py-1 text-right">{parseAnyNum(d.spectacles_prescribed) || 0}</td>
                 </tr>
               );
             })}
+
+            {/* ====== NEW FOOTERS ====== */}
+            <tr className="bg-gray-50 font-semibold">
+              <td className="border px-2 py-1 text-center" colSpan={3}>
+                District Total — During the Month
+              </td>
+              <td className="border px-2 py-1 text-right">{vcTotalsMonth.examined}</td>
+              <td className="border px-2 py-1 text-right">{vcTotalsMonth.cataract}</td>
+              <td className="border px-2 py-1 text-right">{vcTotalsMonth.other_diseases}</td>
+              <td className="border px-2 py-1 text-right">{vcTotalsMonth.refractive_errors}</td>
+              <td className="border px-2 py-1 text-right">{vcTotalsMonth.spectacles_prescribed}</td>
+            </tr>
+
+            <tr className="bg-gray-100 font-semibold">
+              <td className="border px-2 py-1 text-center" colSpan={3}>
+                District Total — Cumulative (Apr → {month})
+              </td>
+              <td className="border px-2 py-1 text-right">{vcTotalsCum.examined}</td>
+              <td className="border px-2 py-1 text-right">{vcTotalsCum.cataract}</td>
+              <td className="border px-2 py-1 text-right">{vcTotalsCum.other_diseases}</td>
+              <td className="border px-2 py-1 text-right">{vcTotalsCum.refractive_errors}</td>
+              <td className="border px-2 py-1 text-right">{vcTotalsCum.spectacles_prescribed}</td>
+            </tr>
           </tbody>
         </table>
       </div>
     );
   };
-
-  const heading = `District Tables — ${district} (${month} ${year})`;
 
   return (
     <div className="space-y-10">
