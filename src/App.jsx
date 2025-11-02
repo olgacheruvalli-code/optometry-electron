@@ -26,6 +26,7 @@ import Register from "./components/Register";
 import { startFlute, stopFlute } from "./utils/sound";
 import EditGate from "./components/EditGate";
 import SearchReports from "./components/SearchReports";
+import AmblyopiaForm from "./components/AmblyopiaForm";
 import TestVisionCenter from "./components/TestVisionCenter";
 // Wake up Render backend when app starts
 fetch("https://optometry-backend-iiuk.onrender.com/api/ping").catch(() => {});
@@ -591,8 +592,7 @@ function ViewReports({ reportData, month, year }) {
 
 
 
-// App.jsx (inside the file) — replace your existing ReportEntry with this one.
-// App.jsx — replace ONLY the ReportEntry component with this version
+/* ========================= ReportEntry (inline) ========================= */
 function ReportEntry({
   user,
   initialAnswers = {},
@@ -602,28 +602,50 @@ function ReportEntry({
   initialYear = "",
   disabled = false,
 }) {
-  // helper: normalize question blocks
-  const getQs = (blk) =>
-    (Array.isArray(blk?.questions)
-      ? blk.questions
-      : Array.isArray(blk?.rows)
-      ? blk.rows
-      : []
-    ).map((q, i) => ({
-      ...q,
-      id:
-        q?.id ??
-        q?.key ??
-        q?.code ??
-        q?.name ??
-        q?.labelKey ??
-        `q_auto_${(blk?.title || "blk").toString().replace(/\s+/g, "_")}_${i + 1}`,
-      label: q?.label ?? q?.title ?? q?.text ?? q?.name ?? `Row ${i + 1}`,
-    }));
+  /* --- safe no-ops if these aren’t defined elsewhere --- */
+  const startFx = () => (typeof startFlute === "function" ? startFlute() : void 0);
+  const stopFx  = () => (typeof stopFlute  === "function" ? stopFlute()  : void 0);
 
+  /* ---------- recursive question flattener (fixes ADDL. REPORTS) --------- */
+  function flattenQuestionsFromBlock(blk) {
+    const out = [];
+
+    const pushQ = (q, i, title = "blk") => {
+      const id =
+        q?.id || q?.key || q?.code || q?.name || q?.labelKey || q?.field ||
+        `q_auto_${String(title).replace(/\s+/g, "_")}_${i + 1}`;
+      const label = q?.label || q?.title || q?.text || q?.name || `Row ${i + 1}`;
+      out.push({ ...q, id, label });
+    };
+
+    const walk = (node, title = node?.title || "blk") => {
+      if (!node || typeof node !== "object") return;
+
+      const direct = Array.isArray(node.questions)
+        ? node.questions
+        : Array.isArray(node.rows)
+        ? node.rows
+        : [];
+      direct.forEach((q, i) => pushQ(q, i, title));
+
+      const nested =
+        (Array.isArray(node.items) && node.items) ||
+        (Array.isArray(node.subsections) && node.subsections) ||
+        (Array.isArray(node.sections) && node.sections) ||
+        null;
+      if (nested) nested.forEach((child, idx) => walk(child, child?.title || `${title}_${idx + 1}`));
+    };
+
+    walk(blk);
+    return out;
+  }
+
+  const getQs = (blk) => flattenQuestionsFromBlock(blk);
+
+  /* ------------------------------ state ---------------------------------- */
   const [answers, setAnswers] = React.useState(initialAnswers);
 
-  // Eye Bank table
+  // Eye Bank
   const eyeBankSection = sections.find((s) =>
     (s.title || "").toUpperCase().includes("EYE BANK")
   );
@@ -636,7 +658,7 @@ function ReportEntry({
       : [{}, {}]
   );
 
-  // Vision Center table
+  // Vision Center
   const visionSection = sections.find((s) =>
     (s.title || "").toUpperCase().includes("VISION CENTER")
   );
@@ -664,17 +686,18 @@ function ReportEntry({
   const canSave = month && year;
   const canSaveThisCombo = canSave && !alreadySubmitted;
 
+  /* ---------------------------- effects ---------------------------------- */
   React.useEffect(() => {
-    startFlute();
-    return () => stopFlute();
+    startFx();
+    return () => stopFx();
   }, []);
 
-  // Check if report exists
+  // check if a report already exists for this identity/month/year
   React.useEffect(() => {
     let cancelled = false;
     setAlreadySubmitted(false);
 
-    const go = async () => {
+    (async () => {
       if (!user?.district || !user?.institution || !month || !year) return;
       try {
         const url =
@@ -688,26 +711,91 @@ function ReportEntry({
         const items = Array.isArray(json?.docs) ? json.docs : Array.isArray(json) ? json : [];
         if (!cancelled) setAlreadySubmitted(items.length > 0);
       } catch {
-        /* ignore network errors */
+        /* ignore */
       }
-    };
-    go();
+    })();
 
     return () => {
       cancelled = true;
     };
   }, [user?.district, user?.institution, month, year]);
 
-  // ✅ Fixed confirm() — saves even when all fields are 0
+  /* ----------------------------- helpers --------------------------------- */
+  const sanitizeTableArray = (arr) =>
+    Array.isArray(arr) ? arr.map((r) => (r && typeof r === "object" ? r : {})) : [];
+
+  const someRowHasValues = (rows) =>
+    Array.isArray(rows) &&
+    rows.some((r) =>
+      Object.values(r || {}).some(
+        (v) => v !== undefined && v !== null && String(v).trim() !== "" && String(v) !== "0"
+      )
+    );
+
+  function buildAnswersPartial(answersObj = {}, allSections = []) {
+    const known = new Set();
+    const flat = [];
+
+    const collect = (blk) => {
+      if (!blk || typeof blk !== "object") return;
+
+      const direct = Array.isArray(blk.questions)
+        ? blk.questions
+        : Array.isArray(blk.rows)
+        ? blk.rows
+        : [];
+      direct.forEach((q) => {
+        const k = q?.id || q?.key || q?.code || q?.name || q?.labelKey || q?.field || null;
+        if (k) {
+          known.add(k);
+          flat.push(k);
+        }
+      });
+
+      const nested =
+        (Array.isArray(blk.items) && blk.items) ||
+        (Array.isArray(blk.subsections) && blk.subsections) ||
+        (Array.isArray(blk.sections) && blk.sections) ||
+        null;
+      if (nested) nested.forEach(collect);
+    };
+
+    (allSections || []).forEach(collect);
+
+    const out = {};
+    for (const k of flat) {
+      const v = answersObj[k];
+      if (v !== undefined && v !== null && String(v).trim() !== "") out[k] = v;
+    }
+    return out;
+  }
+
+  const handleTableChange =
+    (setFn) =>
+    (rowIdx, key, value) => {
+      setFn((prev) => {
+        const next = [...prev];
+        next[rowIdx] = { ...next[rowIdx], [key]: value };
+        return next;
+      });
+    };
+
+  const handleWheelBlock = (e) => {
+    const t = e.target;
+    if (t && t.tagName === "INPUT" && t.type === "number") {
+      t.blur();
+      e.preventDefault();
+    }
+  };
+
+  /* ------------------------------ save ----------------------------------- */
   const confirm = async () => {
     if (!month || !year) {
       alert("Please select both Month and Year before saving.");
       return;
     }
     if (alreadySubmitted) {
-      alert(
-        "A report for this Month & Year already exists for your institution. Please pick another Month/Year."
-      );
+      alert("A report for this Month & Year already exists for your institution.");
       return;
     }
 
@@ -729,12 +817,7 @@ function ReportEntry({
       eyeBank: cleanEyeBank,
       visionCenter: cleanVisionCenter,
     };
-
-    // 🔸 New Fix — ensure even all-zero reports are stored
-    if (!hasAnyValue) {
-      console.warn("All-zero report — forcing save for visibility.");
-      payload.forceSave = true;
-    }
+    if (!hasAnyValue) payload.forceSave = true;
 
     try {
       const res = await fetch(`${API_BASE}/api/reports`, {
@@ -744,36 +827,18 @@ function ReportEntry({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data?.ok === false) {
-        console.error("Save failed:", data);
         alert(`❌ Save failed: ${data?.error || res.status}`);
         return;
       }
       alert(`✅ Saved for ${user.institution}, ${user.district}`);
-      stopFlute();
+      stopFx();
     } catch (err) {
       console.error("Save error:", err);
       alert("❌ Unexpected error during save. See console.");
     }
   };
 
-  const handleTableChange =
-    (setFn) =>
-    (rowIdx, key, value) => {
-      setFn((prev) => {
-        const updated = [...prev];
-        updated[rowIdx] = { ...updated[rowIdx], [key]: value };
-        return updated;
-      });
-    };
-
-  const handleWheelBlock = (e) => {
-    const t = e.target;
-    if (t && t.tagName === "INPUT" && t.type === "number") {
-      t.blur();
-      e.preventDefault();
-    }
-  };
-
+  /* ------------------------------ render --------------------------------- */
   return (
     <div className="a4-wrapper font-serif" onWheel={handleWheelBlock}>
       <style>{`
@@ -806,17 +871,19 @@ function ReportEntry({
           </div>
         )}
 
-        {/* Question Sections */}
+        {/* All non-table sections (now includes nested ADDL. REPORTS) */}
         {sections
           .filter((s) => !s.table)
-          .map((s) => (
-            <div key={s.title || Math.random()} className="mb-12">
-              {s.title && (
-                <h4 className="text-lg font-bold text-[#017d8a] mb-4">{s.title}</h4>
-              )}
-              {getQs(s).length > 0 && (
+          .map((s) => {
+            const qs = getQs(s);
+            if (!qs.length) return null;
+            return (
+              <div key={s.title || Math.random()} className="mb-12">
+                {s.title && (
+                  <h4 className="text-lg font-bold text-[#017d8a] mb-4">{s.title}</h4>
+                )}
                 <div className="flex flex-col gap-6">
-                  {getQs(s).map((q) => (
+                  {qs.map((q) => (
                     <div className="mb-2" key={q.id || q.label}>
                       <QuestionInput
                         q={q}
@@ -827,9 +894,9 @@ function ReportEntry({
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-          ))}
+              </div>
+            );
+          })}
 
         {/* Eye Bank */}
         <div className="mb-12">
@@ -896,7 +963,7 @@ function ReportEntry({
     </div>
   );
 }
-
+/* ======================= /ReportEntry (inline) ======================= */
 
 
 
@@ -1446,6 +1513,8 @@ function App() {
             )}
           </div>
         )}
+        {menu === "amblyopia" && <AmblyopiaForm user={user} />}
+
 
         {/* District → Institution-wise (table) */}
         {menu === "district-institutions" && (
