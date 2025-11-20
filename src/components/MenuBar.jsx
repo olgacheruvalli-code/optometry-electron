@@ -85,7 +85,7 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     });
   }
 
-  // Connected Link (with two new submenus; removed “Vision Center Related Issues”)
+  // Connected Link
   menuItems.push({
     key: "others-connected",
     label: "Connected Link",
@@ -118,10 +118,15 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     key: "research",
     label: "Research/Deep Study",
     sub: [
-      { key: "research-amblyopia", label: "Amblyopia" },
-      { key: "research-strabismus", label: "Strabismus" },
-      { key: "research-low-vision", label: "Low Vision" },
-      { key: "research-accommodative-spasm", label: "Accommodative Spasm" },
+      // ✅ Amblyopia group – keys MUST match App.jsx
+      { key: "research-amblyopia-entry", label: "Amblyopia – Entry" },
+      { key: "research-amblyopia-view", label: "Amblyopia – View Records" },
+      { key: "research-amblyopia-analytics", label: "Amblyopia – Analytics Dashboard" },
+
+      // Reserve for future conditions
+      { key: "research-strabismus", label: "Strabismus (Coming Soon)" },
+      { key: "research-low-vision", label: "Low Vision (Coming Soon)" },
+      { key: "research-accommodative-spasm", label: "Accommodative Spasm (Coming Soon)" },
     ],
   });
 
@@ -132,11 +137,20 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
         <h1 className="text-2xl font-bold text-gray-900">OPTOMETRY</h1>
         <div className="flex items-center gap-4">
           <div className="text-right text-sm text-gray-700 leading-tight font-medium">
-            <div>District: <b>{user?.district}</b></div>
-            <div>Institution: <b>{user?.institution}</b></div>
+            <div>
+              District: <b>{user?.district}</b>
+            </div>
+            <div>
+              Institution: <b>{user?.institution}</b>
+            </div>
           </div>
           <div className="w-9 h-9 bg-[#3b6e8f] rounded-full flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-5 h-5 text-white"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path d="M12 12c2.7 0 4.5-1.8 4.5-4.5S14.7 3 12 3 7.5 4.8 7.5 7.5 9.3 12 12 12Zm0 1.5c-3 0-9 1.5-9 4.5V21h18v-3c0-3-6-4.5-9-4.5Z" />
             </svg>
           </div>

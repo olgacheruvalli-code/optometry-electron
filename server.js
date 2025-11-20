@@ -10,7 +10,7 @@ const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/optometry"
 
 const ORIGINS_RAW = process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || "";
 const ALLOWED_ORIGINS = ORIGINS_RAW.split(",").map(s => s.trim()).filter(Boolean);
-const ALLOW_VERCEL_PREVIEWS = false; // set to true if you want *.vercel.app previews auto-allowed
+const ALLOW_VERCEL_PREVIEWS = false;
 
 const FISCAL_MONTHS = [
   "April","May","June","July","August","September",
@@ -66,6 +66,7 @@ const _ensure84OnDoc = doc => {
 };
 const _fiscalStartYear = (m, y) =>
   ["January", "February", "March"].includes(m) ? +y - 1 : +y;
+
 function _fiscalWindow(toMonth, toYear) {
   const startY = _fiscalStartYear(toMonth, toYear);
   const window = [];
@@ -81,6 +82,7 @@ function _fiscalWindow(toMonth, toYear) {
   }
   return window;
 }
+
 function normalizeMonth(m = "") {
   const s = lowerSan(m);
   const map = {
@@ -109,6 +111,31 @@ const ReportSchema = new mongoose.Schema(
 ReportSchema.index({ district: 1, institution: 1, month: 1, year: 1 }, { unique: true });
 const Report = mongoose.model("Report", ReportSchema);
 
+/* ======================= NEW — Amblyopia Schema ======================= */
+const AmblyopiaSchema = new mongoose.Schema(
+  {
+    patientId: String,
+    age: String,
+    sex: String,
+    unaidedRE: String,
+    unaidedLE: String,
+    bcvaRE: String,
+    bcvaLE: String,
+    type: String,
+    degree: String,
+    treatment: String,
+    outcome: String,
+    remarks: String,
+    district: String,
+    institution: String,
+    examiner: String,
+    date: String,
+  },
+  { timestamps: true }
+);
+const Amblyopia =
+  mongoose.models.Amblyopia || mongoose.model("Amblyopia", AmblyopiaSchema);
+
 /* ======================= Express App ======================= */
 const app = express();
 let dbReady = false;
@@ -126,6 +153,7 @@ function isAllowedOrigin(origin) {
   }
   return false;
 }
+
 let corsOptions;
 if (process.env.NODE_ENV !== "production") {
   console.log("🔓 Local dev mode: allowing all origins");
@@ -136,8 +164,8 @@ if (process.env.NODE_ENV !== "production") {
       if (isAllowedOrigin(origin)) return cb(null, true);
       return cb(new Error(`CORS blocked for origin: ${origin}`), false);
     },
-    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET","HEAD","POST","PUT","PATCH","DELETE","OPTIONS"],
+    allowedHeaders: ["Content-Type","Authorization"],
     credentials: false,
     maxAge: 86400,
   };
@@ -145,7 +173,6 @@ if (process.env.NODE_ENV !== "production") {
 app.use(cors(corsOptions));
 app.options(/^\/api\/.*$/, cors(corsOptions));
 app.use((req, res, next) => { res.header("Vary", "Origin"); next(); });
-/* ---------- END CORS BLOCK ---------- */
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -164,8 +191,47 @@ app.get("/api/health", (req, res) =>
   res.json({ ok: true, startedAt, version: "v9-autoCORS" })
 );
 
-/* ======================= Your existing /api routes go here ======================= */
-/* keep /api/reports, /api/district-institution-report, /api/institution-fy-cumulative unchanged */
+/* ======================= EXISTING REPORT ROUTES (unchanged) ======================= */
+// Your /api/reports
+// Your /api/district-institution-report
+// Your /api/institution-fy-cumulative
+
+
+/* ======================= NEW — Amblyopia Research ROUTES ======================= */
+
+/* ---- Save Amblyopia Record ---- */
+app.post("/api/amblyopia-research", async (req, res) => {
+  try {
+    const data = req.body;
+
+    if (!data.district || !data.institution) {
+      return res.json({ ok: false, error: "Missing district/institution" });
+    }
+
+    await Amblyopia.create(data);
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("❌ Amblyopia save error:", e);
+    res.json({ ok: false, error: "server_error" });
+  }
+});
+
+/* ---- Fetch Amblyopia Records ---- */
+app.get("/api/amblyopia-research", async (req, res) => {
+  try {
+    const { district, institution } = req.query;
+
+    const docs = await Amblyopia.find({ district, institution })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json({ ok: true, docs });
+  } catch (e) {
+    console.error("❌ Amblyopia fetch error:", e);
+    res.json({ ok: false, error: "server_error" });
+  }
+});
 
 /* ======================= 404 ======================= */
 app.use((req, res) =>
@@ -173,7 +239,10 @@ app.use((req, res) =>
 );
 
 /* ======================= Start ======================= */
-app.listen(PORT, "0.0.0.0", () => console.log(`🚀 API listening on port ${PORT}`));
+app.listen(PORT, "0.0.0.0", () =>
+  console.log(`🚀 API listening on port ${PORT}`)
+);
+
 mongoose
   .connect(MONGO_URI, { dbName: "optometry" })
   .then(() => { dbReady = true; console.log("✅ Mongo connected"); })

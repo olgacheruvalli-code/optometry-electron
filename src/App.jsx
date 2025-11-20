@@ -26,7 +26,9 @@ import Register from "./components/Register";
 import { startFlute, stopFlute } from "./utils/sound";
 import EditGate from "./components/EditGate";
 import SearchReports from "./components/SearchReports";
-import AmblyopiaForm from "./components/AmblyopiaForm";
+import AmblyopiaForm from "./components/Amblyopia/AmblyopiaForm";
+import AmblyopiaView from "./components/Amblyopia/AmblyopiaView";
+import AmblyopiaAnalytics from "./components/Amblyopia/AmblyopiaAnalytics";
 import TestVisionCenter from "./components/TestVisionCenter";
 // Wake up Render backend when app starts
 fetch("https://optometry-backend-iiuk.onrender.com/api/ping").catch(() => {});
@@ -995,9 +997,9 @@ function App() {
   // DOC/DC detection
   const instStr = String(user?.institution || "").trim().toLowerCase();
   const userRole =
-    (user?.isDoc || /^doc\s/.test(instStr) || /^dc\s/.test(instStr))
+    user?.isDoc || /^doc\s/.test(instStr) || /^dc\s/.test(instStr)
       ? "DOC"
-      : (user?.role || "USER");
+      : user?.role || "USER";
 
   const qDefs = useMemo(() => orderedQuestions(sections), []);
   const selectedDistrict = user?.district || "Kozhikode";
@@ -1028,13 +1030,21 @@ function App() {
 
   /* ------------------------ Build district institution-wise ------------------------ */
   useEffect(() => {
-    if ((menu !== "district-institutions" && menu !== "print" && menu !== "district-dl-inst") || !month || !year || !selectedDistrict) return;
+    if (
+      (menu !== "district-institutions" &&
+        menu !== "print" &&
+        menu !== "district-dl-inst") ||
+      !month ||
+      !year ||
+      !selectedDistrict
+    )
+      return;
 
     let cancelled = false;
 
     const monthIdx = Object.fromEntries(MONTHS.map((m, i) => [m.toLowerCase(), i]));
     const selIdx = monthIdx[String(month).toLowerCase()];
-  if (selIdx == null || selIdx < 0) return;
+    if (selIdx == null || selIdx < 0) return;
     const fiscalStartYear = selIdx >= 9 ? Number(year) - 1 : Number(year);
 
     const fiscalPairs = [];
@@ -1108,7 +1118,10 @@ function App() {
 
         const displayByLower = new Map();
         (Array.isArray(institutionNamesMemo) ? institutionNamesMemo : [])
-          .filter((s) => s && !/^doc\s/i.test(String(s)) && !/^dc\s/i.test(String(s)))
+          .filter(
+            (s) =>
+              s && !/^doc\s/i.test(String(s)) && !/^dc\s/i.test(String(s))
+          )
           .forEach((s) => {
             const disp = String(s).trim();
             const lower = disp.toLowerCase();
@@ -1139,9 +1152,15 @@ function App() {
         displayByLower.forEach((displayName, lowerName) => {
           const rec =
             byInstAgg.get(displayName) ||
-            { institution: displayName, monthData: mkZeros(), cumulativeData: mkZeros() };
+            {
+              institution: displayName,
+              monthData: mkZeros(),
+              cumulativeData: mkZeros(),
+            };
 
-          const md = latestByInstMonth.get(`${lowerName}|${monthLowerSel}|${yearStrSel}`);
+          const md = latestByInstMonth.get(
+            `${lowerName}|${monthLowerSel}|${yearStrSel}`
+          );
           const monthAns = md?.answers || {};
           for (let i = 0; i < qDefs.length; i++) {
             const k = `q${i + 1}`;
@@ -1170,7 +1189,10 @@ function App() {
           }
         }
         setInstitutionData(list);
-        setDistrictPerformance({ monthData: distMonth, cumulativeData: distCum });
+        setDistrictPerformance({
+          monthData: distMonth,
+          cumulativeData: distCum,
+        });
       } catch (e) {
         console.error("Institution-wise fiscal aggregate failed:", e);
         setInstitutionData([]);
@@ -1204,11 +1226,13 @@ function App() {
     let cancelled = false;
 
     const pickLatest = (arr) =>
-      arr.slice().sort(
-        (a, b) =>
-          new Date(b?.updatedAt || b?.createdAt || 0) -
-          new Date(a?.updatedAt || a?.createdAt || 0)
-      )[0];
+      arr
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(b?.updatedAt || b?.createdAt || 0) -
+            new Date(a?.updatedAt || a?.createdAt || 0)
+        )[0];
 
     (async () => {
       try {
@@ -1220,7 +1244,11 @@ function App() {
 
         const res = await fetch(url);
         const json = await res.json().catch(() => ({}));
-        const items = Array.isArray(json?.docs) ? json.docs : Array.isArray(json) ? json : [];
+        const items = Array.isArray(json?.docs)
+          ? json.docs
+          : Array.isArray(json)
+          ? json
+          : [];
 
         const mine = items.filter(
           (d) =>
@@ -1228,7 +1256,8 @@ function App() {
               String(user?.district || "").trim().toLowerCase() &&
             String(d?.institution || "").trim().toLowerCase() ===
               String(user?.institution || "").trim().toLowerCase() &&
-            String(d?.month || "").trim().toLowerCase() === String(month).toLowerCase() &&
+            String(d?.month || "").trim().toLowerCase() ===
+              String(month).toLowerCase() &&
             String(d?.year || "") === String(year)
         );
 
@@ -1240,7 +1269,9 @@ function App() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [menu, month, year, userRole, user?.district, user?.institution]);
 
   /* =======================  EXCEL DOWNLOADS  ======================= */
@@ -1257,12 +1288,16 @@ function App() {
   };
 
   const toCSV = (rows) =>
-    rows.map((r) =>
-      r.map((v) => {
-        const s = v == null ? "" : String(v);
-        return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-      }).join(",")
-    ).join("\n");
+    rows
+      .map((r) =>
+        r
+          .map((v) => {
+            const s = v == null ? "" : String(v);
+            return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+          })
+          .join(",")
+      )
+      .join("\n");
 
   const downloadInstitutionWiseXLSX = async () => {
     if (!month || !year || !institutionData.length || !Q_ROWS.length) {
@@ -1283,7 +1318,10 @@ function App() {
         const rec = institutionData.find((r) => r.institution === n);
         row.push(rec?.monthData?.[i] ?? 0, rec?.cumulativeData?.[i] ?? 0);
       });
-      row.push(districtPerformance.monthData?.[i] ?? 0, districtPerformance.cumulativeData?.[i] ?? 0);
+      row.push(
+        districtPerformance.monthData?.[i] ?? 0,
+        districtPerformance.cumulativeData?.[i] ?? 0
+      );
       rows.push(row);
     }
 
@@ -1292,11 +1330,16 @@ function App() {
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet(rows);
       XLSX.utils.book_append_sheet(wb, ws, "Institution-wise");
-      XLSX.writeFile(wb, `Institution-wise_${selectedDistrict}_${month}_${year}.xlsx`);
+      XLSX.writeFile(
+        wb,
+        `Institution-wise_${selectedDistrict}_${month}_${year}.xlsx`
+      );
     } catch (e) {
       console.warn("xlsx not available, fallback CSV:", e);
-      saveBlob(new Blob([toCSV(rows)], { type: "text/csv;charset=utf-8" }),
-        `Institution-wise_${selectedDistrict}_${month}_${year}.csv`);
+      saveBlob(
+        new Blob([toCSV(rows)], { type: "text/csv;charset=utf-8" }),
+        `Institution-wise_${selectedDistrict}_${month}_${year}.csv`
+      );
     }
   };
 
@@ -1308,14 +1351,20 @@ function App() {
 
     const res = await fetch(url);
     const json = await res.json().catch(() => ({}));
-    const list = Array.isArray(json?.docs) ? json.docs : Array.isArray(json) ? json : [];
+    const list = Array.isArray(json?.docs)
+      ? json.docs
+      : Array.isArray(json)
+      ? json
+      : [];
 
     const hydrated = await Promise.all(
       list.map(async (d) => {
         try {
           const id = d?._id || d?.id;
           if (!id) return d;
-          const r2 = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(id)}`);
+          const r2 = await fetch(
+            `${API_BASE}/api/reports/${encodeURIComponent(id)}`
+          );
           const j2 = await r2.json().catch(() => ({}));
           return j2?.doc || j2 || d;
         } catch {
@@ -1337,9 +1386,12 @@ function App() {
       return out;
     });
   };
+
   const unionKeys = (rows) => {
     const set = new Set();
-    rows.forEach((r) => Object.keys(r || {}).forEach((k) => set.add(k)));
+    rows.forEach((r) =>
+      Object.keys(r || {}).forEach((k) => set.add(k))
+    );
     return Array.from(set);
   };
 
@@ -1357,38 +1409,75 @@ function App() {
         const inst = String(d?.institution || "").trim();
         if (!inst || /^doc\s/i.test(inst) || /^dc\s/i.test(inst)) return;
 
-        const eb = normalizeArray(d?.eyeBank || d?.eyebank || d?.eye_bank || []);
+        const eb = normalizeArray(
+          d?.eyeBank || d?.eyebank || d?.eye_bank || []
+        );
         eb.forEach((row) => ebRows.push({ Institution: inst, ...row }));
 
-        const vc = normalizeArray(d?.visionCenter || d?.visioncentre || d?.vision_centre || []);
+        const vc = normalizeArray(
+          d?.visionCenter || d?.visioncentre || d?.vision_centre || []
+        );
         vc.forEach((row) => vcRows.push({ Institution: inst, ...row }));
       });
 
-      const ebKeys = ["Institution", ...unionKeys(ebRows).filter((k) => k !== "Institution")];
-      const vcKeys = ["Institution", ...unionKeys(vcRows).filter((k) => k !== "Institution")];
+      const ebKeys = [
+        "Institution",
+        ...unionKeys(ebRows).filter((k) => k !== "Institution"),
+      ];
+      const vcKeys = [
+        "Institution",
+        ...unionKeys(vcRows).filter((k) => k !== "Institution"),
+      ];
 
-      const ebAOA = [ebKeys, ...ebRows.map((r) => ebKeys.map((k) => r?.[k] ?? ""))];
-      const vcAOA = [vcKeys, ...vcRows.map((r) => vcKeys.map((k) => r?.[k] ?? ""))];
+      const ebAOA = [
+        ebKeys,
+        ...ebRows.map((r) => ebKeys.map((k) => r?.[k] ?? "")),
+      ];
+      const vcAOA = [
+        vcKeys,
+        ...vcRows.map((r) => vcKeys.map((k) => r?.[k] ?? "")),
+      ];
 
       try {
         const XLSX = await import("xlsx");
         const wb = XLSX.utils.book_new();
-        if (ebRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ebAOA), "EyeBank");
-        if (vcRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(vcAOA), "VisionCenter");
+        if (ebRows.length)
+          XLSX.utils.book_append_sheet(
+            wb,
+            XLSX.utils.aoa_to_sheet(ebAOA),
+            "EyeBank"
+          );
+        if (vcRows.length)
+          XLSX.utils.book_append_sheet(
+            wb,
+            XLSX.utils.aoa_to_sheet(vcAOA),
+            "VisionCenter"
+          );
         if (!ebRows.length && !vcRows.length) {
           alert("No Eye Bank / Vision Center data for this month.");
           return;
         }
-        XLSX.writeFile(wb, `EB_VC_${selectedDistrict}_${month}_${year}.xlsx`);
+        XLSX.writeFile(
+          wb,
+          `EB_VC_${selectedDistrict}_${month}_${year}.xlsx`
+        );
       } catch (e) {
         console.warn("xlsx not available, fallback CSV:", e);
         if (ebRows.length) {
-          saveBlob(new Blob([toCSV(ebAOA)], { type: "text/csv;charset=utf-8" }),
-            `EyeBank_${selectedDistrict}_${month}_${year}.csv`);
+          saveBlob(
+            new Blob([toCSV(ebAOA)], {
+              type: "text/csv;charset=utf-8",
+            }),
+            `EyeBank_${selectedDistrict}_${month}_${year}.csv`
+          );
         }
         if (vcRows.length) {
-          saveBlob(new Blob([toCSV(vcAOA)], { type: "text/csv;charset=utf-8" }),
-            `VisionCenter_${selectedDistrict}_${month}_${year}.csv`);
+          saveBlob(
+            new Blob([toCSV(vcAOA)], {
+              type: "text/csv;charset=utf-8",
+            }),
+            `VisionCenter_${selectedDistrict}_${month}_${year}.csv`
+          );
         }
         if (!ebRows.length && !vcRows.length) {
           alert("No Eye Bank / Vision Center data for this month.");
@@ -1437,6 +1526,10 @@ function App() {
 
   const viewerInstitution = userRole === "DOC" ? undefined : user?.institution || "";
 
+  // DEBUG — remove later
+  console.log("ACTIVE MENU =", menu);
+  window.DEBUG_MENU = menu;
+
   return (
     <div className="min-h-screen bg-gray-100 pt-[80px]">
       <div className="no-print">
@@ -1480,16 +1573,28 @@ function App() {
         {menu === "view" && (
           <div className="p-4 font-serif text-[12pt]">
             <div className="flex justify-center gap-4 mb-4">
-              <select className="border p-2 rounded" value={month} onChange={(e) => setMonth(e.target.value)}>
+              <select
+                className="border p-2 rounded"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+              >
                 <option value="">Month</option>
                 {MONTHS.map((m) => (
-                  <option key={m} value={m}>{m}</option>
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
                 ))}
               </select>
-              <select className="border p-2 rounded" value={year} onChange={(e) => setYear(e.target.value)}>
+              <select
+                className="border p-2 rounded"
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+              >
                 <option value="">Year</option>
                 {Array.from({ length: 6 }, (_, i) => 2024 + i).map((y) => (
-                  <option key={y} value={y}>{y}</option>
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
                 ))}
               </select>
             </div>
@@ -1509,18 +1614,41 @@ function App() {
             </div>
 
             {currentReport && (
-              <ViewReports reportData={currentReport} month={currentReport.month} year={currentReport.year} />
+              <ViewReports
+                reportData={currentReport}
+                month={currentReport.month}
+                year={currentReport.year}
+              />
             )}
           </div>
         )}
-        {menu === "amblyopia" && <AmblyopiaForm user={user} />}
 
+        {/* --------------------- Research → Amblyopia --------------------- */}
+
+        {/* 1. Amblyopia ENTRY form */}
+        {menu === "research-amblyopia-entry" && (
+          <AmblyopiaForm user={user} />
+        )}
+
+        {/* 2. View saved Amblyopia records */}
+        {menu === "research-amblyopia-view" && (
+          <AmblyopiaView user={user} />
+        )}
+
+        {/* 3. Amblyopia Analytics */}
+        {menu === "research-amblyopia-analytics" && (
+          <AmblyopiaAnalytics user={user} />
+        )}
 
         {/* District → Institution-wise (table) */}
         {menu === "district-institutions" && (
           <>
-            <MonthYearSelector month={month} year={year} setMonth={setMonth} setYear={setYear} />
-            {/* ⛔️ Removed the two old download buttons here */}
+            <MonthYearSelector
+              month={month}
+              year={year}
+              setMonth={setMonth}
+              setYear={setYear}
+            />
             {month && year ? (
               <ViewInstitutionWiseReport
                 questions={Q_ROWS.map((q) => q.label)}
@@ -1532,7 +1660,8 @@ function App() {
               />
             ) : (
               <div className="text-center text-gray-600 mt-6 no-print">
-                Please select both <b>Month</b> and <b>Year</b> to view institution-wise report.
+                Please select both <b>Month</b> and <b>Year</b> to view institution-wise
+                report.
               </div>
             )}
           </>
@@ -1541,7 +1670,12 @@ function App() {
         {/* Submenu: Download Institution-wise */}
         {menu === "district-dl-inst" && (
           <>
-            <MonthYearSelector month={month} year={year} setMonth={setMonth} setYear={setYear} />
+            <MonthYearSelector
+              month={month}
+              year={year}
+              setMonth={setMonth}
+              setYear={setYear}
+            />
             <div className="no-print flex justify-center mt-3">
               <button
                 className="px-5 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
@@ -1560,7 +1694,12 @@ function App() {
         {/* Submenu: Download Eye Bank & VC */}
         {menu === "district-dl-ebvc" && (
           <>
-            <MonthYearSelector month={month} year={year} setMonth={setMonth} setYear={setYear} />
+            <MonthYearSelector
+              month={month}
+              year={year}
+              setMonth={setMonth}
+              setYear={setYear}
+            />
             <div className="no-print flex justify-center mt-3">
               <button
                 className="px-5 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
@@ -1579,7 +1718,12 @@ function App() {
         {/* District Summary Tables */}
         {menu === "district-tables" && (
           <>
-            <MonthYearSelector month={month} year={year} setMonth={setMonth} setYear={setYear} />
+            <MonthYearSelector
+              month={month}
+              year={year}
+              setMonth={setMonth}
+              setYear={setYear}
+            />
             {month && year ? (
               <ViewDistrictTables
                 user={user}
@@ -1601,16 +1745,28 @@ function App() {
         {menu === "print" && (
           <>
             <div className="flex justify-center gap-4 mb-4 no-print">
-              <select className="border p-2 rounded" value={month} onChange={(e) => setMonth(e.target.value)}>
+              <select
+                className="border p-2 rounded"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+              >
                 <option value="">Month</option>
                 {MONTHS.map((m) => (
-                  <option key={m} value={m}>{m}</option>
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
                 ))}
               </select>
-              <select className="border p-2 rounded" value={year} onChange={(e) => setYear(e.target.value)}>
+              <select
+                className="border p-2 rounded"
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+              >
                 <option value="">Year</option>
                 {Array.from({ length: 6 }, (_, i) => 2024 + i).map((y) => (
-                  <option key={y} value={y}>{y}</option>
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
                 ))}
               </select>
             </div>
@@ -1623,7 +1779,11 @@ function App() {
                 >
                   🖨️ Print (A4 portrait)
                 </button>
-                <ViewReports reportData={currentReport} month={currentReport.month} year={currentReport.year} />
+                <ViewReports
+                  reportData={currentReport}
+                  month={currentReport.month}
+                  year={currentReport.year}
+                />
               </>
             )}
 
@@ -1654,24 +1814,28 @@ function App() {
           </>
         )}
 
+        {/* Edit Reports */}
         {menu === "edit" && (
           <EditGate user={user}>
             <EditReport user={user} />
           </EditGate>
         )}
+
+        {/* Search Reports */}
         {menu === "search" && (
-  <SearchReports
-    user={user}
-    onOpen={(report) => {
-      setCurrent(report || null);
-      setMenu("view");   // re-use the existing viewer
-    }}
-  />
-)}
+          <SearchReports
+            user={user}
+            onOpen={(report) => {
+              setCurrent(report || null);
+              setMenu("view"); // re-use the existing viewer
+            }}
+          />
+        )}
 
-
+        {/* Vision Center test */}
         {menu === "test-vc" && <TestVisionCenter />}
 
+        {/* Default home message */}
         {menu === "" && (
           <div className="text-center text-gray-500 mt-10 text-lg italic">
             🔹 Please select a menu option to begin.
@@ -1683,4 +1847,3 @@ function App() {
 }
 
 export default App;
-

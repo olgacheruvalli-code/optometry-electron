@@ -5,6 +5,33 @@ import rightImage from "../assets/optometrist-right.png";
 
 const REQUIRED_PASSWORD = "123";
 
+// ⚡ Universal fetch with timeout
+async function fetchWithTimeout(url, options = {}, timeout = 4000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(id);
+    return res;
+  } catch (err) {
+    clearTimeout(id);
+    throw err;
+  }
+}
+
+// ⚡ Backend warm-up function (fixes slow login)
+async function warmUpBackend() {
+  try {
+    await fetchWithTimeout(`${API_BASE}/api/ping`, {}, 3000);
+  } catch {
+    /* ignore ping errors — only to wake backend */
+  }
+}
+
 export default function Login({ onLogin, onShowRegister }) {
   const [district, setDistrict] = useState("");
   const [institution, setInstitution] = useState("");
@@ -32,6 +59,7 @@ export default function Login({ onLogin, onShowRegister }) {
     return out;
   }, [district]);
 
+  // ⚡ FAST, RETRY-ENABLED LOGIN HANDLER
   const handleLogin = async () => {
     if (!district || !institution || !password) {
       setError("Please select district, institution, and enter password.");
@@ -45,48 +73,72 @@ export default function Login({ onLogin, onShowRegister }) {
     setError("");
     setIsLoading(true);
 
-    const payload = { institution: institution.trim(), district: district.trim(), password };
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 12000);
+    // 1️⃣ Wake backend BEFORE login
+    await warmUpBackend();
 
-    try {
-      const res = await fetch(`${API_BASE}/api/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
+    const payload = {
+      institution: institution.trim(),
+      district: district.trim(),
+      password,
+    };
 
-      const raw = await res.text();
-      let data = {};
+    // 2️⃣ Try login 3 TIMES maximum
+    const attempts = [4000, 4000, 5000]; // timeouts per attempt
+    for (let i = 0; i < attempts.length; i++) {
       try {
-        data = raw ? JSON.parse(raw) : {};
-      } catch {}
+        const res = await fetchWithTimeout(
+          `${API_BASE}/api/login`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          },
+          attempts[i]
+        );
 
-      if (!res.ok) {
-        const msg = data?.error || raw || `HTTP ${res.status} ${res.statusText || ""}`.trim();
-        throw new Error(msg);
+        const raw = await res.text();
+        let data = {};
+        try {
+          data = raw ? JSON.parse(raw) : {};
+        } catch {}
+
+        if (!res.ok) {
+          const msg =
+            data?.error ||
+            raw ||
+            `HTTP ${res.status} ${res.statusText || ""}`.trim();
+          throw new Error(msg);
+        }
+
+        const user = data.user || data;
+        if (!user?.district || !user?.institution) {
+          throw new Error("Malformed login response from server.");
+        }
+
+        // SUCCESS → LOGIN DONE
+        onLogin(user);
+        setIsLoading(false);
+        return;
+      } catch (err) {
+        console.warn(`Login attempt ${i + 1} failed`, err);
+
+        if (i === attempts.length - 1) {
+          // LAST attempt failed → show message
+          setError(
+            err?.name === "AbortError"
+              ? "Login request timed out. Please try again."
+              : err?.message || "Login failed."
+          );
+          setIsLoading(false);
+        } else {
+          // wait 500ms then retry
+          await new Promise((r) => setTimeout(r, 500));
+        }
       }
-
-      const user = data.user || data;
-      if (!user || !user.district || !user.institution) {
-        throw new Error("Malformed login response from server.");
-      }
-
-      onLogin(user);
-    } catch (err) {
-      setError(
-        err?.name === "AbortError"
-          ? "Login request timed out. Please try again."
-          : err?.message || "Login failed."
-      );
-      console.error("Login error:", err);
-    } finally {
-      clearTimeout(t);
-      setIsLoading(false);
     }
   };
 
+  // Guest login
   const handleGuestLogin = () => {
     onLogin({ district: "Guest", institution: "Guest User", isGuest: true });
   };
@@ -94,20 +146,20 @@ export default function Login({ onLogin, onShowRegister }) {
   return (
     <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-b from-[#e9f1f8] to-[#f7fafc] font-serif p-4">
       <div className="flex flex-col md:flex-row bg-white rounded-2xl shadow-xl overflow-hidden w-full max-w-5xl border border-gray-100">
-        {/* Left: Form */}
+        
+        {/* Left: Login Form */}
         <div className="w-full md:w-1/2 p-6 md:p-8 space-y-4 bg-white">
           <h2 className="text-2xl md:text-3xl font-bold text-center text-[#134074]">
             Optometry Monthly Reporting
           </h2>
 
-          {/* API shown only in dev mode */}
           {process.env.NODE_ENV === "development" && (
             <div className="text-[10px] text-gray-500 text-center break-all">
               API: {API_BASE}
             </div>
           )}
 
-          {/* District */}
+          {/* DISTRICT */}
           <label className="block text-sm text-gray-700">District</label>
           <select
             value={district}
@@ -120,13 +172,11 @@ export default function Login({ onLogin, onShowRegister }) {
           >
             <option value="">Select District</option>
             {Object.keys(districtInstitutions).map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
+              <option key={d} value={d}>{d}</option>
             ))}
           </select>
 
-          {/* Institution */}
+          {/* INSTITUTION */}
           <label className="block text-sm text-gray-700">Institution</label>
           <select
             value={institution}
@@ -139,30 +189,25 @@ export default function Login({ onLogin, onShowRegister }) {
           >
             <option value="">Select Institution</option>
             {institutionOptions.map((i) => (
-              <option key={i} value={i}>
-                {i}
-              </option>
+              <option key={i} value={i}>{i}</option>
             ))}
           </select>
 
-          {/* Password */}
+          {/* PASSWORD */}
           <label className="block text-sm text-gray-700">Password</label>
           <input
             type="password"
             value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              setError("");
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleLogin();
-            }}
+            onChange={(e) => { setPassword(e.target.value); setError(""); }}
+            onKeyDown={(e) => e.key === "Enter" && handleLogin()}
             className="w-full px-3 py-2 rounded bg-gray-100 text-gray-800 focus:outline-none"
             autoComplete="current-password"
           />
 
+          {/* Error */}
           {error && <div className="text-sm text-red-600 text-center">{error}</div>}
 
+          {/* LOGIN BUTTON */}
           <button
             onClick={handleLogin}
             disabled={!district || !institution || !password || isLoading}
@@ -171,11 +216,11 @@ export default function Login({ onLogin, onShowRegister }) {
             {isLoading ? "Logging in..." : "Login"}
           </button>
 
+          {/* REGISTER */}
           <div className="text-center mt-2">
             <button
               onClick={onShowRegister}
               className="text-sm text-blue-600 hover:underline"
-              type="button"
             >
               New Optometrist? Register here
             </button>
@@ -183,29 +228,24 @@ export default function Login({ onLogin, onShowRegister }) {
 
           <hr className="my-2" />
 
-          {/* Guest Login */}
+          {/* GUEST LOGIN */}
           <div className="text-center">
             <button
               onClick={handleGuestLogin}
               className="text-sm text-gray-700 border border-gray-400 px-4 py-2 rounded hover:bg-gray-100"
-              type="button"
             >
               👁️ Continue as Guest
             </button>
           </div>
         </div>
 
-        {/* Right: Image */}
+        {/* RIGHT IMAGE */}
         <div className="w-full md:w-1/2 bg-[#0b2e59]/5">
-          <img
-            src={rightImage}
-            alt="Optometrist examining patient"
-            className="object-cover w-full h-full"
-          />
+          <img src={rightImage} alt="Optometrist" className="object-cover w-full h-full" />
         </div>
       </div>
 
-      {/* ✅ Simple loader overlay (added only this) */}
+      {/* LOADER OVERLAY */}
       {isLoading && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="flex flex-col items-center">
