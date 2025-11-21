@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import API_BASE from "../../apiBase";
+import API_BASE from "../../apiBase.js";
 
 export default function AmblyopiaView({ user }) {
   const [records, setRecords] = useState([]);

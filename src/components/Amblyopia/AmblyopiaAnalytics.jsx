@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import API_BASE from "../../apiBase";
+import API_BASE from "../../apiBase.js";
+
 import { Bar, Pie, Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
