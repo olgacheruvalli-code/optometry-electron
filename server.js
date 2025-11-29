@@ -5,7 +5,7 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 
 /* ======================= Config ======================= */
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5050; // <-- make sure this matches your local port
 const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/optometry";
 
 const ORIGINS_RAW = process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || "";
@@ -111,7 +111,7 @@ const ReportSchema = new mongoose.Schema(
 ReportSchema.index({ district: 1, institution: 1, month: 1, year: 1 }, { unique: true });
 const Report = mongoose.model("Report", ReportSchema);
 
-/* ======================= NEW — Amblyopia Schema ======================= */
+/* ======================= Amblyopia Schema ======================= */
 const AmblyopiaSchema = new mongoose.Schema(
   {
     patientId: String,
@@ -179,7 +179,10 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
   if (req.method === "OPTIONS") return res.sendStatus(204);
-  const pass = ["/api/health"];
+
+  // allow these even if dbReady is false
+  const pass = ["/api/health", "/api/ping", "/api/login"];
+
   if (!dbReady && req.path.startsWith("/api") && !pass.includes(req.path)) {
     return res.status(503).json({ ok: false, error: "db_not_ready" });
   }
@@ -191,15 +194,37 @@ app.get("/api/health", (req, res) =>
   res.json({ ok: true, startedAt, version: "v9-autoCORS" })
 );
 
-/* ======================= EXISTING REPORT ROUTES (unchanged) ======================= */
-// Your /api/reports
-// Your /api/district-institution-report
-// Your /api/institution-fy-cumulative
+app.get("/api/ping", (req, res) =>
+  res.json({ ok: true, msg: "backend alive", db: dbReady })
+);
 
+/* ======================= SIMPLE LOCAL LOGIN (DEV ONLY) ======================= */
+/* This is ONLY for local testing on http://localhost:5050.
+   It lets you log in without real DB users.
+   When you deploy to Render, you can replace this with your real login logic. */
+app.post("/api/login", (req, res) => {
+  const { username, district, institution } = req.body || {};
 
-/* ======================= NEW — Amblyopia Research ROUTES ======================= */
+  if (!username) {
+    return res.status(400).json({ ok: false, error: "missing_username" });
+  }
 
-/* ---- Save Amblyopia Record ---- */
+  const role =
+    String(username).toLowerCase().startsWith("dc") ? "DOC" : "OPTOMETRIST";
+
+  return res.json({
+    ok: true,
+    user: {
+      username,
+      district: district || "",
+      institution: institution || "",
+      role,
+      isGuest: false,
+    },
+  });
+});
+
+/* ======================= Amblyopia Research Routes ======================= */
 app.post("/api/amblyopia-research", async (req, res) => {
   try {
     const data = req.body;
@@ -217,7 +242,6 @@ app.post("/api/amblyopia-research", async (req, res) => {
   }
 });
 
-/* ---- Fetch Amblyopia Records ---- */
 app.get("/api/amblyopia-research", async (req, res) => {
   try {
     const { district, institution } = req.query;
@@ -232,6 +256,14 @@ app.get("/api/amblyopia-research", async (req, res) => {
     res.json({ ok: false, error: "server_error" });
   }
 });
+
+/* ======================= (YOUR OTHER REPORT ROUTES GO HERE) ======================= */
+/* e.g.
+   app.get("/api/reports", ...);
+   app.post("/api/reports", ...);
+   app.get("/api/district-institution-report", ...);
+   etc.
+*/
 
 /* ======================= 404 ======================= */
 app.use((req, res) =>

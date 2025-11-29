@@ -76,7 +76,9 @@ export default function Login({ onLogin, onShowRegister }) {
     // 1️⃣ Wake backend BEFORE login
     await warmUpBackend();
 
+    // 🔴 IMPORTANT: include username so backend doesn't say "missing user name"
     const payload = {
+      username: institution.trim(),          // <-- NEW LINE
       institution: institution.trim(),
       district: district.trim(),
       password,

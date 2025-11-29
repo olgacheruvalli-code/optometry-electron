@@ -1,5 +1,6 @@
 // src/components/AmblyopiaForm.jsx
 import React, { useState } from "react";
+import API_BASE from "../../apiBase";   // correct import (file inside src)
 
 export default function AmblyopiaForm({ user }) {
   const [form, setForm] = useState({
@@ -21,7 +22,7 @@ export default function AmblyopiaForm({ user }) {
 
   const handleSubmit = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/amblyopia-research", {
+      const res = await fetch(`${API_BASE}/api/amblyopia-research`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -32,11 +33,12 @@ export default function AmblyopiaForm({ user }) {
           date: new Date().toISOString(),
         }),
       });
+
       const data = await res.json();
       if (data.ok) alert("✅ Record saved successfully");
       else alert("⚠️ Failed to save record");
     } catch (e) {
-      console.error(e);
+      console.error("Amblyopia save failed", e);
       alert("❌ Network or server error");
     }
   };
@@ -76,7 +78,8 @@ export default function AmblyopiaForm({ user }) {
                     <option key={v}>{v}</option>
                   ))}
                 {key === "degree" && ["Mild", "Moderate", "Severe"].map((v) => <option key={v}>{v}</option>)}
-                {key === "outcome" && ["Improved", "Stable", "No improvement"].map((v) => <option key={v}>{v}</option>)}
+                {key === "outcome" &&
+                  ["Improved", "Stable", "No improvement"].map((v) => <option key={v}>{v}</option>)}
               </select>
             ) : (
               <input

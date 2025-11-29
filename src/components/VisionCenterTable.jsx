@@ -103,31 +103,53 @@ export default function VisionCenterTable({
                   ["otherEye", otherEye],
                   ["refractive", refractive],
                   ["spectacles", spectacles],
-                ].map(([key, val]) => (
-                  <td key={key} className="border border-black px-2 py-1">
-                    <input
-                      type="number"
-                      className="w-full text-right outline-none"
-                      value={val}
-                      onChange={(e) => handle(i, key, e.target.value)}
-                      disabled={disabled}
-                    />
-                  </td>
-                ))}
+                ].map(([key, val]) => {
+                  // 🧠 If this cell has never been touched (no value in row),
+                  // show it as blank "" instead of 0 for easier entry.
+                  const displayVal =
+                    r[key] === undefined || r[key] === null || r[key] === ""
+                      ? ""
+                      : val;
+
+                  return (
+                    <td key={key} className="border border-black px-2 py-1">
+                      <input
+                        type="number"
+                        className="w-full text-right outline-none"
+                        value={displayVal}
+                        onChange={(e) => handle(i, key, e.target.value)}
+                        disabled={disabled}
+                      />
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}
 
           <tr className="bg-gray-50 font-semibold">
-            <td className="border border-black px-2 py-1 text-center" colSpan={showInstitution ? 2 : 1}>
+            <td
+              className="border border-black px-2 py-1 text-center"
+              colSpan={showInstitution ? 2 : 1}
+            >
               Total
             </td>
             <td className="border border-black px-2 py-1" />
-            <td className="border border-black px-2 py-1 text-right">{totals.patientsExamined}</td>
-            <td className="border border-black px-2 py-1 text-right">{totals.cataract}</td>
-            <td className="border border-black px-2 py-1 text-right">{totals.otherEye}</td>
-            <td className="border border-black px-2 py-1 text-right">{totals.refractive}</td>
-            <td className="border border-black px-2 py-1 text-right">{totals.spectacles}</td>
+            <td className="border border-black px-2 py-1 text-right">
+              {totals.patientsExamined}
+            </td>
+            <td className="border border-black px-2 py-1 text-right">
+              {totals.cataract}
+            </td>
+            <td className="border border-black px-2 py-1 text-right">
+              {totals.otherEye}
+            </td>
+            <td className="border border-black px-2 py-1 text-right">
+              {totals.refractive}
+            </td>
+            <td className="border border-black px-2 py-1 text-right">
+              {totals.spectacles}
+            </td>
           </tr>
         </tbody>
       </table>

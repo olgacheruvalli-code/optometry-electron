@@ -614,9 +614,15 @@ function ReportEntry({
 
     const pushQ = (q, i, title = "blk") => {
       const id =
-        q?.id || q?.key || q?.code || q?.name || q?.labelKey || q?.field ||
+        q?.id ||
+        q?.key ||
+        q?.code ||
+        q?.name ||
+        q?.labelKey ||
+        q?.field ||
         `q_auto_${String(title).replace(/\s+/g, "_")}_${i + 1}`;
-      const label = q?.label || q?.title || q?.text || q?.name || `Row ${i + 1}`;
+      const label =
+        q?.label || q?.title || q?.text || q?.name || `Row ${i + 1}`;
       out.push({ ...q, id, label });
     };
 
@@ -635,7 +641,11 @@ function ReportEntry({
         (Array.isArray(node.subsections) && node.subsections) ||
         (Array.isArray(node.sections) && node.sections) ||
         null;
-      if (nested) nested.forEach((child, idx) => walk(child, child?.title || `${title}_${idx + 1}`));
+      if (nested) {
+        nested.forEach((child, idx) =>
+          walk(child, child?.title || `${title}_${idx + 1}`)
+        );
+      }
     };
 
     walk(blk);
@@ -664,7 +674,9 @@ function ReportEntry({
   const visionSection = sections.find((s) =>
     (s.title || "").toUpperCase().includes("VISION CENTER")
   );
-  const visionRowsDef = Array.isArray(visionSection?.rows) ? visionSection.rows : [];
+  const visionRowsDef = Array.isArray(visionSection?.rows)
+    ? visionSection.rows
+    : [];
   const [visionCenter, setVisionCenter] = React.useState(
     initialVisionCenter.length
       ? initialVisionCenter
@@ -676,7 +688,10 @@ function ReportEntry({
               .map((k) => [row[k], ""])
           )
         )
-      : [{ centerName: "", patientsExamined: "" }, { centerName: "", patientsExamined: "" }]
+      : [
+          { centerName: "", patientsExamined: "" },
+          { centerName: "", patientsExamined: "" },
+        ]
   );
 
   const [month, setMonth] = React.useState(initialMonth);
@@ -710,7 +725,11 @@ function ReportEntry({
           `&year=${encodeURIComponent(year)}`;
         const res = await fetch(url);
         const json = await res.json().catch(() => ({}));
-        const items = Array.isArray(json?.docs) ? json.docs : Array.isArray(json) ? json : [];
+        const items = Array.isArray(json?.docs)
+          ? json.docs
+          : Array.isArray(json)
+          ? json
+          : [];
         if (!cancelled) setAlreadySubmitted(items.length > 0);
       } catch {
         /* ignore */
@@ -724,16 +743,23 @@ function ReportEntry({
 
   /* ----------------------------- helpers --------------------------------- */
   const sanitizeTableArray = (arr) =>
-    Array.isArray(arr) ? arr.map((r) => (r && typeof r === "object" ? r : {})) : [];
+    Array.isArray(arr)
+      ? arr.map((r) => (r && typeof r === "object" ? r : {}))
+      : [];
 
   const someRowHasValues = (rows) =>
     Array.isArray(rows) &&
     rows.some((r) =>
       Object.values(r || {}).some(
-        (v) => v !== undefined && v !== null && String(v).trim() !== "" && String(v) !== "0"
+        (v) =>
+          v !== undefined &&
+          v !== null &&
+          String(v).trim() !== "" &&
+          String(v) !== "0"
       )
     );
 
+  // old helper (kept for compatibility; not used now)
   function buildAnswersPartial(answersObj = {}, allSections = []) {
     const known = new Set();
     const flat = [];
@@ -747,7 +773,14 @@ function ReportEntry({
         ? blk.rows
         : [];
       direct.forEach((q) => {
-        const k = q?.id || q?.key || q?.code || q?.name || q?.labelKey || q?.field || null;
+        const k =
+          q?.id ||
+          q?.key ||
+          q?.code ||
+          q?.name ||
+          q?.labelKey ||
+          q?.field ||
+          null;
         if (k) {
           known.add(k);
           flat.push(k);
@@ -767,7 +800,9 @@ function ReportEntry({
     const out = {};
     for (const k of flat) {
       const v = answersObj[k];
-      if (v !== undefined && v !== null && String(v).trim() !== "") out[k] = v;
+      if (v !== undefined && v !== null && String(v).trim() !== "") {
+        out[k] = v;
+      }
     }
     return out;
   }
@@ -790,10 +825,42 @@ function ReportEntry({
     }
   };
 
+  /* --------- Build a stable 84-question order (matches page order) ------- */
+  const qDefs84 = React.useMemo(() => {
+    const all = [];
+    (sections || [])
+      .filter((s) => !s.table)
+      .forEach((s) => {
+        const qs = getQs(s);
+        qs.forEach((q) => all.push(q));
+      });
+    return all.slice(0, 84);
+  }, []);
+
+  // Map current answers to q1..q84, filling missing with "0"
+  const buildFullAnswers84 = () => {
+    const out = {};
+    for (let i = 0; i < 84; i++) {
+      const qDef = qDefs84[i];
+      const keyId = qDef?.id;
+      const raw = keyId ? answers[keyId] : undefined;
+      const clean =
+        raw === undefined || raw === null || String(raw).trim() === ""
+          ? "0"
+          : String(raw).trim();
+      out[`q${i + 1}`] = clean;
+    }
+    return out;
+  };
+
   /* ------------------------------ save ----------------------------------- */
   const confirm = async () => {
     if (!month || !year) {
       alert("Please select both Month and Year before saving.");
+      return;
+    }
+    if (!user?.district || !user?.institution) {
+      alert("Missing user district/institution. Please login again.");
       return;
     }
     if (alreadySubmitted) {
@@ -801,25 +868,35 @@ function ReportEntry({
       return;
     }
 
-    const answersPartial = buildAnswersPartial(answers, sections);
+    // ✅ Build full 84 answers (q1..q84) with "0" for empty fields
+    const answersFull = buildFullAnswers84();
+
+    // ✅ Clean tables
     const cleanEyeBank = sanitizeTableArray(eyeBank);
     const cleanVisionCenter = sanitizeTableArray(visionCenter);
 
-    const hasAnyValue =
-      Object.keys(answersPartial).length > 0 ||
-      someRowHasValues(cleanEyeBank) ||
-      someRowHasValues(cleanVisionCenter);
+    // ✅ Check if anything non-zero was entered
+    const anyAnswer = Object.values(answersFull).some(
+      (v) => String(v) !== "0"
+    );
+    const hasEyeBank = someRowHasValues(cleanEyeBank);
+    const hasVisionCenter = someRowHasValues(cleanVisionCenter);
 
     const payload = {
       district: user.district,
       institution: user.institution,
       month,
       year,
-      answers: answersPartial,
+      answers: answersFull,
       eyeBank: cleanEyeBank,
       visionCenter: cleanVisionCenter,
     };
-    if (!hasAnyValue) payload.forceSave = true;
+
+    if (!anyAnswer && !hasEyeBank && !hasVisionCenter) {
+      payload.forceSave = true;
+    }
+
+    console.log("REPORT SAVE PAYLOAD", payload);
 
     try {
       const res = await fetch(`${API_BASE}/api/reports`, {
@@ -827,13 +904,28 @@ function ReportEntry({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json().catch(() => ({}));
+
+      const raw = await res.text();
+      let data = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        // ignore JSON parse error, use raw if needed
+      }
+
       if (!res.ok || data?.ok === false) {
-        alert(`❌ Save failed: ${data?.error || res.status}`);
+        const msg =
+          data?.error ||
+          raw ||
+          `HTTP ${res.status} ${res.statusText || ""}`.trim();
+        alert(`❌ Save failed: ${msg}`);
         return;
       }
+
       alert(`✅ Saved for ${user.institution}, ${user.district}`);
       stopFx();
+      setMode("edit");
+      setAlreadySubmitted(true);
     } catch (err) {
       console.error("Save error:", err);
       alert("❌ Unexpected error during save. See console.");
@@ -845,8 +937,13 @@ function ReportEntry({
     <div className="a4-wrapper font-serif" onWheel={handleWheelBlock}>
       <style>{`
         .a4-wrapper input[type="number"]::-webkit-outer-spin-button,
-        .a4-wrapper input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        .a4-wrapper input[type="number"] { -moz-appearance: textfield; }
+        .a4-wrapper input[type="number"]::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        .a4-wrapper input[type="number"] {
+          -moz-appearance: textfield;
+        }
       `}</style>
 
       <div className="p-6 bg-white rounded-xl shadow-lg">
@@ -854,7 +951,8 @@ function ReportEntry({
           REPORT DATA ENTRY
         </h2>
         <div className="text-center text-[#016eaa] mb-2">
-          District: <b>{user.district}</b> | Institution: <b>{user.institution}</b>
+          District: <b>{user.district}</b> | Institution:{" "}
+          <b>{user.institution}</b>
         </div>
 
         <div className="flex justify-end mb-2">
@@ -869,7 +967,8 @@ function ReportEntry({
 
         {alreadySubmitted && (
           <div className="mb-4 px-3 py-2 rounded bg-yellow-100 text-yellow-900 border border-yellow-300">
-            ⚠️ A report for <b>{month}</b> <b>{year}</b> already exists for your institution.
+            ⚠️ A report for <b>{month}</b> <b>{year}</b> already exists for your
+            institution.
           </div>
         )}
 
@@ -882,7 +981,9 @@ function ReportEntry({
             return (
               <div key={s.title || Math.random()} className="mb-12">
                 {s.title && (
-                  <h4 className="text-lg font-bold text-[#017d8a] mb-4">{s.title}</h4>
+                  <h4 className="text-lg font-bold text-[#017d8a] mb-4">
+                    {s.title}
+                  </h4>
                 )}
                 <div className="flex flex-col gap-6">
                   {qs.map((q) => (
@@ -890,7 +991,9 @@ function ReportEntry({
                       <QuestionInput
                         q={q}
                         value={answers[q.id] || ""}
-                        onChange={(val) => setAnswers((a) => ({ ...a, [q.id]: val }))}
+                        onChange={(val) =>
+                          setAnswers((a) => ({ ...a, [q.id]: val }))
+                        }
                         disabled={disabled}
                       />
                     </div>
@@ -902,7 +1005,9 @@ function ReportEntry({
 
         {/* Eye Bank */}
         <div className="mb-12">
-          <h4 className="text-lg font-bold text-[#017d8a] mb-4">III. EYE BANK PERFORMANCE</h4>
+          <h4 className="text-lg font-bold text-[#017d8a] mb-4">
+            III. EYE BANK PERFORMANCE
+          </h4>
           <EyeBankTable
             data={eyeBank}
             onChange={handleTableChange(setEyeBank)}
@@ -912,7 +1017,9 @@ function ReportEntry({
 
         {/* Vision Center */}
         <div className="mb-12">
-          <h4 className="text-lg font-bold text-[#017d8a] mb-4">V. VISION CENTER</h4>
+          <h4 className="text-lg font-bold text-[#017d8a] mb-4">
+            V. VISION CENTER
+          </h4>
           <VisionCenterTable
             data={visionCenter}
             onChange={handleTableChange(setVisionCenter)}
@@ -965,6 +1072,7 @@ function ReportEntry({
     </div>
   );
 }
+
 /* ======================= /ReportEntry (inline) ======================= */
 
 
