@@ -227,6 +227,82 @@ function ViewReports({ reportData, month, year }) {
   const baseDistrict = reportData?.district || "";
   const baseInstitution = reportData?.institution || "";
 
+  /* ---------- SAME 84-QUESTION ORDER AS ReportEntry ---------- */
+
+  function flattenQuestionsFromBlock(blk) {
+    const out = [];
+
+    const pushQ = (q, i, title = "blk") => {
+      const id =
+        q?.id ||
+        q?.key ||
+        q?.code ||
+        q?.name ||
+        q?.labelKey ||
+        q?.field ||
+        `q_auto_${String(title).replace(/\s+/g, "_")}_${i + 1}`;
+      const label =
+        q?.label || q?.title || q?.text || q?.name || `Row ${i + 1}`;
+      out.push({ ...q, id, label });
+    };
+
+    const walk = (node, title = node?.title || "blk") => {
+      if (!node || typeof node !== "object") return;
+
+      const direct = Array.isArray(node.questions)
+        ? node.questions
+        : Array.isArray(node.rows)
+        ? node.rows
+        : [];
+      direct.forEach((q, i) => pushQ(q, i, title));
+
+      const nested =
+        (Array.isArray(node.items) && node.items) ||
+        (Array.isArray(node.subsections) && node.subsections) ||
+        (Array.isArray(node.sections) && node.sections) ||
+        null;
+      if (nested) {
+        nested.forEach((child, idx) =>
+          walk(child, child?.title || `${title}_${idx + 1}`)
+        );
+      }
+    };
+
+    walk(blk);
+    return out;
+  }
+
+  const getQs = (blk) => flattenQuestionsFromBlock(blk);
+
+  // same 84-question sequence as we used in ReportEntry → buildFullAnswers84
+  const qDefs84 = useMemo(() => {
+    const all = [];
+    (sections || [])
+      .filter((s) => !s.table)
+      .forEach((s) => {
+        const qs = getQs(s);
+        qs.forEach((q) => all.push(q));
+      });
+    return all.slice(0, 84);
+  }, []);
+
+  const labelNorm = (s) =>
+    String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
+
+  // maps: id → qX and label → qX
+  const { idToKey, labelToKey } = useMemo(() => {
+    const idMap = {};
+    const labelMap = {};
+    qDefs84.forEach((qDef, idx) => {
+      const key = `q${idx + 1}`;
+      const id = qDef?.id;
+      const lbl = qDef?.label;
+      if (id) idMap[id] = key;
+      if (lbl) labelMap[labelNorm(lbl)] = key;
+    });
+    return { idToKey: idMap, labelToKey: labelMap };
+  }, [qDefs84]);
+
   /* 1) Fetch the selected month’s document strictly by (D,I,M,Y) */
   useEffect(() => {
     if (!baseDistrict || !baseInstitution || !month || !year) return;
@@ -262,7 +338,6 @@ function ViewReports({ reportData, month, year }) {
         );
 
         if (!filtered.length) {
-          // defensive fallback: list-all for D+I and then filter
           const rAll = await fetch(
             `${API_BASE}/api/reports?district=${encodeURIComponent(
               baseDistrict
@@ -311,7 +386,7 @@ function ViewReports({ reportData, month, year }) {
       const pairs = [];
 
       if (idx <= 2) {
-        // Jan/Feb/Mar of selYear → Apr..Dec of (selYear-1) + Jan..selected of selYear
+        // Jan/Feb/Mar: Apr–Dec (prev year) + Jan–selected (current year)
         for (let i = calIndex["april"]; i <= calIndex["december"]; i++) {
           pairs.push({ month: CAL_MONTHS[i], year: String(selYear - 1) });
         }
@@ -319,7 +394,7 @@ function ViewReports({ reportData, month, year }) {
           pairs.push({ month: CAL_MONTHS[i], year: String(selYear) });
         }
       } else {
-        // Apr..Dec of selYear → Apr..selected of selYear
+        // Apr–Dec: Apr–selected (same year)
         for (let i = calIndex["april"]; i <= idx; i++) {
           pairs.push({ month: CAL_MONTHS[i], year: String(selYear) });
         }
@@ -340,24 +415,23 @@ function ViewReports({ reportData, month, year }) {
 
     (async () => {
       try {
-        // Get all docs for this District + Institution (single call preferred)
         let list = await fetchList(
           `${API_BASE}/api/reports?district=${encodeURIComponent(
             baseDistrict
           )}&institution=${encodeURIComponent(baseInstitution)}`
         );
 
-        // Fallback: /api/reports (unfiltered) if needed
         if (!Array.isArray(list) || list.length < 2) {
           const all = await fetchList(`${API_BASE}/api/reports`);
           list = Array.isArray(all)
             ? all.filter(
-                (d) => eq(d?.district, baseDistrict) && eq(d?.institution, baseInstitution)
+                (d) =>
+                  eq(d?.district, baseDistrict) &&
+                  eq(d?.institution, baseInstitution)
               )
             : [];
         }
 
-        // Latest per (month,year) for this D+I
         const latestByMY = new Map();
         for (const d of list) {
           if (!eq(d?.district, baseDistrict) || !eq(d?.institution, baseInstitution)) continue;
@@ -372,14 +446,12 @@ function ViewReports({ reportData, month, year }) {
           if (!prev || ts >= prevTs) latestByMY.set(key, d);
         }
 
-        // Keep only months in the fiscal window Apr→selected
         const windowKeys = new Set(
           fiscalWindowPairs(month, String(year)).map(
             (p) => `${norm(normMonth(p.month))}|${String(p.year)}`
           )
         );
 
-        // Sum q1..qN across that window
         const sums = {};
         for (const [key, d] of latestByMY.entries()) {
           if (!windowKeys.has(key)) continue;
@@ -420,43 +492,44 @@ function ViewReports({ reportData, month, year }) {
       ? rows.map((row) => {
           const out = { ...(row || {}) };
           for (const k of Object.keys(out)) {
-            if (/name|centre|center/i.test(k) && (out[k] === 0 || out[k] === "0")) out[k] = "";
+            if (/name|centre|center/i.test(k) && (out[k] === 0 || out[k] === "0"))
+              out[k] = "";
           }
           return out;
         })
       : [];
 
-  // ✅ Eye Bank — include legacy keys so older data appears
   const eyeBankData = normalizeTextNameFields(
     doc?.eyeBank ||
       doc?.eyebank ||
       doc?.eye_bank ||
-      doc?.eyeBankData || // legacy
-      doc?.bank ||        // legacy
-      doc?.eb ||          // legacy
+      doc?.eyeBankData ||
+      doc?.bank ||
+      doc?.eb ||
       []
   );
 
-  // ✅ Vision Centre — include legacy keys so older data appears
   const vcRaw =
-    doc?.visionCenter ||     // current
-    doc?.visioncentre ||     // alt spelling
-    doc?.vision_centre ||    // snake
-    doc?.visionCenterData || // legacy
-    doc?.vcenter ||          // legacy
-    doc?.vc ||               // legacy
-    doc?.vcData ||           // legacy
+    doc?.visionCenter ||
+    doc?.visioncentre ||
+    doc?.vision_centre ||
+    doc?.visionCenterData ||
+    doc?.vcenter ||
+    doc?.vc ||
+    doc?.vcData ||
     [];
 
   const visionCenterData = normalizeTextNameFields(
     Array.isArray(vcRaw)
       ? vcRaw.filter(
-          (r) => !Object.values(r || {}).some((v) => typeof v === "string" && /total/i.test(v))
+          (r) =>
+            !Object.values(r || {}).some(
+              (v) => typeof v === "string" && /total/i.test(v)
+            )
         )
       : []
   );
 
-  // server cumulative (fallback only)
   const cumSrc =
     cumulativeFromServer && Object.keys(cumulativeFromServer).length
       ? cumulativeFromServer
@@ -506,7 +579,7 @@ function ViewReports({ reportData, month, year }) {
             return flatRows.map((item, idx) => {
               if (item.kind === "header") {
                 const label = String(item.label ?? "").trim();
-                if (!label) return null; // hide blank header rows
+                if (!label) return null;
                 return (
                   <tr key={`h-${idx}`}>
                     <td colSpan={3} className="border p-1 font-bold bg-gray-100">
@@ -517,7 +590,7 @@ function ViewReports({ reportData, month, year }) {
               }
               if (item.kind === "subheader") {
                 const label = String(item.label ?? "").trim();
-                if (!label) return null; // hide blank subheaders
+                if (!label) return null;
                 return (
                   <tr key={`sh-${idx}`}>
                     <td colSpan={3} className="border p-1 font-semibold bg-gray-50">
@@ -539,7 +612,6 @@ function ViewReports({ reportData, month, year }) {
                 return (
                   <tr key={`vc-${idx}`}>
                     <td colSpan={3} className="border p-1">
-                      {/* Unified VisionCenterTable includes "No. of Spectacles Prescribed" */}
                       <VisionCenterTable
                         data={visionCenterData}
                         disabled
@@ -550,12 +622,18 @@ function ViewReports({ reportData, month, year }) {
                 );
               }
               if (item.kind === "q") {
-                // Keep numbering in sync with saved data even if label is blank
                 qNumber += 1;
-                const label = String(item.row?.label ?? "").trim();
-                const key = `q${qNumber}`;
+                const row = item.row || {};
+                const labelRaw = row.label ?? row.title ?? "";
+                const label = String(labelRaw).trim();
+                const id = row.id;
 
-                // If label is empty, hide the row visually but DO NOT skip the index
+                // 🔑 Find the correct q-key for this label/id
+                let key =
+                  (id && idToKey[id]) ||
+                  (label && labelToKey[labelNorm(label)]) ||
+                  `q${qNumber}`; // last-resort fallback
+
                 if (!label) return null;
 
                 const monthVal = Number(answersRaw[key] ?? 0);
@@ -591,6 +669,7 @@ function ViewReports({ reportData, month, year }) {
     </div>
   );
 }
+
 
 
 
