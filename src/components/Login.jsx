@@ -6,7 +6,7 @@ import rightImage from "../assets/optometrist-right.png";
 const REQUIRED_PASSWORD = "123";
 
 // ⚡ Universal fetch with timeout
-async function fetchWithTimeout(url, options = {}, timeout = 4000) {
+async function fetchWithTimeout(url, options = {}, timeout = 20000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
 
@@ -23,12 +23,12 @@ async function fetchWithTimeout(url, options = {}, timeout = 4000) {
   }
 }
 
-// ⚡ Backend warm-up function (fixes slow login)
+// ⚡ Backend warm-up function (quick ping)
 async function warmUpBackend() {
   try {
-    await fetchWithTimeout(`${API_BASE}/api/ping`, {}, 3000);
+    await fetchWithTimeout(`${API_BASE}/api/ping`, {}, 5000);
   } catch {
-    /* ignore ping errors — only to wake backend */
+    // ignore ping errors — only to wake backend
   }
 }
 
@@ -59,7 +59,6 @@ export default function Login({ onLogin, onShowRegister }) {
     return out;
   }, [district]);
 
-  // ⚡ FAST, RETRY-ENABLED LOGIN HANDLER
   const handleLogin = async () => {
     if (!district || !institution || !password) {
       setError("Please select district, institution, and enter password.");
@@ -73,74 +72,71 @@ export default function Login({ onLogin, onShowRegister }) {
     setError("");
     setIsLoading(true);
 
-    // 1️⃣ Wake backend BEFORE login
-    await warmUpBackend();
+    try {
+      // 1️⃣ Try to wake backend quickly (ignore failure)
+      await warmUpBackend();
 
-    // 🔴 IMPORTANT: include username so backend doesn't say "missing user name"
-    const payload = {
-      username: institution.trim(),          // <-- NEW LINE
-      institution: institution.trim(),
-      district: district.trim(),
-      password,
-    };
+      const payload = {
+        username: institution.trim(), // keep sending username
+        institution: institution.trim(),
+        district: district.trim(),
+        password,
+      };
 
-    // 2️⃣ Try login 3 TIMES maximum
-    const attempts = [4000, 4000, 5000]; // timeouts per attempt
-    for (let i = 0; i < attempts.length; i++) {
+      console.log("Login → POST", `${API_BASE}/api/login`, payload);
+
+      // 2️⃣ One login request with 20s timeout
+      const res = await fetchWithTimeout(
+        `${API_BASE}/api/login`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        20000 // 20 seconds
+      );
+
+      const raw = await res.text();
+      let data = {};
       try {
-        const res = await fetchWithTimeout(
-          `${API_BASE}/api/login`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          },
-          attempts[i]
-        );
-
-        const raw = await res.text();
-        let data = {};
-        try {
-          data = raw ? JSON.parse(raw) : {};
-        } catch {}
-
-        if (!res.ok) {
-          const msg =
-            data?.error ||
-            raw ||
-            `HTTP ${res.status} ${res.statusText || ""}`.trim();
-          throw new Error(msg);
-        }
-
-        const user = data.user || data;
-        if (!user?.district || !user?.institution) {
-          throw new Error("Malformed login response from server.");
-        }
-
-        // SUCCESS → LOGIN DONE
-        onLogin(user);
-        setIsLoading(false);
-        return;
-      } catch (err) {
-        console.warn(`Login attempt ${i + 1} failed`, err);
-
-        if (i === attempts.length - 1) {
-          // LAST attempt failed → show message
-          setError(
-            err?.name === "AbortError"
-              ? "Login request timed out. Please try again."
-              : err?.message || "Login failed."
-          );
-          setIsLoading(false);
-        } else {
-          // wait 500ms then retry
-          await new Promise((r) => setTimeout(r, 500));
-        }
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        // non-JSON body, ignore
       }
+
+      if (!res.ok) {
+        const msg =
+          data?.error ||
+          raw ||
+          `HTTP ${res.status} ${res.statusText || ""}`.trim();
+        throw new Error(msg);
+      }
+
+      const user = data.user || data;
+      if (!user?.district || !user?.institution) {
+        throw new Error("Malformed login response from server.");
+      }
+
+      onLogin(user); // ✅ success
+    } catch (err) {
+      console.warn("Login failed:", err);
+
+      if (err.name === "AbortError") {
+        setError(
+          "Server did not respond in time. Please open " +
+            `${API_BASE}/api/ping` +
+            " in a browser tab to wake it, then try again."
+        );
+      } else if (!navigator.onLine) {
+        setError("No internet connection. Please check your network.");
+      } else {
+        setError(err.message || "Login failed.");
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Guest login
   const handleGuestLogin = () => {
     onLogin({ district: "Guest", institution: "Guest User", isGuest: true });
   };
@@ -148,7 +144,6 @@ export default function Login({ onLogin, onShowRegister }) {
   return (
     <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-b from-[#e9f1f8] to-[#f7fafc] font-serif p-4">
       <div className="flex flex-col md:flex-row bg-white rounded-2xl shadow-xl overflow-hidden w-full max-w-5xl border border-gray-100">
-        
         {/* Left: Login Form */}
         <div className="w-full md:w-1/2 p-6 md:p-8 space-y-4 bg-white">
           <h2 className="text-2xl md:text-3xl font-bold text-center text-[#134074]">
@@ -174,7 +169,9 @@ export default function Login({ onLogin, onShowRegister }) {
           >
             <option value="">Select District</option>
             {Object.keys(districtInstitutions).map((d) => (
-              <option key={d} value={d}>{d}</option>
+              <option key={d} value={d}>
+                {d}
+              </option>
             ))}
           </select>
 
@@ -191,7 +188,9 @@ export default function Login({ onLogin, onShowRegister }) {
           >
             <option value="">Select Institution</option>
             {institutionOptions.map((i) => (
-              <option key={i} value={i}>{i}</option>
+              <option key={i} value={i}>
+                {i}
+              </option>
             ))}
           </select>
 
@@ -200,14 +199,19 @@ export default function Login({ onLogin, onShowRegister }) {
           <input
             type="password"
             value={password}
-            onChange={(e) => { setPassword(e.target.value); setError(""); }}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setError("");
+            }}
             onKeyDown={(e) => e.key === "Enter" && handleLogin()}
             className="w-full px-3 py-2 rounded bg-gray-100 text-gray-800 focus:outline-none"
             autoComplete="current-password"
           />
 
           {/* Error */}
-          {error && <div className="text-sm text-red-600 text-center">{error}</div>}
+          {error && (
+            <div className="text-sm text-red-600 text-center">{error}</div>
+          )}
 
           {/* LOGIN BUTTON */}
           <button
@@ -243,7 +247,11 @@ export default function Login({ onLogin, onShowRegister }) {
 
         {/* RIGHT IMAGE */}
         <div className="w-full md:w-1/2 bg-[#0b2e59]/5">
-          <img src={rightImage} alt="Optometrist" className="object-cover w-full h-full" />
+          <img
+            src={rightImage}
+            alt="Optometrist"
+            className="object-cover w-full h-full"
+          />
         </div>
       </div>
 
@@ -251,8 +259,10 @@ export default function Login({ onLogin, onShowRegister }) {
       {isLoading && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="flex flex-col items-center">
-            <div className="w-12 h-12 border-4 border-t-4 border-gray-200 border-t-green-700 rounded-full animate-spin"></div>
-            <p className="mt-3 text-white font-medium animate-pulse">Signing you in...</p>
+            <div className="w-12 h-12 border-4 border-t-4 border-gray-200 border-t-green-700 rounded-full animate-spin" />
+            <p className="mt-3 text-white font-medium animate-pulse">
+              Signing you in...
+            </p>
           </div>
         </div>
       )}

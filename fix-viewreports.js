@@ -1,23 +1,37 @@
-const fs = require("fs");
-const p = "src/App.jsx";
-let s = fs.readFileSync(p, "utf8");
+// fix-viewreports.js
+// Replaces ONLY the ViewReports function in src/App.jsx,
+// using the correct marker that exists in your file.
 
-// Find the ViewReports function start
+const fs = require("fs");
+const path = "src/App.jsx";
+
+let s = fs.readFileSync(path, "utf8");
+
+// 1) Find the start of ViewReports
 const start = s.indexOf("function ViewReports");
 if (start < 0) {
   console.error("❌ Could not find 'function ViewReports' in src/App.jsx. Aborting.");
   process.exit(1);
 }
 
-// Find the banner that starts ReportEntry (we won’t touch anything after this)
-const marker = "/* -------------------------------------------------------------------------- */\n/* ReportEntry";
-const end = s.indexOf(marker, start);
+// 2) Find the end of ViewReports by locating the banner that starts ReportEntry
+//    (this DOES exist in your App.jsx)
+const marker1 = "/* ======================= /ReportEntry (inline) ======================= */";
+const marker2 = "/* ========================================================================== */\n/* App";
+
+let end = s.indexOf(marker1, start);
 if (end < 0) {
-  console.error("❌ Could not find the 'ReportEntry' banner after ViewReports. Aborting.");
+  end = s.indexOf(marker2, start);
+}
+
+if (end < 0) {
+  console.error(
+    "❌ Could not locate end of ViewReports block (no ReportEntry/App marker found). Aborting."
+  );
   process.exit(1);
 }
 
-// New ViewReports block (only individual cumulative logic; no other features touched)
+// 3) New ViewReports block
 const viewReportsBlock = `
 /* ========================================================================== */
 /* ViewReports (uses backend FY endpoint; Apr→selected; EB/VC no cumulative)  */
@@ -282,7 +296,8 @@ function ViewReports({ reportData, month, year }) {
 }
 `.trim();
 
-// Splice it back in (ONLY ViewReports is replaced)
+// 4) Splice it back in
 const newS = s.slice(0, start) + viewReportsBlock + "\n\n" + s.slice(end);
-fs.writeFileSync(p, newS);
-console.log("✅ Restored a valid ViewReports block (only individual cumulative logic touched).");
+fs.writeFileSync(path, newS);
+console.log("✅ ViewReports block successfully replaced in src/App.jsx.");
+

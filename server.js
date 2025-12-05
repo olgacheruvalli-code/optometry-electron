@@ -5,16 +5,32 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 
 /* ======================= Config ======================= */
-const PORT = process.env.PORT || 5050; // <-- make sure this matches your local port
-const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/optometry";
+// ✅ Using 5050 port (fixed)
+const PORT = process.env.PORT || 5050;
 
-const ORIGINS_RAW = process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || "";
-const ALLOWED_ORIGINS = ORIGINS_RAW.split(",").map(s => s.trim()).filter(Boolean);
+const MONGO_URI =
+  process.env.MONGO_URI || "mongodb://127.0.0.1:27017/optometry";
+
+const ORIGINS_RAW =
+  process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || "";
+const ALLOWED_ORIGINS = ORIGINS_RAW.split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 const ALLOW_VERCEL_PREVIEWS = false;
 
 const FISCAL_MONTHS = [
-  "April","May","June","July","August","September",
-  "October","November","December","January","February","March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+  "January",
+  "February",
+  "March",
 ];
 const ALL_QUESTION_KEYS = Array.from({ length: 84 }, (_, i) => `q${i + 1}`);
 
@@ -31,7 +47,7 @@ const CANON = {
 const ALIAS_TO_CANON = (() => {
   const map = new Map();
   for (const [canon, aliases] of Object.entries(CANON)) {
-    aliases.forEach(a => map.set(lowerSan(a), canon));
+    aliases.forEach((a) => map.set(lowerSan(a), canon));
   }
   return map;
 })();
@@ -41,20 +57,28 @@ const normInstKey = (name = "") => {
 };
 
 /* ======================= Helpers ======================= */
-const _num = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
+const _num = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
 const _normalize84 = (obj = {}) => {
   const out = {};
   for (const k of ALL_QUESTION_KEYS) out[k] = _num(obj[k]);
   return out;
 };
-const _answersTo84Array = (ans = {}) => ALL_QUESTION_KEYS.map(k => _num(ans[k]));
+
+const _answersTo84Array = (ans = {}) =>
+  ALL_QUESTION_KEYS.map((k) => _num(ans[k]));
+
 const _sum84 = (a = [], b = []) => {
   const n = Math.max(a.length, b.length);
   const out = new Array(n).fill(0);
   for (let i = 0; i < n; i++) out[i] = _num(a[i]) + _num(b[i]);
   return out;
 };
-const _ensure84OnDoc = doc => {
+
+const _ensure84OnDoc = (doc) => {
   if (!doc) return doc;
   const d = { ...(doc.toObject?.() || doc) };
   d.institution = sanitize(d.institution || "");
@@ -64,16 +88,13 @@ const _ensure84OnDoc = doc => {
   d.cumulative = hasCum ? _normalize84(d.cumulative) : { ...d.answers };
   return d;
 };
+
 const _fiscalStartYear = (m, y) =>
   ["January", "February", "March"].includes(m) ? +y - 1 : +y;
 
 function _fiscalWindow(toMonth, toYear) {
   const startY = _fiscalStartYear(toMonth, toYear);
   const window = [];
-  const FISCAL_MONTHS = [
-    "April","May","June","July","August","September",
-    "October","November","December","January","February","March",
-  ];
   for (let i = 0; i < FISCAL_MONTHS.length; i++) {
     const m = FISCAL_MONTHS[i];
     const y = i <= 8 ? startY : startY + 1;
@@ -86,9 +107,19 @@ function _fiscalWindow(toMonth, toYear) {
 function normalizeMonth(m = "") {
   const s = lowerSan(m);
   const map = {
-    jan: "January", feb: "February", mar: "March", apr: "April", may: "May",
-    jun: "June", jul: "July", aug: "August", sep: "September", sept: "September",
-    oct: "October", nov: "November", dec: "December",
+    jan: "January",
+    feb: "February",
+    mar: "March",
+    apr: "April",
+    may: "May",
+    jun: "June",
+    jul: "July",
+    aug: "August",
+    sep: "September",
+    sept: "September",
+    oct: "October",
+    nov: "November",
+    dec: "December",
   };
   const key = s.slice(0, 3);
   return map[key] || sanitize(m);
@@ -108,7 +139,10 @@ const ReportSchema = new mongoose.Schema(
   },
   { versionKey: false, timestamps: true }
 );
-ReportSchema.index({ district: 1, institution: 1, month: 1, year: 1 }, { unique: true });
+ReportSchema.index(
+  { district: 1, institution: 1, month: 1, year: 1 },
+  { unique: true }
+);
 const Report = mongoose.model("Report", ReportSchema);
 
 /* ======================= Amblyopia Schema ======================= */
@@ -148,7 +182,8 @@ function isAllowedOrigin(origin) {
   if (ALLOW_VERCEL_PREVIEWS) {
     try {
       const u = new URL(origin);
-      if (u.protocol === "https:" && u.hostname.endsWith(".vercel.app")) return true;
+      if (u.protocol === "https:" && u.hostname.endsWith(".vercel.app"))
+        return true;
     } catch {}
   }
   return false;
@@ -164,15 +199,18 @@ if (process.env.NODE_ENV !== "production") {
       if (isAllowedOrigin(origin)) return cb(null, true);
       return cb(new Error(`CORS blocked for origin: ${origin}`), false);
     },
-    methods: ["GET","HEAD","POST","PUT","PATCH","DELETE","OPTIONS"],
-    allowedHeaders: ["Content-Type","Authorization"],
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: false,
     maxAge: 86400,
   };
 }
 app.use(cors(corsOptions));
 app.options(/^\/api\/.*$/, cors(corsOptions));
-app.use((req, res, next) => { res.header("Vary", "Origin"); next(); });
+app.use((req, res, next) => {
+  res.header("Vary", "Origin");
+  next();
+});
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -180,7 +218,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
   if (req.method === "OPTIONS") return res.sendStatus(204);
 
-  // allow these even if dbReady is false
+  // allow ping/health/login before db is ready
   const pass = ["/api/health", "/api/ping", "/api/login"];
 
   if (!dbReady && req.path.startsWith("/api") && !pass.includes(req.path)) {
@@ -191,17 +229,15 @@ app.use((req, res, next) => {
 
 /* ======================= Diagnostics ======================= */
 app.get("/api/health", (req, res) =>
-  res.json({ ok: true, startedAt, version: "v9-autoCORS" })
+  res.json({ ok: true, startedAt, version: "v10-nov-purge" })
 );
+
 
 app.get("/api/ping", (req, res) =>
   res.json({ ok: true, msg: "backend alive", db: dbReady })
 );
 
-/* ======================= SIMPLE LOCAL LOGIN (DEV ONLY) ======================= */
-/* This is ONLY for local testing on http://localhost:5050.
-   It lets you log in without real DB users.
-   When you deploy to Render, you can replace this with your real login logic. */
+/* ======================= SIMPLE LOCAL LOGIN ======================= */
 app.post("/api/login", (req, res) => {
   const { username, district, institution } = req.body || {};
 
@@ -210,7 +246,10 @@ app.post("/api/login", (req, res) => {
   }
 
   const role =
-    String(username).toLowerCase().startsWith("dc") ? "DOC" : "OPTOMETRIST";
+    String(username).toLowerCase().startsWith("dc") ||
+    String(username).toLowerCase().startsWith("doc")
+      ? "DOC"
+      : "OPTOMETRIST";
 
   return res.json({
     ok: true,
@@ -224,7 +263,7 @@ app.post("/api/login", (req, res) => {
   });
 });
 
-/* ======================= Amblyopia Research Routes ======================= */
+/* ======================= Amblyopia Research ======================= */
 app.post("/api/amblyopia-research", async (req, res) => {
   try {
     const data = req.body;
@@ -246,7 +285,11 @@ app.get("/api/amblyopia-research", async (req, res) => {
   try {
     const { district, institution } = req.query;
 
-    const docs = await Amblyopia.find({ district, institution })
+    const filter = {};
+    if (district) filter.district = district;
+    if (institution) filter.institution = institution;
+
+    const docs = await Amblyopia.find(filter)
       .sort({ createdAt: -1 })
       .lean();
 
@@ -257,17 +300,197 @@ app.get("/api/amblyopia-research", async (req, res) => {
   }
 });
 
-/* ======================= (YOUR OTHER REPORT ROUTES GO HERE) ======================= */
-/* e.g.
-   app.get("/api/reports", ...);
-   app.post("/api/reports", ...);
-   app.get("/api/district-institution-report", ...);
-   etc.
-*/
+/* ======================= REPORT ROUTES ======================= */
+app.get("/api/reports", async (req, res) => {
+  try {
+    const {
+      district,
+      institution,
+      month,
+      year,
+      q,
+      limit = 500,
+      page = 1,
+    } = req.query;
+
+    const filter = {};
+    if (district) filter.district = sanitize(district);
+    if (institution) filter.institution = sanitize(institution);
+    if (month) filter.month = normalizeMonth(month);
+    if (year) filter.year = String(year);
+
+    if (q) {
+      const re = new RegExp(sanitize(q), "i");
+      filter.$or = [{ district: re }, { institution: re }, { month: re }];
+    }
+
+    const lim = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 2000);
+    const skip = (Math.max(parseInt(page, 10) || 1, 1) - 1) * lim;
+
+    const docs = await Report.find(filter)
+      .sort({ createdAt: 1 })
+      .skip(skip)
+      .limit(lim)
+      .lean();
+
+    res.json({ ok: true, docs: docs.map(_ensure84OnDoc) });
+  } catch (e) {
+    console.error("❌ GET /api/reports error:", e);
+    res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
+app.get("/api/reports/:id", async (req, res) => {
+  try {
+    const doc = await Report.findById(req.params.id);
+    if (!doc) return res.status(404).json({ ok: false, error: "not_found" });
+    res.json({ ok: true, doc: _ensure84OnDoc(doc) });
+  } catch (e) {
+    console.error("❌ GET /api/reports/:id error:", e);
+    res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
+app.post("/api/reports", async (req, res) => {
+  try {
+    const {
+      district,
+      institution,
+      month,
+      year,
+      answers = {},
+      eyeBank = [],
+      visionCenter = [],
+      forceSave,
+    } = req.body || {};
+
+    if (!district || !institution || !month || !year) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "missing_required_fields" });
+    }
+
+    const dist = sanitize(district);
+    const inst = sanitize(institution);
+    const mon = normalizeMonth(month);
+    const yr = String(year);
+
+    if (!FISCAL_MONTHS.includes(mon)) {
+      return res.status(400).json({
+        ok: false,
+        error: "invalid_month",
+        allowed: FISCAL_MONTHS,
+      });
+    }
+
+    const ans84 = _normalize84(answers);
+    const ebArr = Array.isArray(eyeBank) ? eyeBank : [];
+    const vcArr = Array.isArray(visionCenter) ? visionCenter : [];
+
+    const anyAnswer = Object.values(ans84).some((v) => _num(v) > 0);
+    const hasEB =
+      ebArr.some((row) =>
+        Object.values(row || {}).some((v) => _num(v) > 0)
+      );
+    const hasVC =
+      vcArr.some((row) =>
+        Object.values(row || {}).some((v) => _num(v) > 0)
+      );
+
+    if (!forceSave && !anyAnswer && !hasEB && !hasVC) {
+      return res.status(400).json({
+        ok: false,
+        error: "empty_report",
+      });
+    }
+
+    let doc = await Report.findOne({
+      district: dist,
+      institution: inst,
+      month: mon,
+      year: yr,
+    });
+
+    if (!doc) {
+      doc = new Report({
+        district: dist,
+        institution: inst,
+        month: mon,
+        year: yr,
+      });
+    }
+
+    doc.answers = ans84;
+    doc.eyeBank = ebArr;
+    doc.visionCenter = vcArr;
+    doc.cumulative = ans84;
+
+    await doc.save();
+    res.json({ ok: true, doc: _ensure84OnDoc(doc) });
+  } catch (e) {
+    console.error("❌ POST /api/reports error:", e);
+    if (e.code === 11000) {
+      return res
+        .status(409)
+        .json({ ok: false, error: "duplicate_report_for_month_year" });
+    }
+    res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
+/* ======================= DELETE ======================= */
+app.delete("/api/reports/:id", async (req, res) => {
+  try {
+    const doc = await Report.findByIdAndDelete(req.params.id);
+    if (!doc) return res.status(404).json({ ok: false, error: "not_found" });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("❌ DELETE /api/reports/:id error:", e);
+    res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
+/* ========= ONE-TIME ADMIN ROUTE TO DELETE NOVEMBER 2025 REPORTS ========= */
+app.post("/api/admin/purge-nov-2025", async (req, res) => {
+  try {
+    const secret = req.body?.secret;
+    const expected = process.env.ADMIN_SECRET || "NOV25_PURGE_LOCK";
+
+    if (secret !== expected) {
+      return res
+        .status(403)
+        .json({ ok: false, error: "forbidden", message: "Bad secret" });
+    }
+
+    const filter = { month: "November", year: "2025" };
+    const docs = await Report.find(filter).lean();
+
+    const keepDoc = (instRaw = "") => {
+      const inst = lowerSan(instRaw);
+      return inst.startsWith("doc ") || inst.startsWith("dc ");
+    };
+
+    const idsToDelete = docs
+      .filter((d) => !keepDoc(d.institution))
+      .map((d) => d._id);
+
+    if (!idsToDelete.length) {
+      return res.json({ ok: true, deleted: 0 });
+    }
+
+    const result = await Report.deleteMany({ _id: { $in: idsToDelete } });
+    res.json({ ok: true, deleted: result.deletedCount || 0 });
+  } catch (e) {
+    console.error("❌ POST /api/admin/purge-nov-2025 error:", e);
+    res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
 
 /* ======================= 404 ======================= */
 app.use((req, res) =>
-  res.status(404).json({ ok: false, error: "route_not_found", path: req.path })
+  res
+    .status(404)
+    .json({ ok: false, error: "route_not_found", path: req.path })
 );
 
 /* ======================= Start ======================= */
@@ -277,5 +500,8 @@ app.listen(PORT, "0.0.0.0", () =>
 
 mongoose
   .connect(MONGO_URI, { dbName: "optometry" })
-  .then(() => { dbReady = true; console.log("✅ Mongo connected"); })
-  .catch(e => console.error("❌ Mongo connect failed:", e.message));
+  .then(() => {
+    dbReady = true;
+    console.log("✅ Mongo connected");
+  })
+  .catch((e) => console.error("❌ Mongo connect failed:", e.message));

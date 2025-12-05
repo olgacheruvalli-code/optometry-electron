@@ -1,0 +1,133 @@
+    answers: answersRaw = {},
+    cumulative: cumulativeFromServer = {},
+    eyeBank,
+    visionCenter,
+    institution,
+    district,
+    updatedAt,
+  } = doc || {};
+
+  const eyeBankData = normalizeTextNameFields(eyeBank || doc?.eyebank || doc?.eye_bank || []);
+  const visionCenterData = normalizeTextNameFields(
+    visionCenter || doc?.visioncentre || doc?.vision_centre || []
+  );
+
+  // Pick cumulative: server → local FY fallback → stored cumulative → {}
+  const cumSrc =
+    (cumTotals && Object.keys(cumTotals).length && cumTotals) ||
+    (cumFallback && Object.keys(cumFallback).length && cumFallback) ||
+    (cumulativeFromServer && Object.keys(cumulativeFromServer).length && cumulativeFromServer) ||
+    {};
+
+  if (!reportData) return null;
+
+  return (
+    <div className="a4-wrapper text-[12pt] font-serif">
+      <div className="text-center font-bold text-[16pt] mb-1">
+        NATIONAL PROGRAMME FOR CONTROL OF BLINDNESS (NPCB) KERALA
+      </div>
+      <div className="text-center font-semibold text-[14pt] mb-4">
+        INDIVIDUAL REPORTING FORMAT
+      </div>
+
+      <div className="mb-4">
+        <p><strong>District:</strong> {district}</p>
+        <p><strong>Institution:</strong> {institution}</p>
+        <p>
+          <strong>Month:</strong> {month} {year}
+          {updatedAt ? (
+            <span className="ml-2 text-gray-500 no-print">
+              (updated {new Date(updatedAt).toLocaleString()})
+            </span>
+          ) : null}
+        </p>
+      </div>
+
+      {hydrating && (
+        <div className="no-print mb-3 px-3 py-2 rounded bg-yellow-100 text-yellow-900">
+          Loading full data…
+        </div>
+      )}
+
+      <table className="table-auto w-full text-sm border border-black">
+        <thead>
+          <tr>
+            <th className="border p-1 text-left">Description</th>
+            <th className="border p-1 text-right">During the Month</th>
+            <th className="border p-1 text-right">Cumulative</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(() => {
+            let qNumber = 0;
+            return flatRows.map((item, idx) => {
+              if (item.kind === "header") {
+                return (
+                  <tr key={\`h-\${idx}\`}>
+                    <td colSpan={3} className="border p-1 font-bold bg-gray-100">{item.label}</td>
+                  </tr>
+                );
+              }
+              if (item.kind === "subheader") {
+                return (
+                  <tr key={\`sh-\${idx}\`}>
+                    <td colSpan={3} className="border p-1 font-semibold bg-gray-50">{item.label}</td>
+                  </tr>
+                );
+              }
+              if (item.kind === "eyeBankTable") {
+                return (
+                  <tr key={\`eb-\${idx}\`}>
+                    <td colSpan={3} className="border p-1">
+                      <EyeBankTable data={eyeBankData} disabled />
+                    </td>
+                  </tr>
+                );
+              }
+              if (item.kind === "visionCenterTable") {
+                return (
+                  <tr key={\`vc-\${idx}\`}>
+                    <td colSpan={3} className="border p-1">
+                      <VisionCenterTable data={visionCenterData} disabled />
+                    </td>
+                  </tr>
+                );
+              }
+              if (item.kind === "q") {
+                qNumber += 1;
+                const key = \`q\${qNumber}\`;
+                const monthVal = Number(answersRaw[key] ?? 0);
+                const cumVal = Number((cumSrc && cumSrc[key]) ?? 0);
+                return (
+                  <tr key={\`r-\${idx}\`}>
+                    <td className="border p-1">{item.row.label}</td>
+                    <td className="border p-1 text-right">{monthVal}</td>
+                    <td className="border p-1 text-right">{cumVal}</td>
+                  </tr>
+                );
+              }
+              return null;
+            });
+          })()}
+        </tbody>
+      </table>
+
+      <div className="flex justify-between mt-8">
+        <div>
+          Signature of Senior Optometrist / Optometrist
+          <br />.........................................
+        </div>
+        <div>
+          Signature of Superintendent / Medical Officer
+          <br />.........................................
+        </div>
+      </div>
+    </div>
+  );
+}
+`.trim();
+
+// Splice it back in (ONLY ViewReports is replaced)
+const newS = s.slice(0, start) + viewReportsBlock + "\n\n" + s.slice(end);
+fs.writeFileSync(p, newS);
+console.log("✅ Restored a valid ViewReports block (only individual cumulative logic touched).");
