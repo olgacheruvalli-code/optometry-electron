@@ -131,7 +131,6 @@ th.sticky.top-40 {
   /* Set the default print page size and margin (A4 portrait by default) */
   @page {
     size: A4 portrait;
-    /* top | right | bottom | left */
-    margin: 1cm 1.3cm 1.3cm 1.3cm;
+    margin: 1cm;
   }
 }
