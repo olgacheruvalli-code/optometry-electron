@@ -235,7 +235,10 @@ export default function EditReport({ user }) {
   const [year, setYear] = useState(String(new Date().getFullYear()));
 
   const Q_ROWS = useMemo(() => orderedQuestions(sections), []);
-  const KEYS   = useMemo(() => Array.from({ length: Q_ROWS.length }, (_, i) => `q${i + 1}`), [Q_ROWS.length]);
+  const KEYS   = useMemo(
+    () => Array.from({ length: Q_ROWS.length }, (_, i) => `q${i + 1}`),
+    [Q_ROWS.length]
+  );
 
   const [loading, setLoading] = useState(false);
   const [doc, setDoc] = useState(null);
@@ -245,12 +248,18 @@ export default function EditReport({ user }) {
   const [unlocked, setUnlocked] = useState(false);
 
   // editable fields: month answers + (optional) cumulative
-  const [answers, setAnswers] = useState(() => KEYS.reduce((a, k) => ((a[k] = 0), a), {}));
-  const [cumulative, setCumulative] = useState(() => KEYS.reduce((a, k) => ((a[k] = 0), a), {}));
+  const [answers, setAnswers] = useState(() =>
+    KEYS.reduce((a, k) => ((a[k] = 0), a), {})
+  );
+  const [cumulative, setCumulative] = useState(() =>
+    KEYS.reduce((a, k) => ((a[k] = 0), a), {})
+  );
 
   // NEW: tables state (Eye Bank 2 rows, Vision Center 10 rows)
-  const [eyeBank, setEyeBank] = useState([{},{ }]);
-  const [visionCenter, setVisionCenter] = useState(Array.from({ length: 10 }, () => ({})));
+  const [eyeBank, setEyeBank] = useState([{}, {}]);
+  const [visionCenter, setVisionCenter] = useState(
+    Array.from({ length: 10 }, () => ({}))
+  );
 
   // Fetch the latest report strictly by (district, institution, month, year)
   const fetchSelected = async () => {
@@ -295,8 +304,13 @@ export default function EditReport({ user }) {
       setCumulative(cum);
 
       // tables
-      const ebIn = chosen?.eyeBank || chosen?.eyebank || chosen?.eye_bank || [];
-      const vcIn = chosen?.visionCenter || chosen?.visioncentre || chosen?.vision_centre || [];
+      const ebIn =
+        chosen?.eyeBank || chosen?.eyebank || chosen?.eye_bank || [];
+      const vcIn =
+        chosen?.visionCenter ||
+        chosen?.visioncentre ||
+        chosen?.vision_centre ||
+        [];
 
       const ebNorm = ebNormalizeIn(ebIn);
       const vcNorm = vcNormalizeIn(vcIn);
@@ -311,7 +325,7 @@ export default function EditReport({ user }) {
       console.error("fetchSelected failed:", e);
       alert("Could not fetch the selected report.");
       setDoc(null);
-      setEyeBank([{},{ }]);
+      setEyeBank([{}, {}]);
       setVisionCenter(Array.from({ length: 10 }, () => ({})));
     } finally {
       setLoading(false);
@@ -358,7 +372,7 @@ export default function EditReport({ user }) {
         institution,
         month,
         year,
-        answers,    // numbers are OK; backend also accepts strings
+        answers, // numbers are OK; backend also accepts strings
         cumulative, // optional; viewers have client fallback
       };
 
@@ -398,7 +412,9 @@ export default function EditReport({ user }) {
 
   return (
     <div className="max-w-6xl mx-auto font-serif p-4">
-      <h2 className="text-2xl font-bold text-[#134074] mb-4">Edit Saved Report (Admin)</h2>
+      <h2 className="text-2xl font-bold text-[#134074] mb-4">
+        Edit Saved Report (Admin)
+      </h2>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
         <div>
@@ -413,7 +429,7 @@ export default function EditReport({ user }) {
         </div>
         <div>
           <label className="text-sm font-semibold">Institution</label>
-        <input
+          <input
             className="w-full border rounded p-2"
             value={institution}
             onChange={(e) => setInstitution(e.target.value)}
@@ -430,7 +446,9 @@ export default function EditReport({ user }) {
             disabled={loading || !unlocked}
           >
             {MONTHS.map((m) => (
-              <option key={m} value={m}>{m}</option>
+              <option key={m} value={m}>
+                {m}
+              </option>
             ))}
           </select>
         </div>
@@ -459,7 +477,11 @@ export default function EditReport({ user }) {
             />
             <button
               onClick={tryUnlock}
-              className={`px-3 py-2 rounded text-white ${unlocked ? "bg-green-600" : "bg-blue-600 hover:bg-blue-700"}`}
+              className={`px-3 py-2 rounded text-white ${
+                unlocked
+                  ? "bg-green-600"
+                  : "bg-blue-600 hover:bg-blue-700"
+              }`}
               disabled={unlocked}
             >
               {unlocked ? "Unlocked" : "Unlock"}
@@ -478,7 +500,11 @@ export default function EditReport({ user }) {
         </button>
         <button
           onClick={saveAsLatest}
-          className={`px-4 py-2 rounded text-white ${unlocked ? "bg-emerald-600 hover:bg-emerald-700" : "bg-gray-400 cursor-not-allowed"}`}
+          className={`px-4 py-2 rounded text-white ${
+            unlocked
+              ? "bg-emerald-600 hover:bg-emerald-700"
+              : "bg-gray-400 cursor-not-allowed"
+          }`}
           disabled={loading || !unlocked}
           title={unlocked ? "" : "Unlock with admin password to save"}
         >
@@ -487,20 +513,32 @@ export default function EditReport({ user }) {
         {doc && (
           <span className="text-sm text-gray-600">
             Loaded: {doc.institution}, {doc.month} {doc.year}{" "}
-            {doc.updatedAt ? `(updated ${new Date(doc.updatedAt).toLocaleString()})` : ""}
+            {doc.updatedAt
+              ? `(updated ${new Date(
+                  doc.updatedAt
+                ).toLocaleString()})`
+              : ""}
           </span>
         )}
       </div>
 
       {/* --- Eye Bank table (editable) --- */}
       <div className="mb-10">
-        <h4 className="text-lg font-bold text-[#017d8a] mb-3">III. EYE BANK — Edit</h4>
-        <EyeBankTable data={eyeBank} onChange={handleEBChange} disabled={!unlocked} />
+        <h4 className="text-lg font-bold text-[#017d8a] mb-3">
+          III. EYE BANK — Edit
+        </h4>
+        <EyeBankTable
+          data={eyeBank}
+          onChange={handleEBChange}
+          disabled={!unlocked}
+        />
       </div>
 
       {/* --- Vision Center table (editable, with Spectacles column) --- */}
       <div className="mb-10">
-        <h4 className="text-lg font-bold text-[#017d8a] mb-3">V. VISION CENTER — Edit</h4>
+        <h4 className="text-lg font-bold text-[#017d8a] mb-3">
+          V. VISION CENTER — Edit
+        </h4>
         <VisionCenterTable
           data={visionCenter}
           onChange={handleVCChange}
@@ -516,9 +554,15 @@ export default function EditReport({ user }) {
         </div>
 
         <div className="grid grid-cols-12 gap-0">
-          <div className="col-span-7 border p-2 font-semibold bg-gray-50">Description</div>
-          <div className="col-span-2 border p-2 font-semibold bg-gray-50 text-right">Month</div>
-          <div className="col-span-3 border p-2 font-semibold bg-gray-50 text-right">Cumulative</div>
+          <div className="col-span-7 border p-2 font-semibold bg-gray-50">
+            Description
+          </div>
+          <div className="col-span-2 border p-2 font-semibold bg-gray-50 text-right">
+            Month
+          </div>
+          <div className="col-span-3 border p-2 font-semibold bg-gray-50 text-right">
+            Cumulative
+          </div>
 
           {KEYS.map((k, i) => {
             const label =
@@ -534,22 +578,32 @@ export default function EditReport({ user }) {
                   <div className="text-xs text-gray-500">Key: {k}</div>
                 </div>
 
+                {/* Month column – no spinner */}
                 <div className="col-span-2 border p-2">
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     className="w-full border rounded p-1 text-right"
                     value={answers[k]}
-                    onChange={(e) => handleChange(k, e.target.value, setAnswers)}
+                    onChange={(e) =>
+                      handleChange(k, e.target.value, setAnswers)
+                    }
                     disabled={!unlocked}
                   />
                 </div>
 
+                {/* Cumulative column – no spinner */}
                 <div className="col-span-3 border p-2">
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     className="w-full border rounded p-1 text-right"
                     value={cumulative[k]}
-                    onChange={(e) => handleChange(k, e.target.value, setCumulative)}
+                    onChange={(e) =>
+                      handleChange(k, e.target.value, setCumulative)
+                    }
                     disabled={!unlocked}
                   />
                 </div>
@@ -561,7 +615,8 @@ export default function EditReport({ user }) {
 
       {!unlocked && (
         <div className="mt-3 text-sm text-yellow-800 bg-yellow-100 border border-yellow-200 rounded px-3 py-2">
-          🔒 Enter the admin password and click <b>Unlock</b> to enable editing and saving.
+          🔒 Enter the admin password and click <b>Unlock</b> to enable editing
+          and saving.
         </div>
       )}
     </div>
