@@ -11,39 +11,64 @@ const ADMIN_PASS = "451970";
 
 /* --------------------------- Month constants ------------------------ */
 const MONTHS = [
-  "April","May","June","July","August","September",
-  "October","November","December","January","February","March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+  "January",
+  "February",
+  "March",
 ];
 
 /* --------------------------- Helpers -------------------------------- */
 const norm = (s) => String(s || "").trim().toLowerCase();
-const eq   = (a, b) => norm(a) === norm(b);
+const eq = (a, b) => norm(a) === norm(b);
 
 /* normalize month labels like "sept" → "September" */
 const normMonth = (m) => {
   if (!m) return m;
   const s = String(m).trim().toLowerCase();
   const map = {
-    january: "January", jan: "January",
-    february: "February", feb: "February",
-    march: "March", mar: "March",
-    april: "April", apr: "April",
+    january: "January",
+    jan: "January",
+    february: "February",
+    feb: "February",
+    march: "March",
+    mar: "March",
+    april: "April",
+    apr: "April",
     may: "May",
-    june: "June", jun: "June",
-    july: "July", jul: "July",
-    august: "August", aug: "August",
-    september: "September", sep: "September", sept: "September",
-    october: "October", oct: "October",
-    november: "November", nov: "November",
-    december: "December", dec: "December",
+    june: "June",
+    jun: "June",
+    july: "July",
+    jul: "July",
+    august: "August",
+    aug: "August",
+    september: "September",
+    sep: "September",
+    sept: "September",
+    october: "October",
+    oct: "October",
+    november: "November",
+    nov: "November",
+    december: "December",
+    dec: "December",
   };
   return map[s] || m;
 };
 
+/* ---------------------- Question flattening ------------------------- */
 const getQs = (blk) =>
-  Array.isArray(blk?.questions) ? blk.questions
-  : Array.isArray(blk?.rows) ? blk.rows
-  : [];
+  Array.isArray(blk?.questions)
+    ? blk.questions
+    : Array.isArray(blk?.rows)
+    ? blk.rows
+    : [];
 
 function buildFlatRows(secs) {
   const out = [];
@@ -59,7 +84,9 @@ function buildFlatRows(secs) {
 }
 
 const orderedQuestions = (secs) =>
-  buildFlatRows(secs).filter((r) => r.kind === "q").map((r) => r.row);
+  buildFlatRows(secs)
+    .filter((r) => r.kind === "q")
+    .map((r) => r.row);
 
 /* ---------- generic table utils (safe for legacy shapes) ---------- */
 const normalizeTextNameFields = (rows) =>
@@ -67,7 +94,10 @@ const normalizeTextNameFields = (rows) =>
     ? rows.map((row) => {
         const out = { ...(row || {}) };
         for (const k of Object.keys(out)) {
-          if (/name|centre|center|institution/i.test(k) && (out[k] === 0 || out[k] === "0")) {
+          if (
+            /name|centre|center|institution/i.test(k) &&
+            (out[k] === 0 || out[k] === "0")
+          ) {
             out[k] = "";
           }
         }
@@ -175,13 +205,7 @@ const vcNormalizeOut = sanitizeTableArray;
 const ebNormalizeIn = (rows = []) =>
   normalizeTextNameFields(rows).map((r) => ({
     status:
-      r.status ||
-      r.Status ||
-      r.type ||
-      r.Type ||
-      r.name ||
-      r.Name ||
-      "",
+      r.status || r.Status || r.type || r.Type || r.name || r.Name || "",
     eyesCollected:
       Number(
         r.eyesCollected ??
@@ -226,6 +250,47 @@ const ebNormalizeIn = (rows = []) =>
 
 const ebNormalizeOut = sanitizeTableArray;
 
+/* ---------- Glaucoma / DR block normalization ---------- */
+/**
+ * Makes the glaucoma / DR block align with ViewReports:
+ * - If q36 = 0 but q34 has a value → treat q34 as "Glaucoma screened" (q36).
+ * - If glaucoma sub-rows 0 but DR in q38–q40 → move DR to q40–q42, clear q38.
+ */
+function normalizeGlaucomaDRBlock(src = {}) {
+  const out = { ...src };
+
+  const q34Val = Number(out.q34 ?? 0) || 0; // old place for “Screened”
+  let gScr = Number(out.q36 ?? 0) || 0; // Glaucoma screened
+  const gDet = Number(out.q37 ?? 0) || 0; // Glaucoma detected
+  let drScr = Number(out.q38 ?? 0) || 0; // DR screened  (new pattern)
+  let drDet = Number(out.q39 ?? 0) || 0; // DR detected  (new pattern)
+  let drTrt = Number(out.q40 ?? 0) || 0; // DR treated   (new pattern)
+
+  // 1️⃣ OLD PATTERN: some reports stored “Glaucoma screened” in q34
+  if (!gScr && q34Val) {
+    out.q36 = q34Val; // show 93 under “↳ Screened”
+    gScr = q34Val;
+  }
+
+  // 2️⃣ NEW PATTERN: DR values in q38–q40 with glaucoma rows 0
+  const isNewPattern =
+    gScr === 0 &&
+    gDet === 0 &&
+    (drScr !== 0 || drDet !== 0 || drTrt !== 0);
+
+  if (isNewPattern) {
+    // Glaucoma treated (q38) should not show DR screened
+    out.q38 = 0;
+
+    // Move DR to q40–q42
+    out.q40 = drScr;
+    out.q41 = drDet;
+    out.q42 = drTrt;
+  }
+
+  return out;
+}
+
 /* ==================================================================== */
 
 export default function EditReport({ user }) {
@@ -235,7 +300,7 @@ export default function EditReport({ user }) {
   const [year, setYear] = useState(String(new Date().getFullYear()));
 
   const Q_ROWS = useMemo(() => orderedQuestions(sections), []);
-  const KEYS   = useMemo(
+  const KEYS = useMemo(
     () => Array.from({ length: Q_ROWS.length }, (_, i) => `q${i + 1}`),
     [Q_ROWS.length]
   );
@@ -249,10 +314,16 @@ export default function EditReport({ user }) {
 
   // editable fields: month answers + (optional) cumulative
   const [answers, setAnswers] = useState(() =>
-    KEYS.reduce((a, k) => ((a[k] = 0), a), {})
+    KEYS.reduce((a, k) => {
+      a[k] = 0;
+      return a;
+    }, {})
   );
   const [cumulative, setCumulative] = useState(() =>
-    KEYS.reduce((a, k) => ((a[k] = 0), a), {})
+    KEYS.reduce((a, k) => {
+      a[k] = 0;
+      return a;
+    }, {})
   );
 
   // NEW: tables state (Eye Bank 2 rows, Vision Center 10 rows)
@@ -291,21 +362,22 @@ export default function EditReport({ user }) {
       const chosen = mine[0] || null;
       setDoc(chosen);
 
-      // answers/cumulative
-      const a = chosen?.answers || {};
-      const c = chosen?.cumulative || {};
+      // answers/cumulative with glaucoma/DR normalization
+      const aRaw = chosen?.answers || {};
+      const cRaw = chosen?.cumulative || {};
+      const aNorm = normalizeGlaucomaDRBlock(aRaw);
+      const cNorm = normalizeGlaucomaDRBlock(cRaw || {});
       const ans = {};
       const cum = {};
       KEYS.forEach((k) => {
-        ans[k] = Number(a[k] ?? 0) || 0;
-        cum[k] = Number(c[k] ?? 0) || 0;
+        ans[k] = Number(aNorm[k] ?? 0) || 0;
+        cum[k] = Number(cNorm[k] ?? 0) || 0;
       });
       setAnswers(ans);
       setCumulative(cum);
 
       // tables
-      const ebIn =
-        chosen?.eyeBank || chosen?.eyebank || chosen?.eye_bank || [];
+      const ebIn = chosen?.eyeBank || chosen?.eyebank || chosen?.eye_bank || [];
       const vcIn =
         chosen?.visionCenter ||
         chosen?.visioncentre ||
@@ -478,9 +550,7 @@ export default function EditReport({ user }) {
             <button
               onClick={tryUnlock}
               className={`px-3 py-2 rounded text-white ${
-                unlocked
-                  ? "bg-green-600"
-                  : "bg-blue-600 hover:bg-blue-700"
+                unlocked ? "bg-green-600" : "bg-blue-600 hover:bg-blue-700"
               }`}
               disabled={unlocked}
             >
@@ -514,9 +584,7 @@ export default function EditReport({ user }) {
           <span className="text-sm text-gray-600">
             Loaded: {doc.institution}, {doc.month} {doc.year}{" "}
             {doc.updatedAt
-              ? `(updated ${new Date(
-                  doc.updatedAt
-                ).toLocaleString()})`
+              ? `(updated ${new Date(doc.updatedAt).toLocaleString()})`
               : ""}
           </span>
         )}

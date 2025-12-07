@@ -203,6 +203,27 @@ function ViewReports({ reportData, month, year }) {
   const baseDistrict = reportData?.district || "";
   const baseInstitution = reportData?.institution || "";
 
+  // --- helper: how we interpret each q-key for ONE month (mirrors render logic) ---
+  const getMonthValueForKey = (answersObj = {}, key) => {
+    let raw = answersObj[key];
+
+    // Special glaucoma "Screened" fix:
+    // historically some reports stored it in q36 instead of q34.
+    // We treat q36 as:
+    //   - its own value, OR
+    //   - if zero but q34 is non-zero, we take q34 instead.
+    if (key === "q36") {
+      const altMonth = answersObj?.q34;
+      const valNum = Number(raw ?? 0) || 0;
+      const altNum = Number(altMonth ?? 0) || 0;
+      if (!valNum && altNum) {
+        raw = altMonth;
+      }
+    }
+
+    return Number(raw ?? 0) || 0;
+  };
+
   // Hydrate the selected document (so month column shows full data)
   useEffect(() => {
     if (!id) return;
@@ -359,17 +380,20 @@ function ViewReports({ reportData, month, year }) {
           if (!prev || ts(d) >= ts(prev)) latestByMY.set(k, d);
         }
 
-        // sum q1..q84 across FY window
+        // sum *displayed month values* across FY window
         const out = {};
         for (let i = 1; i <= 84; i++) out[`q${i}`] = 0;
+
         for (const p of fiscalPairs) {
           const d = latestByMY.get(`${p.month}|${p.year}`);
           const ans = (d && d.answers) || {};
           for (let i = 1; i <= 84; i++) {
-            const k = `q${i}`;
-            out[k] += Number(ans[k] ?? 0) || 0;
+            const key = `q${i}`;
+            const val = getMonthValueForKey(ans, key);
+            out[key] += val;
           }
         }
+
         if (!cancelled) setCumFallback(out);
       } catch (e) {
         console.warn("Local cumulative fallback failed:", e);
@@ -382,16 +406,56 @@ function ViewReports({ reportData, month, year }) {
     };
   }, [cumTotals, baseDistrict, baseInstitution, month, year]);
 
-  // Render fields
+  /* -------------------- Render fields + glaucoma/DR fix ------------------ */
+
   const {
-    answers: answersRaw = {},
-    cumulative: cumulativeFromServer = {},
+    answers: answersRawOriginal = {},
+    cumulative: cumulativeFromServerOriginal = {},
     eyeBank,
     visionCenter,
     institution,
     district,
     updatedAt,
   } = doc || {};
+
+  // 🔹 Normalize just the Glaucoma / DR block if it's in the "new" pattern
+  function normalizeGlaucomaDRBlock(src = {}) {
+    const out = { ...src };
+
+    const gScr = Number(out.q36 ?? 0) || 0;
+    const gDet = Number(out.q37 ?? 0) || 0;
+    const drScr = Number(out.q38 ?? 0) || 0;
+    const drDet = Number(out.q39 ?? 0) || 0;
+    const drTrt = Number(out.q40 ?? 0) || 0;
+
+    // "New" pattern:
+    //  - Glaucoma detected rows (q36, q37) are both 0
+    //  - but DR values start at q38..q40
+    const isNewPattern =
+      gScr === 0 &&
+      gDet === 0 &&
+      (drScr !== 0 || drDet !== 0 || drTrt !== 0);
+
+    if (!isNewPattern) return out; // October & older → untouched
+
+    // We want:
+    //   Glaucoma treated (q38) → 0
+    //   DR screened  (q40)    → drScr (old q38)
+    //   DR detected  (q41)    → drDet (old q39)
+    //   DR treated   (q42)    → drTrt (old q40)
+    out.q38 = 0;
+    out.q40 = drScr;
+    out.q41 = drDet;
+    out.q42 = drTrt;
+
+    return out;
+  }
+
+  // Apply normalization to month answers and per-doc cumulative
+  const answersRaw = normalizeGlaucomaDRBlock(answersRawOriginal);
+  const cumulativeFromServer = normalizeGlaucomaDRBlock(
+    cumulativeFromServerOriginal || {}
+  );
 
   const eyeBankData = normalizeTextNameFields(
     eyeBank || doc?.eyebank || doc?.eye_bank || []
@@ -400,13 +464,17 @@ function ViewReports({ reportData, month, year }) {
     visionCenter || doc?.visioncentre || doc?.vision_centre || []
   );
 
-  // Pick cumulative: server → local FY fallback → stored cumulative → {}
+  // helper to pick and normalize any cumulative source
+  const pickCum = (src) =>
+    src && Object.keys(src).length
+      ? normalizeGlaucomaDRBlock(src)
+      : null;
+
+  // Pick cumulative: server FY → local FY fallback → stored cumulative → {}
   const cumSrc =
-    (cumTotals && Object.keys(cumTotals).length && cumTotals) ||
-    (cumFallback && Object.keys(cumFallback).length && cumFallback) ||
-    (cumulativeFromServer &&
-      Object.keys(cumulativeFromServer).length &&
-      cumulativeFromServer) ||
+    pickCum(cumTotals) ||
+    pickCum(cumFallback) ||
+    pickCum(cumulativeFromServer) ||
     {};
 
   if (!reportData) return null;
@@ -454,14 +522,17 @@ function ViewReports({ reportData, month, year }) {
         <tbody>
           {(() => {
             let qNumber = 0;
-            let inVisionSection = false; // 🔹 track if we are in VISION CENTER section
+            let inVisionSection = false; // for V. VISION CENTER
+            let inEyeBankSection = false; // for III. EYE BANK PERFORMANCE
+            let eyeBankQsSeen = 0; // count of old Eye Bank q-rows we hide
 
             return flatRows.map((item, idx) => {
               if (item.kind === "header") {
-                const isVisionHeader = String(item.label || "")
-                  .toUpperCase()
-                  .includes("VISION CENTER");
-                inVisionSection = isVisionHeader;
+                const upper = String(item.label || "").toUpperCase();
+
+                inVisionSection = upper.includes("VISION CENTER");
+                inEyeBankSection = upper.includes("EYE BANK PERFORMANCE");
+                if (inEyeBankSection) eyeBankQsSeen = 0;
 
                 return (
                   <tr key={`h-${idx}`}>
@@ -509,21 +580,64 @@ function ViewReports({ reportData, month, year }) {
               }
 
               if (item.kind === "q") {
-                // Always advance qNumber to keep q1..q84 aligned
+                // Always advance qNumber to keep q1..q84 aligned with stored data
                 qNumber += 1;
 
-                // 🔹 Skip all normal question rows in the VISION CENTER section
+                // Hide the first 2 legacy Eye Bank question rows (for *old* saved reports)
+                if (inEyeBankSection && eyeBankQsSeen < 2) {
+                  eyeBankQsSeen += 1;
+                  return null;
+                }
+
+                // Skip all normal question rows in the VISION CENTER section
                 if (inVisionSection) {
                   return null;
                 }
 
+                const label =
+                  item.row?.label ||
+                  item.row?.title ||
+                  item.row?.text ||
+                  item.row?.name ||
+                  `Row ${qNumber}`;
+
                 const key = `q${qNumber}`;
-                const monthVal = Number(answersRaw[key] ?? 0);
-                const cumVal = Number((cumSrc && cumSrc[key]) ?? 0);
+
+                // ----- special fix: Glaucoma "Screened" bug (q36 vs q34) -----
+                let rawMonth = answersRaw[key];
+                let rawCum = cumSrc && cumSrc[key];
+
+                if (key === "q36") {
+                  const altMonth = answersRaw?.q34;
+                  const altCum = cumSrc?.q34;
+
+                  const monthIsZero =
+                    rawMonth == null ||
+                    rawMonth === "" ||
+                    Number(rawMonth) === 0;
+                  const altMonthNonZero =
+                    altMonth != null && Number(altMonth) !== 0;
+
+                  const cumIsZero =
+                    rawCum == null || rawCum === "" || Number(rawCum) === 0;
+                  const altCumNonZero =
+                    altCum != null && Number(altCum) !== 0;
+
+                  if (monthIsZero && altMonthNonZero) {
+                    rawMonth = altMonth;
+                  }
+                  if (cumIsZero && altCumNonZero) {
+                    rawCum = altCum;
+                  }
+                }
+                // ----------------------------------------------------------------
+
+                const monthVal = Number(rawMonth ?? 0) || 0;
+                const cumVal = Number(rawCum ?? 0) || 0;
 
                 return (
                   <tr key={`r-${idx}`}>
-                    <td className="border p-1">{item.row.label}</td>
+                    <td className="border p-1">{label}</td>
                     <td className="border p-1 text-right">{monthVal}</td>
                     <td className="border p-1 text-right">{cumVal}</td>
                   </tr>
@@ -565,10 +679,15 @@ function ReportEntry({
   disabled = false,
 }) {
   /* --- safe no-ops if these aren’t defined elsewhere --- */
-  const startFx = () => (typeof startFlute === "function" ? startFlute() : void 0);
-  const stopFx  = () => (typeof stopFlute  === "function" ? stopFlute()  : void 0);
+  const startFx = () =>
+    typeof startFlute === "function" ? startFlute() : void 0;
+  const stopFx = () =>
+    typeof stopFlute === "function" ? stopFlute() : void 0;
 
-  /* ---------- recursive question flattener (fixes ADDL. REPORTS) --------- */
+  /* ---------- recursive question flattener (fixes ADDL. REPORTS) ---------
+     IMPORTANT: this version skips table sections (Eye Bank & Vision Center)
+     so their rows are NOT counted in q1..q84 for the ENTRY UI only.
+  ------------------------------------------------------------------------- */
   function flattenQuestionsFromBlock(blk) {
     const out = [];
 
@@ -589,11 +708,15 @@ function ReportEntry({
     const walk = (node, title = node?.title || "blk") => {
       if (!node || typeof node !== "object") return;
 
+      // 👉 table section like Eye Bank / Vision Center
+      const isTableSection = node.table && Array.isArray(node.rows);
+
       const direct = Array.isArray(node.questions)
         ? node.questions
-        : Array.isArray(node.rows)
+        : !isTableSection && Array.isArray(node.rows)
         ? node.rows
         : [];
+
       direct.forEach((q, i) => pushQ(q, i, title));
 
       const nested =
@@ -601,6 +724,7 @@ function ReportEntry({
         (Array.isArray(node.subsections) && node.subsections) ||
         (Array.isArray(node.sections) && node.sections) ||
         null;
+
       if (nested) {
         nested.forEach((child, idx) =>
           walk(child, child?.title || `${title}_${idx + 1}`)
@@ -785,16 +909,30 @@ function ReportEntry({
     }
   };
 
-  /* --------- Build a stable 84-question order (matches page order) ------- */
+  /* --------- Build a stable 84-question order (MATCHES VIEW REPORT) ------ */
   const qDefs84 = React.useMemo(() => {
-    const all = [];
-    (sections || [])
-      .filter((s) => !s.table)
-      .forEach((s) => {
-        const qs = getQs(s);
-        qs.forEach((q) => all.push(q));
+    // Use the SAME flattened order as ViewReports (buildFlatRows),
+    // so q1..q84 positions match old reports like October 2025.
+    const flatRows = buildFlatRows(sections);
+
+    const qItems = flatRows
+      .filter((item) => item.kind === "q")
+      .map((item, idx) => {
+        const row = item.row || {};
+        const id =
+          row.id ||
+          row.key ||
+          row.code ||
+          row.name ||
+          row.labelKey ||
+          row.field ||
+          `q_auto_flat_${idx + 1}`;
+        const label =
+          row.label || row.title || row.text || row.name || `Row ${idx + 1}`;
+        return { ...row, id, label };
       });
-    return all.slice(0, 84);
+
+    return qItems.slice(0, 84);
   }, []);
 
   // Map current answers to q1..q84, filling missing with "0"
@@ -824,7 +962,9 @@ function ReportEntry({
       return;
     }
     if (alreadySubmitted) {
-      alert("A report for this Month & Year already exists for your institution.");
+      alert(
+        "A report for this Month & Year already exists for your institution."
+      );
       return;
     }
 
