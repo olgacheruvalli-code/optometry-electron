@@ -5,17 +5,19 @@ import React, {
   useEffect,
   useLayoutEffect, // ok even if unused in this file
   useMemo,
-  useRef,          // ok even if unused in this file
+  useRef, // ok even if unused in this file
   useState,
 } from "react";
 import API_BASE from "./apiBase";
 import sections from "./data/questions";
 import { districtInstitutions } from "./data/districtInstitutions";
 import "./index.css";
+
 import MonthYearSelector from "./components/MonthYearSelector";
 import EyeBankTable from "./components/EyeBankTable";
 import VisionCenterTable from "./components/VisionCenterTable";
 import QuestionInput from "./components/QuestionInput";
+
 import Login from "./components/Login";
 import MenuBar from "./components/MenuBar";
 import ReportsList from "./components/ReportsList";
@@ -30,14 +32,24 @@ import AmblyopiaForm from "./components/Amblyopia/AmblyopiaForm";
 import AmblyopiaView from "./components/Amblyopia/AmblyopiaView";
 import AmblyopiaAnalytics from "./components/Amblyopia/AmblyopiaAnalytics";
 import TestVisionCenter from "./components/TestVisionCenter";
+
 // Wake up Render backend when app starts
 fetch("https://optometry-backend-iiuk.onrender.com/api/ping").catch(() => {});
 
-
 /* ----------------------------- Month constants ---------------------------- */
 const MONTHS = [
-  "April", "May", "June", "July", "August", "September",
-  "October", "November", "December", "January", "February", "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+  "January",
+  "February",
+  "March",
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -74,7 +86,8 @@ function buildFlatRows(secs) {
     // special tables (match both "center" and "centre")
     if (sec?.table) {
       if (/eye\s*bank/i.test(titleStr)) out.push({ kind: "eyeBankTable" });
-      if (/vision\s*cent(e|)r(e|)/i.test(titleStr)) out.push({ kind: "visionCenterTable" });
+      if (/vision\s*cent(e|)r(e|)/i.test(titleStr))
+        out.push({ kind: "visionCenterTable" });
     }
   }
   return out;
@@ -86,60 +99,15 @@ function orderedQuestions(secs) {
 }
 
 const KEYS = Array.from({ length: 84 }, (_, i) => `q${i + 1}`);
-const Q_ROWS = orderedQuestions(sections);
 
-/** Create an object with q1..q84 = 0 */
-const makeEmptyAnswers = () => KEYS.reduce((a, k) => ((a[k] = 0), a), {});
-
-/** Ensure an object has numeric q1..q84 entries (missing -> 0, non-numeric -> 0). */
-const fill84 = (obj) => {
-  const base = { ...(obj || {}) };
-  for (const k of KEYS) {
-    const v = base[k];
-    base[k] = typeof v === "number" ? (Number.isFinite(v) ? v : 0) : Number(v ?? 0) || 0;
-  }
-  return base;
-};
-
-/** Normalize month names (case/abbr tolerant). */
-const normMonth = (m) => {
-  if (!m) return m;
-  const s = String(m).trim().toLowerCase();
-  const map = {
-    january: "January", jan: "January",
-    february: "February", feb: "February",
-    march: "March", mar: "March",
-    april: "April", apr: "April",
-    may: "May",
-    june: "June", jun: "June",
-    july: "July", jul: "July",
-    august: "August", aug: "August",
-    september: "September", sep: "September", sept: "September",
-    october: "October", oct: "October",
-    november: "November", nov: "November",
-    december: "December", dec: "December",
-  };
-  return map[s] || m;
-};
-
-/** Build ONLY non-zero q# keys (q1..qN), respecting the *display order* in `secs`. */
-function buildAnswersPartial(answers, secs) {
-  const qs = orderedQuestions(secs);
-  const out = {};
-  for (let i = 0; i < qs.length; i++) {
-    const id = qs[i]?.id;
-    if (!id) continue;
-    const raw = answers[id];
-    let v = 0;
-    if (raw && typeof raw === "object") {
-      v = Object.values(raw).reduce((s, x) => s + (Number(x) || 0), 0);
-    } else {
-      v = Number(raw || 0);
-    }
-    if (v > 0) out[`q${i + 1}`] = String(v); // keep as string to match earlier cURL behavior
-  }
-  return out;
-}
+/**
+ * ✅ CANONICAL / FROZEN q1..q84 DEF LIST
+ * Single source of truth for q1..q84 order (matches ViewReports order)
+ */
+const Q_DEFS_84 = buildFlatRows(sections)
+  .filter((x) => x.kind === "q")
+  .map((x) => x.row)
+  .slice(0, 84);
 
 /** Convert table rows: keep names as strings; numeric-looking cells -> numbers; null/undefined -> "" */
 const sanitizeTableArray = (arr) =>
@@ -178,7 +146,10 @@ const normalizeTextNameFields = (rows) =>
     ? rows.map((row) => {
         const out = { ...(row || {}) };
         for (const k of Object.keys(out)) {
-          if (/name|centre|center/i.test(k) && (out[k] === 0 || out[k] === "0")) {
+          if (
+            /name|centre|center/i.test(k) &&
+            (out[k] === 0 || out[k] === "0")
+          ) {
             out[k] = "";
           }
         }
@@ -186,12 +157,6 @@ const normalizeTextNameFields = (rows) =>
       })
     : [];
 
-/* ========================================================================== */
-/* ViewReports — Individual view (fixed fiscal YTD Apr→selected, no reset)    */
-/* ========================================================================== */
-/* ========================================================================== */
-/* ViewReports (uses backend FY endpoint; Apr→selected; EB/VC no cumulative)  */
-/* ========================================================================== */
 function ViewReports({ reportData, month, year }) {
   const [doc, setDoc] = useState(reportData);
   const [hydrating, setHydrating] = useState(false);
@@ -466,9 +431,7 @@ function ViewReports({ reportData, month, year }) {
 
   // helper to pick and normalize any cumulative source
   const pickCum = (src) =>
-    src && Object.keys(src).length
-      ? normalizeGlaucomaDRBlock(src)
-      : null;
+    src && Object.keys(src).length ? normalizeGlaucomaDRBlock(src) : null;
 
   // Pick cumulative: server FY → local FY fallback → stored cumulative → {}
   const cumSrc =
@@ -478,6 +441,50 @@ function ViewReports({ reportData, month, year }) {
     {};
 
   if (!reportData) return null;
+
+  // ✅ NEW: Tribal cataract IDs (these are ID-based, not q-based now)
+  const TRIBAL1 = "addl_tribal_cataract_cases";
+  const TRIBAL2 = "addl_tribal_cataract_surgery";
+
+  // Read tribal values from ID-based save, fallback to q mapping if old data
+  const getTribalMonth = (fallbackQKey) => {
+    const v = answersRawOriginal?.[fallbackQKey]; // old qXX if it existed
+    const v2 = answersRawOriginal?.[fallbackQKey]; // kept same; safe
+    // Prefer ID-based
+    const idVal =
+      answersRawOriginal?.[fallbackQKey] !== undefined
+        ? undefined
+        : undefined; // no-op; keep logic below
+    const direct =
+      answersRawOriginal?.[TRIBAL1] !== undefined ||
+      answersRawOriginal?.[TRIBAL2] !== undefined;
+
+    // Use ID if present; else use q fallback
+    return direct
+      ? null
+      : Number(v ?? v2 ?? 0) || 0;
+  };
+
+  const tribalMonth1 =
+    answersRawOriginal?.[TRIBAL1] != null
+      ? Number(answersRawOriginal?.[TRIBAL1] ?? 0) || 0
+      : 0;
+
+  const tribalMonth2 =
+    answersRawOriginal?.[TRIBAL2] != null
+      ? Number(answersRawOriginal?.[TRIBAL2] ?? 0) || 0
+      : 0;
+
+  // For cumulative of these 2, we can only use cumSrc if server/local returns q-based.
+  // If you want perfect cumulative for these 2 also, we should add them to the FY-cumulative endpoint later.
+  const tribalCum1 =
+    cumSrc?.[TRIBAL1] != null
+      ? Number(cumSrc?.[TRIBAL1] ?? 0) || 0
+      : 0;
+  const tribalCum2 =
+    cumSrc?.[TRIBAL2] != null
+      ? Number(cumSrc?.[TRIBAL2] ?? 0) || 0
+      : 0;
 
   return (
     <div className="a4-wrapper text-[12pt] font-serif">
@@ -519,6 +526,7 @@ function ViewReports({ reportData, month, year }) {
             <th className="border p-1 text-right">Cumulative</th>
           </tr>
         </thead>
+
         <tbody>
           {(() => {
             let qNumber = 0;
@@ -536,10 +544,7 @@ function ViewReports({ reportData, month, year }) {
 
                 return (
                   <tr key={`h-${idx}`}>
-                    <td
-                      colSpan={3}
-                      className="border p-1 font-bold bg-gray-100"
-                    >
+                    <td colSpan={3} className="border p-1 font-bold bg-gray-100">
                       {item.label}
                     </td>
                   </tr>
@@ -602,6 +607,27 @@ function ViewReports({ reportData, month, year }) {
                   `Row ${qNumber}`;
 
                 const key = `q${qNumber}`;
+
+                // ✅ NEW: override tribal cataract labels to read ID-based values
+                const isTribal1 =
+                  String(label).trim() ===
+                  "No of cataract cases detected in tribal population";
+                const isTribal2 =
+                  String(label).trim() ===
+                  "No of cases undergone for cataract surgery in tribal population";
+
+                if (isTribal1 || isTribal2) {
+                  const monthVal = isTribal1 ? tribalMonth1 : tribalMonth2;
+                  const cumVal = isTribal1 ? tribalCum1 : tribalCum2;
+
+                  return (
+                    <tr key={`r-${idx}`}>
+                      <td className="border p-1">{label}</td>
+                      <td className="border p-1 text-right">{monthVal}</td>
+                      <td className="border p-1 text-right">{cumVal}</td>
+                    </tr>
+                  );
+                }
 
                 // ----- special fix: Glaucoma "Screened" bug (q36 vs q34) -----
                 let rawMonth = answersRaw[key];
@@ -666,8 +692,45 @@ function ViewReports({ reportData, month, year }) {
   );
 }
 
+function getEyeBankLegacySlotsAndTribalIds() {
+  const flatRows = buildFlatRows(sections);
+
+  let inEyeBank = false;
+  let eyeBankQsSeen = 0;
+  let qNumber = 0;
+
+  let slot1 = null;
+  let slot2 = null;
+
+  for (const item of flatRows) {
+    if (item.kind === "header") {
+      const upper = String(item.label || "").toUpperCase();
+      inEyeBank = upper.includes("EYE BANK PERFORMANCE");
+      if (inEyeBank) eyeBankQsSeen = 0;
+      continue;
+    }
+
+    if (item.kind === "q") {
+      qNumber += 1;
+
+      if (inEyeBank && eyeBankQsSeen < 2) {
+        eyeBankQsSeen += 1;
+        if (slot1 == null) slot1 = qNumber; // first hidden legacy slot
+        else if (slot2 == null) slot2 = qNumber; // second hidden legacy slot
+      }
+    }
+  }
+
+  return {
+    slot1,
+    slot2,
+    TRIBAL1: "addl_tribal_cataract_cases",
+    TRIBAL2: "addl_tribal_cataract_surgery",
+  };
+}
 
 /* ======================= /ReportEntry (inline) ======================= */
+
 
 function ReportEntry({
   user,
@@ -686,7 +749,7 @@ function ReportEntry({
 
   /* ---------- recursive question flattener (fixes ADDL. REPORTS) ---------
      IMPORTANT: this version skips table sections (Eye Bank & Vision Center)
-     so their rows are NOT counted in q1..q84 for the ENTRY UI only.
+     so their rows are NOT counted in q1..qN for the ENTRY UI only.
   ------------------------------------------------------------------------- */
   function flattenQuestionsFromBlock(blk) {
     const out = [];
@@ -736,7 +799,7 @@ function ReportEntry({
     return out;
   }
 
-  const getQs = (blk) => flattenQuestionsFromBlock(blk);
+  const getQsLocal = (blk) => flattenQuestionsFromBlock(blk);
 
   /* ------------------------------ state ---------------------------------- */
   const [answers, setAnswers] = React.useState(initialAnswers);
@@ -745,7 +808,7 @@ function ReportEntry({
   const eyeBankSection = sections.find((s) =>
     (s.title || "").toUpperCase().includes("EYE BANK")
   );
-  const eyeBankRowsDef = getQs(eyeBankSection);
+  const eyeBankRowsDef = getQsLocal(eyeBankSection);
   const [eyeBank, setEyeBank] = React.useState(
     initialEyeBank.length
       ? initialEyeBank
@@ -826,12 +889,12 @@ function ReportEntry({
   }, [user?.district, user?.institution, month, year]);
 
   /* ----------------------------- helpers --------------------------------- */
-  const sanitizeTableArray = (arr) =>
+  const sanitizeTableArrayLocal = (arr) =>
     Array.isArray(arr)
       ? arr.map((r) => (r && typeof r === "object" ? r : {}))
       : [];
 
-  const someRowHasValues = (rows) =>
+  const someRowHasValuesLocal = (rows) =>
     Array.isArray(rows) &&
     rows.some((r) =>
       Object.values(r || {}).some(
@@ -842,54 +905,6 @@ function ReportEntry({
           String(v) !== "0"
       )
     );
-
-  // old helper (kept for compatibility; not used now)
-  function buildAnswersPartial(answersObj = {}, allSections = []) {
-    const known = new Set();
-    const flat = [];
-
-    const collect = (blk) => {
-      if (!blk || typeof blk !== "object") return;
-
-      const direct = Array.isArray(blk.questions)
-        ? blk.questions
-        : Array.isArray(blk.rows)
-        ? blk.rows
-        : [];
-      direct.forEach((q) => {
-        const k =
-          q?.id ||
-          q?.key ||
-          q?.code ||
-          q?.name ||
-          q?.labelKey ||
-          q?.field ||
-          null;
-        if (k) {
-          known.add(k);
-          flat.push(k);
-        }
-      });
-
-      const nested =
-        (Array.isArray(blk.items) && blk.items) ||
-        (Array.isArray(blk.subsections) && blk.subsections) ||
-        (Array.isArray(blk.sections) && blk.sections) ||
-        null;
-      if (nested) nested.forEach(collect);
-    };
-
-    (allSections || []).forEach(collect);
-
-    const out = {};
-    for (const k of flat) {
-      const v = answersObj[k];
-      if (v !== undefined && v !== null && String(v).trim() !== "") {
-        out[k] = v;
-      }
-    }
-    return out;
-  }
 
   const handleTableChange =
     (setFn) =>
@@ -909,13 +924,15 @@ function ReportEntry({
     }
   };
 
-  /* --------- Build a stable 84-question order (MATCHES VIEW REPORT) ------ */
-  const qDefs84 = React.useMemo(() => {
-    // Use the SAME flattened order as ViewReports (buildFlatRows),
-    // so q1..q84 positions match old reports like October 2025.
+  /* --------- Build a stable question order (MATCHES VIEW REPORT) ---------
+     ✅ CRITICAL FIX: DO NOT slice to 84.
+     We keep the SAME order, but save ALL q rows (q1..qN).
+     Old alignment is preserved because first 84 stay identical.
+  ------------------------------------------------------------------------- */
+  const qDefsAll = React.useMemo(() => {
     const flatRows = buildFlatRows(sections);
 
-    const qItems = flatRows
+    return flatRows
       .filter((item) => item.kind === "q")
       .map((item, idx) => {
         const row = item.row || {};
@@ -931,15 +948,13 @@ function ReportEntry({
           row.label || row.title || row.text || row.name || `Row ${idx + 1}`;
         return { ...row, id, label };
       });
-
-    return qItems.slice(0, 84);
   }, []);
 
-  // Map current answers to q1..q84, filling missing with "0"
-  const buildFullAnswers84 = () => {
+  // Map current answers to q1..qN, filling missing with "0"
+  const buildFullAnswersAll = () => {
     const out = {};
-    for (let i = 0; i < 84; i++) {
-      const qDef = qDefs84[i];
+    for (let i = 0; i < qDefsAll.length; i++) {
+      const qDef = qDefsAll[i];
       const keyId = qDef?.id;
       const raw = keyId ? answers[keyId] : undefined;
       const clean =
@@ -968,19 +983,17 @@ function ReportEntry({
       return;
     }
 
-    // ✅ Build full 84 answers (q1..q84) with "0" for empty fields
-    const answersFull = buildFullAnswers84();
+    // ✅ Build full answers q1..qN (this includes Tribal Cataract questions if they are q85/q86 etc.)
+    const answersFull = buildFullAnswersAll();
 
     // ✅ Clean tables
-    const cleanEyeBank = sanitizeTableArray(eyeBank);
-    const cleanVisionCenter = sanitizeTableArray(visionCenter);
+    const cleanEyeBank = sanitizeTableArrayLocal(eyeBank);
+    const cleanVisionCenter = sanitizeTableArrayLocal(visionCenter);
 
     // ✅ Check if anything non-zero was entered
-    const anyAnswer = Object.values(answersFull).some(
-      (v) => String(v) !== "0"
-    );
-    const hasEyeBank = someRowHasValues(cleanEyeBank);
-    const hasVisionCenter = someRowHasValues(cleanVisionCenter);
+    const anyAnswer = Object.values(answersFull).some((v) => String(v) !== "0");
+    const hasEyeBank = someRowHasValuesLocal(cleanEyeBank);
+    const hasVisionCenter = someRowHasValuesLocal(cleanVisionCenter);
 
     const payload = {
       district: user.district,
@@ -1010,7 +1023,7 @@ function ReportEntry({
       try {
         data = raw ? JSON.parse(raw) : {};
       } catch {
-        // ignore JSON parse error, use raw if needed
+        // ignore
       }
 
       if (!res.ok || data?.ok === false) {
@@ -1076,7 +1089,7 @@ function ReportEntry({
         {sections
           .filter((s) => !s.table)
           .map((s) => {
-            const qs = getQs(s);
+            const qs = getQsLocal(s);
             if (!qs.length) return null;
             return (
               <div key={s.title || Math.random()} className="mb-12">
@@ -1174,54 +1187,6 @@ function ReportEntry({
 }
 
 
-/* ========================================================================== */
-/* App                                                                         */
-/* ========================================================================== */
-
-// ---------- Shared question flattener used by District view ----------
-// ---------- Shared question flattener used by District view ----------
-function flattenQuestionsFromBlock(blk) {
-  const out = [];
-
-  const pushQ = (q, i, title = "blk") => {
-    const id =
-      q?.id ||
-      q?.key ||
-      q?.code ||
-      q?.name ||
-      q?.labelKey ||
-      q?.field ||
-      `q_auto_${String(title).replace(/\s+/g, "_")}_${i + 1}`;
-    const label =
-      q?.label || q?.title || q?.text || q?.name || `Row ${i + 1}`;
-    out.push({ ...q, id, label });
-  };
-
-  const walk = (node, title = node?.title || "blk") => {
-    if (!node || typeof node !== "object") return;
-
-    const direct = Array.isArray(node.questions)
-      ? node.questions
-      : Array.isArray(node.rows)
-      ? node.rows
-      : [];
-    direct.forEach((q, i) => pushQ(q, i, title));
-
-    const nested =
-      (Array.isArray(node.items) && node.items) ||
-      (Array.isArray(node.subsections) && node.subsections) ||
-      (Array.isArray(node.sections) && node.sections) ||
-      null;
-    if (nested) {
-      nested.forEach((child, idx) =>
-        walk(child, child?.title || `${title}_${idx + 1}`)
-      );
-    }
-  };
-
-  walk(blk);
-  return out;
-}
 
 function App() {
   const [user, setUser] = useState(null);
@@ -1251,9 +1216,29 @@ function App() {
       ? "DOC"
       : user?.role || "USER";
 
-  // 🔁 Use the SAME 84-question order as ReportEntry / ViewReports
-  //    IMPORTANT: now use Q_ROWS (from top of file) so mapping matches q1..q84 everywhere.
-  const qDefs = useMemo(() => Q_ROWS, []);
+  // 🔁 Use the SAME 84-question order as ViewReports / saving (q1..q84)
+const qDefs = useMemo(() => {
+  const flatRows = buildFlatRows(sections);
+  const qItems = flatRows
+    .filter((item) => item.kind === "q")
+    .map((item, idx) => {
+      const row = item.row || {};
+      const id =
+        row.id ||
+        row.key ||
+        row.code ||
+        row.name ||
+        row.labelKey ||
+        row.field ||
+        `q_auto_flat_${idx + 1}`;
+      const label =
+        row.label || row.title || row.text || row.name || `Row ${idx + 1}`;
+      return { ...row, id, label };
+    });
+
+  return qItems.slice(0, 84);
+}, []);
+
 
   // Labels aligned with q1..q84 (index i → q{i+1})
   const qLabels = useMemo(
