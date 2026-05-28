@@ -30,6 +30,13 @@ const VISION_OPTIONS = [
   "6/36","6/36P","6/60",
   "CF","CFCF","HM+","PL+","PL-"
 ];
+
+const CATARACT_VA_OPTIONS = [
+  "",
+  "PL+", "PL-", "CFCF", "HM+",
+  "1/60", "2/60", "3/60", "4/60", "5/60", "6/60",
+  "6/36", "6/24", "6/18", "6/12", "6/9", "6/6"
+];
 const NV_ADD_OPTIONS = [
   "", "+0.50","+0.75","+1.00","+1.25","+1.50",
   "+1.75","+2.00","+2.25","+2.50",
@@ -763,14 +770,17 @@ export default function RegistersManager({ user, activeRegister }) {
                     )}
                     {activeTab === "blind-register" && (
                       <>
+                        <th className="p-3">Date</th>
                         <th className="p-3">VA (RE/LE)</th>
                         <th className="p-3">Cause</th>
                       </>
                     )}
                     {activeTab === "cataract-backlog" && (
                       <>
+                        <th className="p-3">Detection Date</th>
                         <th className="p-3">Eye</th>
                         <th className="p-3">Status</th>
+                        <th className="p-3">Surgery Date</th>
                       </>
                     )}
                     {(activeTab === "old-aged-spectacles" || activeTab === "school-spectacles") && (
@@ -810,22 +820,25 @@ export default function RegistersManager({ user, activeRegister }) {
                       )}
                       {activeTab === "blind-register" && (
                         <>
+                          <td className="p-3 whitespace-nowrap">{r.date || "—"}</td>
                           <td className="p-3 whitespace-nowrap">RE: {r.vaRE || "-"} | LE: {r.vaLE || "-"}</td>
                           <td className="p-3 text-amber-700 font-semibold whitespace-nowrap">{r.cause}</td>
                         </>
                       )}
                       {activeTab === "cataract-backlog" && (
                         <>
+                          <td className="p-3 whitespace-nowrap">{r.detectionDate || "—"}</td>
                           <td className="p-3 font-bold text-slate-600 whitespace-nowrap">{r.eyeOperated}</td>
                           <td className="p-3 whitespace-nowrap">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
                               r.status === "Operated" 
-                                ? "bg-emerald-50 text-emerald-600 border-emerald-200" 
-                                : "bg-amber-50 text-amber-600 border-amber-200"
+                                ? "bg-emerald-100 text-emerald-800 border-emerald-300" 
+                                : "bg-rose-100 text-rose-800 border-rose-300"
                             }`}>
                               {r.status}
                             </span>
                           </td>
+                          <td className="p-3 whitespace-nowrap">{r.surgeryDate || "—"}</td>
                         </>
                       )}
                       {(activeTab === "old-aged-spectacles" || activeTab === "school-spectacles") && (
@@ -1031,25 +1044,11 @@ export default function RegistersManager({ user, activeRegister }) {
               <>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase mb-1">VA Right Eye (RE)</label>
-                  <input
-                    type="text"
-                    name="vaRE"
-                    value={formData.vaRE}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84]"
-                    placeholder="RE vision"
-                  />
+                  {renderSelect("vaRE", formData.vaRE, CATARACT_VA_OPTIONS, handleChange, "Select RE VA")}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase mb-1">VA Left Eye (LE)</label>
-                  <input
-                    type="text"
-                    name="vaLE"
-                    value={formData.vaLE}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84]"
-                    placeholder="LE vision"
-                  />
+                  {renderSelect("vaLE", formData.vaLE, CATARACT_VA_OPTIONS, handleChange, "Select LE VA")}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Eye to be Operated</label>
