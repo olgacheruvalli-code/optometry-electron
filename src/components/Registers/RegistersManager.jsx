@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import * as XLSX from "xlsx";
 import API_BASE from "../../apiBase";
 import { Plus, Table, Download, Search, X, Check } from "lucide-react";
+import { districtInstitutions } from "../../data/districtInstitutions";
 
 const buildRange = (start, end, step, precision = 2) => {
   const arr = [];
@@ -221,6 +222,21 @@ export default function RegistersManager({ user, activeRegister }) {
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
 
+  // DOC role detection and institution filtering
+  const instStr = String(user?.institution || "").trim().toLowerCase();
+  const userRole =
+    user?.isDoc || /^doc\s/.test(instStr) || /^dc\s/.test(instStr)
+      ? "DOC"
+      : user?.role || "USER";
+
+  const [selectedInstitutionFilter, setSelectedInstitutionFilter] = useState("all");
+
+  const instList = useMemo(() => {
+    const district = user?.district || "";
+    const arr = Array.isArray(districtInstitutions[district]) ? districtInstitutions[district] : [];
+    return arr.filter((n) => n && !/^doc\s/i.test(n) && !/^dc\s/i.test(n));
+  }, [user?.district]);
+
   // Form State
   const initialFormState = {
     name: "",
@@ -288,12 +304,20 @@ export default function RegistersManager({ user, activeRegister }) {
       setPeriodMode("all");
       setCustomStartDate("");
       setCustomEndDate("");
+      setSelectedInstitutionFilter("all");
     }
   }, [activeRegister]);
   const fetchRecords = async () => {
     setLoading(true);
     try {
-      const q = `district=${encodeURIComponent(user?.district || "")}&institution=${encodeURIComponent(user?.institution || "")}`;
+      let q = `district=${encodeURIComponent(user?.district || "")}`;
+      if (userRole === "DOC") {
+        if (selectedInstitutionFilter && selectedInstitutionFilter !== "all") {
+          q += `&institution=${encodeURIComponent(selectedInstitutionFilter)}`;
+        }
+      } else {
+        q += `&institution=${encodeURIComponent(user?.institution || "")}`;
+      }
       const res = await fetch(`${API_BASE}/api/${activeTab}?${q}`);
       const data = await res.json();
       if (res.ok && data.ok) {
@@ -313,7 +337,7 @@ export default function RegistersManager({ user, activeRegister }) {
     if (user?.district) {
       fetchRecords();
     }
-  }, [activeTab, user]);
+  }, [activeTab, user, selectedInstitutionFilter]);
 
   // Handle Form Change
   const handleChange = (e) => {
@@ -665,17 +689,19 @@ export default function RegistersManager({ user, activeRegister }) {
             <Table className="w-4 h-4" />
             View Records ({filteredRecords.length})
           </button>
-          <button
-            onClick={() => {
-              setViewMode("form");
-            }}
-            className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-              viewMode === "form" ? "bg-slate-800 text-white" : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-            {editingId ? "Edit Entry" : "Add New Entry"}
-          </button>
+          {(userRole !== "DOC" || editingId) && (
+            <button
+              onClick={() => {
+                setViewMode("form");
+              }}
+              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                viewMode === "form" ? "bg-slate-800 text-white" : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              <Plus className="w-4 h-4" />
+              {editingId ? "Edit Entry" : "Add New Entry"}
+            </button>
+          )}
         </div>
 
         {viewMode === "table" && records.length > 0 && (
@@ -706,37 +732,57 @@ export default function RegistersManager({ user, activeRegister }) {
               />
             </div>
 
-            {/* Period Filter Selector */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Filter Period:</span>
-              <select
-                value={periodMode}
-                onChange={(e) => setPeriodMode(e.target.value)}
-                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:border-[#396b84] font-semibold cursor-pointer"
-              >
-                <option value="all">All Time</option>
-                <option value="this-month">This Month</option>
-                <option value="last-30">Last 30 Days</option>
-                <option value="custom">Custom Range</option>
-              </select>
-
-              {periodMode === "custom" && (
-                <div className="flex items-center gap-1.5 animate-fadeIn">
-                  <input
-                    type="date"
-                    value={customStartDate}
-                    onChange={(e) => setCustomStartDate(e.target.value)}
-                    className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84] text-slate-700 font-medium cursor-pointer"
-                  />
-                  <span className="text-xs text-slate-400">to</span>
-                  <input
-                    type="date"
-                    value={customEndDate}
-                    onChange={(e) => setCustomEndDate(e.target.value)}
-                    className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84] text-slate-700 font-medium cursor-pointer"
-                  />
+            {/* Period Filter Selector & Institution Selector (for DOC) */}
+            <div className="flex flex-wrap items-center gap-4">
+              {userRole === "DOC" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Institution:</span>
+                  <select
+                    value={selectedInstitutionFilter}
+                    onChange={(e) => setSelectedInstitutionFilter(e.target.value)}
+                    className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:border-[#396b84] font-semibold cursor-pointer max-w-[220px] truncate"
+                  >
+                    <option value="all">All Institutions</option>
+                    {instList.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Filter Period:</span>
+                <select
+                  value={periodMode}
+                  onChange={(e) => setPeriodMode(e.target.value)}
+                  className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:border-[#396b84] font-semibold cursor-pointer"
+                >
+                  <option value="all">All Time</option>
+                  <option value="this-month">This Month</option>
+                  <option value="last-30">Last 30 Days</option>
+                  <option value="custom">Custom Range</option>
+                </select>
+
+                {periodMode === "custom" && (
+                  <div className="flex items-center gap-1.5 animate-fadeIn">
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84] text-slate-700 font-medium cursor-pointer"
+                    />
+                    <span className="text-xs text-slate-400">to</span>
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84] text-slate-700 font-medium cursor-pointer"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
