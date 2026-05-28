@@ -49,21 +49,64 @@ const splitSigned = (value) => {
   return { plus: v, minus: "" };
 };
 
+const formatVal = (val) => {
+  if (!val) return "";
+  let s = val.toString().trim();
+  if (s.toUpperCase() === "PL" || s.toUpperCase() === "PLANO") {
+    return "Plano";
+  }
+  if (s.includes(".")) {
+    while (s.endsWith("0")) {
+      s = s.slice(0, -1);
+    }
+    if (s.endsWith(".")) {
+      s = s + "0";
+    }
+  }
+  return s;
+};
+
 const formatPower = (sph, cyl, axis, add) => {
   const parts = [];
-  if (sph) {
-    parts.push((sph === "PL" || sph === "Plano" || sph.toUpperCase() === "PL") ? "Plano" : sph);
+  
+  const formattedSph = formatVal(sph);
+  const formattedCyl = formatVal(cyl);
+  const formattedAdd = formatVal(add);
+  
+  if (formattedSph) {
+    if (formattedSph === "Plano") {
+      parts.push("Plano SPH");
+    } else {
+      parts.push(`${formattedSph} SPH`);
+    }
   }
-  if (cyl) {
-    parts.push(cyl);
+  
+  if (formattedCyl) {
+    let cylPart = `${formattedCyl} CYL`;
+    if (axis) {
+      cylPart += ` ${axis}`;
+    }
+    parts.push(cylPart);
   }
-  if (axis) {
-    parts.push(`x ${axis}`);
+  
+  if (!formattedCyl && axis) {
+    parts.push(`Axis ${axis}`);
   }
-  if (add) {
-    parts.push(`[Add: ${add}]`);
+  
+  const mainPowerText = parts.join(" / ");
+  
+  if (formattedAdd) {
+    const cleanAdd = formattedAdd.startsWith("+") || formattedAdd.startsWith("-") || formattedAdd === "Plano"
+      ? formattedAdd
+      : `+${formattedAdd}`;
+    if (mainPowerText) {
+      return `${mainPowerText} / Add ${cleanAdd}`;
+    } else {
+      return `Add ${cleanAdd}`;
+    }
   }
-  return parts.join(" ") || "—";
+  
+  return mainPowerText || "—";
 };
 
 const renderSelect = (name, value, options, onChange, placeholder, hideArrow = false) => {
