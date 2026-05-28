@@ -210,6 +210,9 @@ export default function RegistersManager({ user, activeRegister }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusMessage, setStatusMessage] = useState(null);
   const [showCustomDiagnosis, setShowCustomDiagnosis] = useState(false);
+  const [periodMode, setPeriodMode] = useState("all"); // "all", "this-month", "last-30", "custom"
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
 
   // Form State
   const initialFormState = {
@@ -271,6 +274,9 @@ export default function RegistersManager({ user, activeRegister }) {
       setEditingId(null);
       setFormData(initialFormState);
       setShowCustomDiagnosis(false);
+      setPeriodMode("all");
+      setCustomStartDate("");
+      setCustomEndDate("");
     }
   }, [activeRegister]);
   const fetchRecords = async () => {
@@ -406,18 +412,71 @@ export default function RegistersManager({ user, activeRegister }) {
     }
   };
 
-  // Filtered records for search
+  // Filtered records for search & period range
   const filteredRecords = useMemo(() => {
-    if (!searchQuery.trim()) return records;
-    const query = searchQuery.toLowerCase();
-    return records.filter((r) => {
-      const name = String(r.name || "").toLowerCase();
-      const address = String(r.address || "").toLowerCase();
-      const school = String(r.schoolName || "").toLowerCase();
-      const diagnosis = String(r.diagnosis || "").toLowerCase();
-      return name.includes(query) || address.includes(query) || school.includes(query) || diagnosis.includes(query);
-    });
-  }, [records, searchQuery]);
+    const getRecordDate = (r) => {
+      if (activeTab === "blind-register") return r.date;
+      if (activeTab === "cataract-backlog") return r.detectionDate;
+      if (activeTab === "old-aged-spectacles") return r.dateOfPrescription;
+      if (activeTab === "school-spectacles") return r.dateOfPrescription;
+      return null;
+    };
+
+    let result = records;
+
+    // Apply period filter
+    if (periodMode !== "all") {
+      let start = null;
+      let end = null;
+      const now = new Date();
+
+      if (periodMode === "this-month") {
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      } else if (periodMode === "last-30") {
+        start = new Date();
+        start.setDate(now.getDate() - 30);
+        end = now;
+      } else if (periodMode === "custom") {
+        if (customStartDate) start = new Date(customStartDate);
+        if (customEndDate) end = new Date(customEndDate);
+      }
+
+      result = result.filter((r) => {
+        const recordDateStr = getRecordDate(r);
+        if (!recordDateStr) return true;
+        const d = new Date(recordDateStr);
+        
+        if (start) {
+          const s = new Date(start);
+          s.setHours(0, 0, 0, 0);
+          d.setHours(0, 0, 0, 0);
+          if (d < s) return false;
+        }
+        if (end) {
+          const e = new Date(end);
+          e.setHours(23, 59, 59, 999);
+          d.setHours(0, 0, 0, 0);
+          if (d > e) return false;
+        }
+        return true;
+      });
+    }
+
+    // Apply search query filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((r) => {
+        const name = String(r.name || "").toLowerCase();
+        const address = String(r.address || "").toLowerCase();
+        const school = String(r.schoolName || "").toLowerCase();
+        const diagnosis = String(r.diagnosis || "").toLowerCase();
+        return name.includes(query) || address.includes(query) || school.includes(query) || diagnosis.includes(query);
+      });
+    }
+
+    return result;
+  }, [records, searchQuery, periodMode, customStartDate, customEndDate, activeTab]);
 
   // Export Table to Excel
   const handleExportExcel = () => {
@@ -575,6 +634,9 @@ export default function RegistersManager({ user, activeRegister }) {
                 setViewMode("table");
                 setEditingId(null);
                 setFormData(initialFormState);
+                setPeriodMode("all");
+                setCustomStartDate("");
+                setCustomEndDate("");
               }}
               className={`px-3 py-1.5 rounded-md text-xs font-semibold tracking-wide transition ${
                 activeTab === key ? "bg-[#396b84] text-white shadow-sm" : "text-slate-700 hover:bg-slate-300"
@@ -629,16 +691,52 @@ export default function RegistersManager({ user, activeRegister }) {
       {/* RENDER TABLE VIEW */}
       {viewMode === "table" && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-4">
-          {/* Search bar */}
-          <div className="relative max-w-md mb-4">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search by name, address, diagnosis..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-4 py-2 w-full rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84]"
-            />
+          {/* Filters Row */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 pb-3 border-b border-slate-100">
+            {/* Search bar */}
+            <div className="relative w-full md:max-w-md">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by name, address, diagnosis..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-4 py-2 w-full rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84]"
+              />
+            </div>
+
+            {/* Period Filter Selector */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Filter Period:</span>
+              <select
+                value={periodMode}
+                onChange={(e) => setPeriodMode(e.target.value)}
+                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:border-[#396b84] font-semibold cursor-pointer"
+              >
+                <option value="all">All Time</option>
+                <option value="this-month">This Month</option>
+                <option value="last-30">Last 30 Days</option>
+                <option value="custom">Custom Range</option>
+              </select>
+
+              {periodMode === "custom" && (
+                <div className="flex items-center gap-1.5 animate-fadeIn">
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84] text-slate-700 font-medium cursor-pointer"
+                  />
+                  <span className="text-xs text-slate-400">to</span>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84] text-slate-700 font-medium cursor-pointer"
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           {loading ? (
