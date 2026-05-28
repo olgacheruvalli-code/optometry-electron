@@ -4,40 +4,50 @@ import * as XLSX from "xlsx";
 import API_BASE from "../../apiBase";
 import { Plus, Table, Download, Search, Edit, Trash2, X, Check } from "lucide-react";
 
-// Predefined options for lens powers and refraction details
-const SPH_OPTIONS = (() => {
-  const options = ["", "PL"];
-  // Plus values
-  for (let i = 25; i <= 600; i += 25) options.push(`+${(i / 100).toFixed(2)}`);
-  for (let i = 650; i <= 1000; i += 50) options.push(`+${(i / 100).toFixed(2)}`);
-  for (let i = 1100; i <= 2000; i += 100) options.push(`+${(i / 100).toFixed(2)}`);
-  // Minus values
-  for (let i = 25; i <= 600; i += 25) options.push(`-${(i / 100).toFixed(2)}`);
-  for (let i = 650; i <= 1000; i += 50) options.push(`-${(i / 100).toFixed(2)}`);
-  for (let i = 1100; i <= 2000; i += 100) options.push(`-${(i / 100).toFixed(2)}`);
-  return options;
-})();
+const buildRange = (start, end, step, precision = 2) => {
+  const arr = [];
+  for (let v = start; v <= end + 0.0001; v += step) {
+    arr.push(v.toFixed(precision));
+  }
+  return arr;
+};
 
-const CYL_OPTIONS = (() => {
-  const options = ["", "PL"];
-  // Plus values
-  for (let i = 25; i <= 600; i += 25) options.push(`+${(i / 100).toFixed(2)}`);
-  // Minus values
-  for (let i = 25; i <= 600; i += 25) options.push(`-${(i / 100).toFixed(2)}`);
-  return options;
-})();
+const SPH_PLUS = ["", "PL",
+  ...buildRange(0.25, 10, 0.25),   // 0.25 steps up to 10
+  ...buildRange(11, 25, 1)         // 11 → 25 step 1
+];
 
-const AXIS_OPTIONS = (() => {
-  const options = [""];
-  for (let val = 180; val >= 5; val -= 5) options.push(String(val));
-  return options;
-})();
+const SPH_MINUS = ["", "PL",
+  ...buildRange(0.25, 10, 0.25),   // 0.25 steps up to 10
+  ...buildRange(11, 25, 1)         // 11 → 25 step 1
+];
+const CYL_PLUS = ["", "PL", ...buildRange(0.25, 6, 0.25)];
+const CYL_MINUS = ["", "PL", ...buildRange(0.25, 6, 0.25)];
+const AXIS_OPTIONS = ["", ...Array.from({ length: 36 }, (_, i) => String(180 - i * 5))];
+const VISION_OPTIONS = [
+  "", "6/6","6/6P","6/9","6/9P","6/12","6/12P",
+  "6/18","6/18P","6/24","6/24P",
+  "6/36","6/36P","6/60",
+  "CF","CFCF","HM+","PL+","PL-"
+];
+const NV_ADD_OPTIONS = [
+  "", "+0.50","+0.75","+1.00","+1.25","+1.50",
+  "+1.75","+2.00","+2.25","+2.50",
+  "+2.75","+3.00","+3.25","+3.50",
+  "+3.75","+4.00","+4.25","+4.50"
+];
 
-const ADD_OPTIONS = (() => {
-  const options = [""];
-  for (let i = 50; i <= 350; i += 25) options.push(`+${(i / 100).toFixed(2)}`);
-  return options;
-})();
+const NEAR_VISION_OPTIONS = ["", "N6","N8","N10","N12","N18","N24","N36"];
+
+const splitSigned = (value) => {
+  if (!value) return { plus: "", minus: "" };
+  const v = value.toString().trim();
+  if (!v) return { plus: "", minus: "" };
+  if (v.toUpperCase() === "PL") return { plus: "PL", minus: "" };
+  if (v.startsWith("-")) return { plus: "", minus: v.slice(1) };
+  if (v.startsWith("+")) return { plus: v.slice(1), minus: "" };
+  return { plus: v, minus: "" };
+};
 
 const renderSelect = (name, value, options, onChange, placeholder) => {
   const optionsWithCurrent = [...options];
@@ -51,12 +61,69 @@ const renderSelect = (name, value, options, onChange, placeholder) => {
       onChange={onChange}
       className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84] bg-white text-slate-800"
     >
-      {optionsWithCurrent.map((opt) => (
-        <option key={opt} value={opt}>
+      {optionsWithCurrent.map((opt, i) => (
+        <option key={`${opt}-${i}`} value={opt}>
           {opt === "" ? placeholder || "Select" : opt}
         </option>
       ))}
     </select>
+  );
+};
+
+const PowerSelector = ({ name, value, onChange }) => {
+  const { plus, minus } = splitSigned(value);
+
+  const handlePlus = (val) => {
+    let newVal = "";
+    if (val === "PL") newVal = "PL";
+    else if (val) newVal = "+" + val;
+    onChange({ target: { name, value: newVal } });
+  };
+
+  const handleMinus = (val) => {
+    let newVal = "";
+    if (val === "PL") newVal = "PL";
+    else if (val) newVal = "-" + val;
+    onChange({ target: { name, value: newVal } });
+  };
+
+  const isSph = name.toLowerCase().includes("sph");
+  const PLUS_OPTIONS = [...(isSph ? SPH_PLUS : CYL_PLUS)];
+  const MINUS_OPTIONS = [...(isSph ? SPH_MINUS : CYL_MINUS)];
+
+  if (plus && !PLUS_OPTIONS.includes(plus)) {
+    PLUS_OPTIONS.push(plus);
+  }
+  if (minus && !MINUS_OPTIONS.includes(minus)) {
+    MINUS_OPTIONS.push(minus);
+  }
+
+  return (
+    <div className="flex gap-0.5">
+      <select
+        value={plus}
+        onChange={(e) => handlePlus(e.target.value)}
+        className="w-1/2 min-w-[45px] px-1 py-1 border border-slate-200 rounded text-[11px] bg-white text-slate-800 focus:outline-none focus:border-[#396b84]"
+      >
+        {PLUS_OPTIONS.map((opt, i) => (
+          <option key={`plus-${opt}-${i}`} value={opt}>
+            {opt === "" ? "+" : opt === "PL" ? "PL" : "+" + opt}
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={minus}
+        onChange={(e) => handleMinus(e.target.value)}
+        className="w-1/2 min-w-[45px] px-1 py-1 border border-slate-200 rounded text-[11px] bg-white text-slate-800 focus:outline-none focus:border-[#396b84]"
+      >
+        {MINUS_OPTIONS.map((opt, i) => (
+          <option key={`minus-${opt}-${i}`} value={opt}>
+            {opt === "" ? "-" : opt === "PL" ? "PL" : "-" + opt}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 };
 
@@ -883,16 +950,15 @@ export default function RegistersManager({ user, activeRegister }) {
                   <h5 className="text-xs font-bold text-sky-700 border-b border-slate-100 pb-1.5 mb-3 uppercase tracking-wider">
                     Right Eye (RE / OD)
                   </h5>
-                  
-                  {/* RE Vision */}
+                                   {/* RE Vision */}
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Vision DV</label>
-                      <input type="text" name="visionRE_DV" value={formData.visionRE_DV} onChange={handleChange} placeholder="e.g. 6/18" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("visionRE_DV", formData.visionRE_DV, VISION_OPTIONS, handleChange, "DV")}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Vision NV</label>
-                      <input type="text" name="visionRE_NV" value={formData.visionRE_NV} onChange={handleChange} placeholder="e.g. N9" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("visionRE_NV", formData.visionRE_NV, NEAR_VISION_OPTIONS, handleChange, "NV")}
                     </div>
                   </div>
 
@@ -900,11 +966,11 @@ export default function RegistersManager({ user, activeRegister }) {
                   <div className="grid grid-cols-4 gap-1.5 mb-3">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Sph</label>
-                      {renderSelect("powerRE_Sph", formData.powerRE_Sph, SPH_OPTIONS, handleChange, "SPH")}
+                      <PowerSelector name="powerRE_Sph" value={formData.powerRE_Sph} onChange={handleChange} />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Cyl</label>
-                      {renderSelect("powerRE_Cyl", formData.powerRE_Cyl, CYL_OPTIONS, handleChange, "CYL")}
+                      <PowerSelector name="powerRE_Cyl" value={formData.powerRE_Cyl} onChange={handleChange} />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Axis</label>
@@ -912,7 +978,7 @@ export default function RegistersManager({ user, activeRegister }) {
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">NV Add</label>
-                      {renderSelect("powerRE_Add", formData.powerRE_Add, ADD_OPTIONS, handleChange, "ADD")}
+                      {renderSelect("powerRE_Add", formData.powerRE_Add, NV_ADD_OPTIONS, handleChange, "ADD")}
                     </div>
                   </div>
 
@@ -920,11 +986,11 @@ export default function RegistersManager({ user, activeRegister }) {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Corrected DV</label>
-                      <input type="text" name="correctedRE_DV" value={formData.correctedRE_DV} onChange={handleChange} placeholder="6/6" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("correctedRE_DV", formData.correctedRE_DV, VISION_OPTIONS, handleChange, "DV")}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Corrected NV</label>
-                      <input type="text" name="correctedRE_NV" value={formData.correctedRE_NV} onChange={handleChange} placeholder="N6" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("correctedRE_NV", formData.correctedRE_NV, NEAR_VISION_OPTIONS, handleChange, "NV")}
                     </div>
                   </div>
                 </div>
@@ -934,16 +1000,15 @@ export default function RegistersManager({ user, activeRegister }) {
                   <h5 className="text-xs font-bold text-emerald-700 border-b border-slate-100 pb-1.5 mb-3 uppercase tracking-wider">
                     Left Eye (LE / OS)
                   </h5>
-                  
-                  {/* LE Vision */}
+                                   {/* LE Vision */}
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Vision DV</label>
-                      <input type="text" name="visionLE_DV" value={formData.visionLE_DV} onChange={handleChange} placeholder="e.g. 6/18" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("visionLE_DV", formData.visionLE_DV, VISION_OPTIONS, handleChange, "DV")}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Vision NV</label>
-                      <input type="text" name="visionLE_NV" value={formData.visionLE_NV} onChange={handleChange} placeholder="e.g. N9" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("visionLE_NV", formData.visionLE_NV, NEAR_VISION_OPTIONS, handleChange, "NV")}
                     </div>
                   </div>
 
@@ -951,11 +1016,11 @@ export default function RegistersManager({ user, activeRegister }) {
                   <div className="grid grid-cols-4 gap-1.5 mb-3">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Sph</label>
-                      {renderSelect("powerLE_Sph", formData.powerLE_Sph, SPH_OPTIONS, handleChange, "SPH")}
+                      <PowerSelector name="powerLE_Sph" value={formData.powerLE_Sph} onChange={handleChange} />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Cyl</label>
-                      {renderSelect("powerLE_Cyl", formData.powerLE_Cyl, CYL_OPTIONS, handleChange, "CYL")}
+                      <PowerSelector name="powerLE_Cyl" value={formData.powerLE_Cyl} onChange={handleChange} />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Axis</label>
@@ -963,7 +1028,7 @@ export default function RegistersManager({ user, activeRegister }) {
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">NV Add</label>
-                      {renderSelect("powerLE_Add", formData.powerLE_Add, ADD_OPTIONS, handleChange, "ADD")}
+                      {renderSelect("powerLE_Add", formData.powerLE_Add, NV_ADD_OPTIONS, handleChange, "ADD")}
                     </div>
                   </div>
 
@@ -971,11 +1036,11 @@ export default function RegistersManager({ user, activeRegister }) {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Corrected DV</label>
-                      <input type="text" name="correctedLE_DV" value={formData.correctedLE_DV} onChange={handleChange} placeholder="6/6" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("correctedLE_DV", formData.correctedLE_DV, VISION_OPTIONS, handleChange, "DV")}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Corrected NV</label>
-                      <input type="text" name="correctedLE_NV" value={formData.correctedLE_NV} onChange={handleChange} placeholder="N6" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("correctedLE_NV", formData.correctedLE_NV, NEAR_VISION_OPTIONS, handleChange, "NV")}
                     </div>
                   </div>
                 </div>
