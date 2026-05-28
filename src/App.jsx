@@ -32,6 +32,7 @@ import AmblyopiaForm from "./components/Amblyopia/AmblyopiaForm";
 import AmblyopiaView from "./components/Amblyopia/AmblyopiaView";
 import AmblyopiaAnalytics from "./components/Amblyopia/AmblyopiaAnalytics";
 import TestVisionCenter from "./components/TestVisionCenter";
+import RegistersManager from "./components/Registers/RegistersManager";
 
 // Wake up Render backend when app starts
 fetch("https://optometry-backend-iiuk.onrender.com/api/ping").catch(() => {});
@@ -2093,6 +2094,14 @@ const qDefs = useMemo(() => {
 
         {/* Vision Center test */}
         {menu === "test-vc" && <TestVisionCenter />}
+
+        {/* PWA Registers Data Entry */}
+        {menu && menu.startsWith("register-") && (
+          <RegistersManager
+            user={user}
+            activeRegister={menu}
+          />
+        )}
 
         {/* Default home message */}
         {menu === "" && (

@@ -113,6 +113,18 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     ],
   });
 
+  // NEW: Registers (New)
+  menuItems.push({
+    key: "registers-new",
+    label: "Registers (New)",
+    sub: [
+      { key: "register-blind", label: "Blind Register" },
+      { key: "register-cataract", label: "Cataract Backlog" },
+      { key: "register-old-aged", label: "Old Aged Spectacles" },
+      { key: "register-school", label: "School Children Spectacles" },
+    ],
+  });
+
   // NEW: Research / Deep Study
   menuItems.push({
     key: "research",
