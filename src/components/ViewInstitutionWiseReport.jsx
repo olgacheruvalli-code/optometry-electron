@@ -28,16 +28,23 @@ export default function ViewInstitutionWiseReport({
   districtPerformance = {},
   month,
   year,
+  reportTitle = "Institution-wise District Report",
 }) {
   return (
     <div className="relative overflow-auto max-h-[70vh] rounded border border-gray-300 p-2">
+      {reportTitle && (
+        <h2 className="text-xl font-bold text-center text-[#134074] my-2 no-print">
+          {reportTitle}
+        </h2>
+      )}
+
       {/* ✅ Single working download button at the TOP */}
       <div className="mb-3 flex justify-end">
         <button
           onClick={() =>
             exportTable(
               "instWiseTable",
-              `Institution-wise_${month || ""}-${year || ""}.xlsx`
+              `${reportTitle.replace(/[^\w]/g, "_")}_${month || ""}-${year || ""}.xlsx`
             )
           }
           className="px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
@@ -91,44 +98,49 @@ export default function ViewInstitutionWiseReport({
         </thead>
 
         <tbody>
-          {questions.map((label, i) => (
-            <tr key={i}>
-              {/* First column — frozen col */}
-              <td className="sticky left-0 z-20 bg-[#EAF2FF] text-[#0B3D91] border px-2 py-1 text-left font-medium">
-                {label}
-              </td>
+          {questions.map((q, i) => {
+            const label = typeof q === "string" ? q : q.label;
+            const qIdx = typeof q === "string" ? i : q.index;
+            return (
+              <tr key={i}>
+                {/* First column — frozen col */}
+                <td className="sticky left-0 z-20 bg-[#EAF2FF] text-[#0B3D91] border px-2 py-1 text-left font-medium">
+                  {label}
+                </td>
 
-              {/* Month cells per institution */}
-              {institutionNames.map((name) => {
-                const rec = data.find((d) => d.institution === name);
-                return (
-                  <td key={`${name}-m-${i}`} className="border px-2 py-1 text-right">
-                    {rec?.monthData?.[i] ?? 0}
-                  </td>
-                );
-              })}
+                {/* Month cells per institution */}
+                {institutionNames.map((name) => {
+                  const rec = data.find((d) => d.institution === name);
+                  return (
+                    <td key={`${name}-m-${i}`} className="border px-2 py-1 text-right">
+                      {rec?.monthData?.[qIdx] ?? 0}
+                    </td>
+                  );
+                })}
 
-              {/* Cumulative cells per institution */}
-              {institutionNames.map((name) => {
-                const rec = data.find((d) => d.institution === name);
-                return (
-                  <td key={`${name}-c-${i}`} className="border px-2 py-1 text-right">
-                    {rec?.cumulativeData?.[i] ?? 0}
-                  </td>
-                );
-              })}
+                {/* Cumulative cells per institution */}
+                {institutionNames.map((name) => {
+                  const rec = data.find((d) => d.institution === name);
+                  return (
+                    <td key={`${name}-c-${i}`} className="border px-2 py-1 text-right">
+                      {rec?.cumulativeData?.[qIdx] ?? 0}
+                    </td>
+                  );
+                })}
 
-              {/* District totals */}
-              <td className="border px-2 py-1 text-right">
-                {districtPerformance?.monthData?.[i] ?? 0}
-              </td>
-              <td className="border px-2 py-1 text-right">
-                {districtPerformance?.cumulativeData?.[i] ?? 0}
-              </td>
-            </tr>
-          ))}
+                {/* District totals */}
+                <td className="border px-2 py-1 text-right">
+                  {districtPerformance?.monthData?.[qIdx] ?? 0}
+                </td>
+                <td className="border px-2 py-1 text-right">
+                  {districtPerformance?.cumulativeData?.[qIdx] ?? 0}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
+

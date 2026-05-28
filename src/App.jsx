@@ -1262,6 +1262,42 @@ const qDefs = useMemo(() => {
     [qDefs]
   );
 
+  const getQuestionsForMenu = React.useCallback((m) => {
+    const allQs = qDefs.map((q, idx) => ({ label: q.label || "", index: idx }));
+    
+    if (m === "performance-cataract") {
+      // q5 to q10
+      return [4, 5, 6, 7, 8, 9].map(i => allQs[i]).filter(Boolean);
+    }
+    if (m === "identified-cataract") {
+      // q5
+      return [4].map(i => allQs[i]).filter(Boolean);
+    }
+    if (m === "op-eye-diseases") {
+      // Section I (q1-q21) and Section IV (q35-q58)
+      const indices = [];
+      for (let i = 0; i <= 20; i++) indices.push(i);
+      for (let i = 34; i <= 57; i++) indices.push(i);
+      return indices.map(i => allQs[i]).filter(Boolean);
+    }
+    if (m === "other-diseases") {
+      // Section IV (q35-q58)
+      const indices = [];
+      for (let i = 34; i <= 57; i++) indices.push(i);
+      return indices.map(i => allQs[i]).filter(Boolean);
+    }
+    if (m === "seh-spectacles-eyebank") {
+      // q11 (index 10), Section II (q22-q32 / indices 21-31), legacy Eye Bank (q33-q34 / indices 32-33), Addl Old Aged (q59-q61 / indices 58-60), Addl School (q62-q69 / indices 61-68)
+      const indices = [10];
+      for (let i = 21; i <= 31; i++) indices.push(i);
+      for (let i = 32; i <= 33; i++) indices.push(i); // Eye bank
+      for (let i = 58; i <= 60; i++) indices.push(i);
+      for (let i = 61; i <= 68; i++) indices.push(i);
+      return indices.map(i => allQs[i]).filter(Boolean);
+    }
+    return allQs;
+  }, [qDefs]);
+
   const selectedDistrict = user?.district || "Kozhikode";
 
   const institutionNamesMemo = useMemo(
@@ -1292,6 +1328,11 @@ const qDefs = useMemo(() => {
   useEffect(() => {
     if (
       (menu !== "district-institutions" &&
+        menu !== "performance-cataract" &&
+        menu !== "op-eye-diseases" &&
+        menu !== "seh-spectacles-eyebank" &&
+        menu !== "other-diseases" &&
+        menu !== "identified-cataract" &&
         menu !== "print" &&
         menu !== "district-dl-inst") ||
       !month ||
@@ -1345,7 +1386,13 @@ const qDefs = useMemo(() => {
 
     (async () => {
       try {
-        const all = await fetchList(`${API_BASE}/api/reports`);
+        const [all, blindReg, cataractReg, oldAgedReg, schoolReg] = await Promise.all([
+          fetchList(`${API_BASE}/api/reports`),
+          fetchList(`${API_BASE}/api/blind-register?district=${encodeURIComponent(selectedDistrict)}`),
+          fetchList(`${API_BASE}/api/cataract-backlog?district=${encodeURIComponent(selectedDistrict)}`),
+          fetchList(`${API_BASE}/api/old-aged-spectacles?district=${encodeURIComponent(selectedDistrict)}`),
+          fetchList(`${API_BASE}/api/school-spectacles?district=${encodeURIComponent(selectedDistrict)}`),
+        ]);
 
         const districtDocs = all.filter(
           (d) =>
@@ -1438,6 +1485,93 @@ const qDefs = useMemo(() => {
           }
           byInstAgg.set(displayName, rec);
         });
+
+        const isRegisterSubmenu =
+          menu === "performance-cataract" ||
+          menu === "op-eye-diseases" ||
+          menu === "seh-spectacles-eyebank" ||
+          menu === "other-diseases" ||
+          menu === "identified-cataract";
+
+        if (isRegisterSubmenu) {
+          const getMonthNumber = (mName) => {
+            const map = {
+              january: "01", february: "02", march: "03", april: "04", may: "05", june: "06",
+              july: "07", august: "08", september: "09", october: "10", november: "11", december: "12"
+            };
+            return map[String(mName).trim().toLowerCase()] || "";
+          };
+
+          const getPrefix = (m, y) => `${y}-${getMonthNumber(m)}`;
+          const monthPrefix = getPrefix(month, year);
+          const fiscalPrefixes = fiscalPairs.map(p => getPrefix(p.month, p.year));
+
+          const isMale = r => String(r.sex || "").trim().toLowerCase() === "male";
+          const isFemale = r => String(r.sex || "").trim().toLowerCase() === "female";
+          const isOperated = r => String(r.status || "").trim().toLowerCase() === "operated";
+
+          const filterReg = (reg, dateField, prefixes, nameLower, extraFilter = () => true) => {
+            return reg.filter(r => {
+              const rInst = String(r.institution || "").trim().toLowerCase();
+              if (rInst !== nameLower) return false;
+              const dateVal = r[dateField];
+              if (!dateVal) return false;
+              const matchesDate = prefixes.some(pref => dateVal.startsWith(pref));
+              if (!matchesDate) return false;
+              return extraFilter(r);
+            }).length;
+          };
+
+          displayByLower.forEach((displayName, lowerName) => {
+            const rec = byInstAgg.get(displayName);
+            if (!rec) return;
+
+            const mCounts = {
+              q5: filterReg(cataractReg, "detectionDate", [monthPrefix], lowerName),
+              q7: filterReg(cataractReg, "surgeryDate", [monthPrefix], lowerName, isOperated),
+              q8: filterReg(cataractReg, "surgeryDate", [monthPrefix], lowerName, r => isOperated(r) && isFemale(r)),
+              q11: filterReg(oldAgedReg, "dateOfPrescription", [monthPrefix], lowerName),
+              q26: filterReg(schoolReg, "dateOfPrescription", [monthPrefix], lowerName),
+              q27: filterReg(schoolReg, "dateOfPrescription", [monthPrefix], lowerName),
+              q57: filterReg(blindReg, "date", [monthPrefix], lowerName),
+              q59: filterReg(oldAgedReg, "dateOfPrescription", [monthPrefix], lowerName, isMale),
+              q60: filterReg(oldAgedReg, "dateOfPrescription", [monthPrefix], lowerName, isFemale),
+              q61: filterReg(oldAgedReg, "dateOfPrescription", [monthPrefix], lowerName),
+              q66: filterReg(schoolReg, "dateOfPrescription", [monthPrefix], lowerName),
+              q67: filterReg(schoolReg, "dateOfPrescription", [monthPrefix], lowerName, isMale),
+              q68: filterReg(schoolReg, "dateOfPrescription", [monthPrefix], lowerName, isFemale),
+              q69: filterReg(schoolReg, "dateOfPrescription", [monthPrefix], lowerName),
+            };
+
+            const cCounts = {
+              q5: filterReg(cataractReg, "detectionDate", fiscalPrefixes, lowerName),
+              q7: filterReg(cataractReg, "surgeryDate", fiscalPrefixes, lowerName, isOperated),
+              q8: filterReg(cataractReg, "surgeryDate", fiscalPrefixes, lowerName, r => isOperated(r) && isFemale(r)),
+              q11: filterReg(oldAgedReg, "dateOfPrescription", fiscalPrefixes, lowerName),
+              q26: filterReg(schoolReg, "dateOfPrescription", fiscalPrefixes, lowerName),
+              q27: filterReg(schoolReg, "dateOfPrescription", fiscalPrefixes, lowerName),
+              q57: filterReg(blindReg, "date", fiscalPrefixes, lowerName),
+              q59: filterReg(oldAgedReg, "dateOfPrescription", fiscalPrefixes, lowerName, isMale),
+              q60: filterReg(oldAgedReg, "dateOfPrescription", fiscalPrefixes, lowerName, isFemale),
+              q61: filterReg(oldAgedReg, "dateOfPrescription", fiscalPrefixes, lowerName),
+              q66: filterReg(schoolReg, "dateOfPrescription", fiscalPrefixes, lowerName),
+              q67: filterReg(schoolReg, "dateOfPrescription", fiscalPrefixes, lowerName, isMale),
+              q68: filterReg(schoolReg, "dateOfPrescription", fiscalPrefixes, lowerName, isFemale),
+              q69: filterReg(schoolReg, "dateOfPrescription", fiscalPrefixes, lowerName),
+            };
+
+            const keyToIndex = {
+              q5: 4, q7: 6, q8: 7, q11: 10, q26: 25, q27: 26, q57: 56, q59: 58, q60: 59, q61: 60, q66: 65, q67: 66, q68: 67, q69: 68
+            };
+
+            Object.entries(keyToIndex).forEach(([key, idx]) => {
+              rec.monthData[idx] = mCounts[key];
+              rec.cumulativeData[idx] = cCounts[key];
+            });
+
+            byInstAgg.set(displayName, rec);
+          });
+        }
 
         const list = Array.from(byInstAgg.values());
         const distMonth = mkZeros();
@@ -1900,8 +2034,13 @@ const qDefs = useMemo(() => {
           <AmblyopiaAnalytics user={user} />
         )}
 
-        {/* District → Institution-wise (table) */}
-        {menu === "district-institutions" && (
+        {/* District → Institution-wise (table) or any of its sub-reports */}
+        {(menu === "district-institutions" ||
+          menu === "performance-cataract" ||
+          menu === "op-eye-diseases" ||
+          menu === "seh-spectacles-eyebank" ||
+          menu === "other-diseases" ||
+          menu === "identified-cataract") && (
           <>
             <MonthYearSelector
               month={month}
@@ -1911,7 +2050,15 @@ const qDefs = useMemo(() => {
             />
             {month && year ? (
               <ViewInstitutionWiseReport
-                questions={qLabels}
+                reportTitle={
+                  menu === "performance-cataract" ? "Performance Of Cataract Surgery" :
+                  menu === "identified-cataract" ? "Number of Cataract Cases Identified" :
+                  menu === "op-eye-diseases" ? "OP & Other Eye Diseases" :
+                  menu === "other-diseases" ? "Details of Other Eye Diseases" :
+                  menu === "seh-spectacles-eyebank" ? "SEHP & Spectacles to Old Aged, Eye Bank" :
+                  "Institution-wise District Report"
+                }
+                questions={getQuestionsForMenu(menu)}
                 institutionNames={institutionNamesMemo}
                 data={institutionData}
                 districtPerformance={districtPerformance}
@@ -1920,8 +2067,7 @@ const qDefs = useMemo(() => {
               />
             ) : (
               <div className="text-center text-gray-600 mt-6 no-print">
-                Please select both <b>Month</b> and <b>Year</b> to view institution-wise
-                report.
+                Please select both <b>Month</b> and <b>Year</b> to view the report.
               </div>
             )}
           </>
