@@ -4,6 +4,62 @@ import * as XLSX from "xlsx";
 import API_BASE from "../../apiBase";
 import { Plus, Table, Download, Search, Edit, Trash2, X, Check } from "lucide-react";
 
+// Predefined options for lens powers and refraction details
+const SPH_OPTIONS = (() => {
+  const options = ["", "PL"];
+  // Plus values
+  for (let i = 25; i <= 600; i += 25) options.push(`+${(i / 100).toFixed(2)}`);
+  for (let i = 650; i <= 1000; i += 50) options.push(`+${(i / 100).toFixed(2)}`);
+  for (let i = 1100; i <= 2000; i += 100) options.push(`+${(i / 100).toFixed(2)}`);
+  // Minus values
+  for (let i = 25; i <= 600; i += 25) options.push(`-${(i / 100).toFixed(2)}`);
+  for (let i = 650; i <= 1000; i += 50) options.push(`-${(i / 100).toFixed(2)}`);
+  for (let i = 1100; i <= 2000; i += 100) options.push(`-${(i / 100).toFixed(2)}`);
+  return options;
+})();
+
+const CYL_OPTIONS = (() => {
+  const options = ["", "PL"];
+  // Plus values
+  for (let i = 25; i <= 600; i += 25) options.push(`+${(i / 100).toFixed(2)}`);
+  // Minus values
+  for (let i = 25; i <= 600; i += 25) options.push(`-${(i / 100).toFixed(2)}`);
+  return options;
+})();
+
+const AXIS_OPTIONS = (() => {
+  const options = [""];
+  for (let val = 180; val >= 5; val -= 5) options.push(String(val));
+  return options;
+})();
+
+const ADD_OPTIONS = (() => {
+  const options = [""];
+  for (let i = 50; i <= 350; i += 25) options.push(`+${(i / 100).toFixed(2)}`);
+  return options;
+})();
+
+const renderSelect = (name, value, options, onChange, placeholder) => {
+  const optionsWithCurrent = [...options];
+  if (value && !options.includes(value)) {
+    optionsWithCurrent.push(value);
+  }
+  return (
+    <select
+      name={name}
+      value={value}
+      onChange={onChange}
+      className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84] bg-white text-slate-800"
+    >
+      {optionsWithCurrent.map((opt) => (
+        <option key={opt} value={opt}>
+          {opt === "" ? placeholder || "Select" : opt}
+        </option>
+      ))}
+    </select>
+  );
+};
+
 export default function RegistersManager({ user, activeRegister }) {
   // Map activeRegister menu key to register sub-tab key
   const getTabKey = (key) => {
@@ -844,19 +900,19 @@ export default function RegistersManager({ user, activeRegister }) {
                   <div className="grid grid-cols-4 gap-1.5 mb-3">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Sph</label>
-                      <input type="text" name="powerRE_Sph" value={formData.powerRE_Sph} onChange={handleChange} placeholder="+1.00" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("powerRE_Sph", formData.powerRE_Sph, SPH_OPTIONS, handleChange, "SPH")}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Cyl</label>
-                      <input type="text" name="powerRE_Cyl" value={formData.powerRE_Cyl} onChange={handleChange} placeholder="-0.50" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("powerRE_Cyl", formData.powerRE_Cyl, CYL_OPTIONS, handleChange, "CYL")}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Axis</label>
-                      <input type="text" name="powerRE_Axis" value={formData.powerRE_Axis} onChange={handleChange} placeholder="90" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("powerRE_Axis", formData.powerRE_Axis, AXIS_OPTIONS, handleChange, "AXIS")}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">NV Add</label>
-                      <input type="text" name="powerRE_Add" value={formData.powerRE_Add} onChange={handleChange} placeholder="+2.00" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("powerRE_Add", formData.powerRE_Add, ADD_OPTIONS, handleChange, "ADD")}
                     </div>
                   </div>
 
@@ -895,19 +951,19 @@ export default function RegistersManager({ user, activeRegister }) {
                   <div className="grid grid-cols-4 gap-1.5 mb-3">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Sph</label>
-                      <input type="text" name="powerLE_Sph" value={formData.powerLE_Sph} onChange={handleChange} placeholder="+1.00" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("powerLE_Sph", formData.powerLE_Sph, SPH_OPTIONS, handleChange, "SPH")}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Cyl</label>
-                      <input type="text" name="powerLE_Cyl" value={formData.powerLE_Cyl} onChange={handleChange} placeholder="-0.50" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("powerLE_Cyl", formData.powerLE_Cyl, CYL_OPTIONS, handleChange, "CYL")}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Axis</label>
-                      <input type="text" name="powerLE_Axis" value={formData.powerLE_Axis} onChange={handleChange} placeholder="90" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("powerLE_Axis", formData.powerLE_Axis, AXIS_OPTIONS, handleChange, "AXIS")}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">NV Add</label>
-                      <input type="text" name="powerLE_Add" value={formData.powerLE_Add} onChange={handleChange} placeholder="+2.00" className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84]" />
+                      {renderSelect("powerLE_Add", formData.powerLE_Add, ADD_OPTIONS, handleChange, "ADD")}
                     </div>
                   </div>
 
