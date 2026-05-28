@@ -1741,22 +1741,7 @@ const qDefs = useMemo(() => {
       ? json
       : [];
 
-    const hydrated = await Promise.all(
-      list.map(async (d) => {
-        try {
-          const id = d?._id || d?.id;
-          if (!id) return d;
-          const r2 = await fetch(
-            `${API_BASE}/api/reports/${encodeURIComponent(id)}`
-          );
-          const j2 = await r2.json().catch(() => ({}));
-          return j2?.doc || j2 || d;
-        } catch {
-          return d;
-        }
-      })
-    );
-    return hydrated;
+    return list;
   };
 
   const normalizeArray = (arr) => {
