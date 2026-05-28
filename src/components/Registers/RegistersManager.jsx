@@ -150,6 +150,8 @@ export default function RegistersManager({ user, activeRegister }) {
     age: "",
     sex: "Male",
     address: "",
+    optometristName: localStorage.getItem("optometristName") || user?.name || user?.username || "",
+    optometristPhone: localStorage.getItem("optometristPhone") || "",
     // Blind Register specific
     vaRE: "",
     vaLE: "",
@@ -278,7 +280,17 @@ export default function RegistersManager({ user, activeRegister }) {
 
       if (res.ok && data.ok) {
         triggerStatus("success", editingId ? "Record updated successfully!" : "Record added successfully!");
-        setFormData(initialFormState);
+        if (formData.optometristName) {
+          localStorage.setItem("optometristName", formData.optometristName);
+        }
+        if (formData.optometristPhone) {
+          localStorage.setItem("optometristPhone", formData.optometristPhone);
+        }
+        setFormData({
+          ...initialFormState,
+          optometristName: formData.optometristName || "",
+          optometristPhone: formData.optometristPhone || "",
+        });
         setEditingId(null);
         setViewMode("table");
         fetchRecords();
@@ -348,7 +360,8 @@ export default function RegistersManager({ user, activeRegister }) {
         "Address/Contact": r.address,
         "District": r.district,
         "Institution": r.institution,
-        "Optometrist": r.optometrist,
+        "Name of optometrist": r.optometristName || r.optometrist || "",
+        "Contact Number of optometrist": r.optometristPhone || "",
       };
 
       if (activeTab === "blind-register") {
@@ -373,67 +386,69 @@ export default function RegistersManager({ user, activeRegister }) {
         });
       } else if (activeTab === "old-aged-spectacles") {
         dataToExport.push({
+          "Sl No": idx + 1,
           "Manual Sl No": r.slNo,
-          "Patient Name": r.name,
+          "Name of Patient": r.name,
           "Date of Prescription": r.dateOfPrescription,
-          "Age": r.age,
           "Sex": r.sex,
+          "Age": r.age,
           "Diagnosis": r.diagnosis,
-          "Vision DV RE": r.visionRE_DV,
-          "Vision NV RE": r.visionRE_NV,
-          "Vision DV LE": r.visionLE_DV,
-          "Vision NV LE": r.visionLE_NV,
-          "Power RE Sph": r.powerRE_Sph,
-          "Power RE Cyl": r.powerRE_Cyl,
-          "Power RE Axis": r.powerRE_Axis,
-          "Power RE Add": r.powerRE_Add,
-          "Power LE Sph": r.powerLE_Sph,
-          "Power LE Cyl": r.powerLE_Cyl,
-          "Power LE Axis": r.powerLE_Axis,
-          "Power LE Add": r.powerLE_Add,
-          "Corrected DV RE": r.correctedRE_DV,
-          "Corrected NV RE": r.correctedRE_NV,
-          "Corrected DV LE": r.correctedLE_DV,
-          "Corrected NV LE": r.correctedLE_NV,
-          "IPD/Frame Size": r.ipdFrameSize,
-          "Reference": r.reference,
-          "Address": r.address,
+          "Vision RE DV": r.visionRE_DV,
+          "Vision RE NV": r.visionRE_NV,
+          "Vision LE DV": r.visionLE_DV,
+          "Vision LE NV": r.visionLE_NV,
+          "RE SPH": r.powerRE_Sph,
+          "RE CYL": r.powerRE_Cyl,
+          "RE Axis": r.powerRE_Axis,
+          "RE NV Add": r.powerRE_Add,
+          "LE SPH": r.powerLE_Sph,
+          "LE CYL": r.powerLE_Cyl,
+          "LE Axis": r.powerLE_Axis,
+          "LE NV Add": r.powerLE_Add,
+          "Corrected RE DV": r.correctedRE_DV,
+          "Corrected RE NV": r.correctedRE_NV,
+          "Corrected LE DV": r.correctedLE_DV,
+          "Corrected LE NV": r.correctedLE_NV,
+          "IPD/Frame size": r.ipdFrameSize,
+          "Contact Details": r.address,
           "District": r.district,
           "Institution": r.institution,
-          "Optometrist": r.optometrist,
+          "Name of optometrist": r.optometristName || r.optometrist || "",
+          "Contact Number of optometrist": r.optometristPhone || "",
         });
       } else if (activeTab === "school-spectacles") {
         dataToExport.push({
-          "Patient Name": r.name,
+          "Sl No": idx + 1,
+          "Name of Patient": r.name,
           "Date of Prescription": r.dateOfPrescription,
-          "Age": r.age,
           "Sex": r.sex,
+          "Age": r.age,
           "School Name": r.schoolName,
           "Class/Standard": r.classStandard,
           "Teacher Name": r.teacherName,
           "Diagnosis": r.diagnosis,
-          "Vision DV RE": r.visionRE_DV,
-          "Vision NV RE": r.visionRE_NV,
-          "Vision DV LE": r.visionLE_DV,
-          "Vision NV LE": r.visionLE_NV,
-          "Power RE Sph": r.powerRE_Sph,
-          "Power RE Cyl": r.powerRE_Cyl,
-          "Power RE Axis": r.powerRE_Axis,
-          "Power RE Add": r.powerRE_Add,
-          "Power LE Sph": r.powerLE_Sph,
-          "Power LE Cyl": r.powerLE_Cyl,
-          "Power LE Axis": r.powerLE_Axis,
-          "Power LE Add": r.powerLE_Add,
-          "Corrected DV RE": r.correctedRE_DV,
-          "Corrected NV RE": r.correctedRE_NV,
-          "Corrected DV LE": r.correctedLE_DV,
-          "Corrected NV LE": r.correctedLE_NV,
-          "IPD/Frame Size": r.ipdFrameSize,
-          "Reference": r.reference,
-          "Address": r.address,
+          "Vision RE DV": r.visionRE_DV,
+          "Vision RE NV": r.visionRE_NV,
+          "Vision LE DV": r.visionLE_DV,
+          "Vision LE NV": r.visionLE_NV,
+          "RE SPH": r.powerRE_Sph,
+          "RE CYL": r.powerRE_Cyl,
+          "RE Axis": r.powerRE_Axis,
+          "RE NV Add": r.powerRE_Add,
+          "LE SPH": r.powerLE_Sph,
+          "LE CYL": r.powerLE_Cyl,
+          "LE Axis": r.powerLE_Axis,
+          "LE NV Add": r.powerLE_Add,
+          "Corrected RE DV": r.correctedRE_DV,
+          "Corrected RE NV": r.correctedRE_NV,
+          "Corrected LE DV": r.correctedLE_DV,
+          "Corrected LE NV": r.correctedLE_NV,
+          "IPD/Frame size": r.ipdFrameSize,
+          "Contact Details": r.address,
           "District": r.district,
           "Institution": r.institution,
-          "Optometrist": r.optometrist,
+          "Name of optometrist": r.optometristName || r.optometrist || "",
+          "Contact Number of optometrist": r.optometristPhone || "",
         });
       }
     });
@@ -566,7 +581,12 @@ export default function RegistersManager({ user, activeRegister }) {
                     <th className="p-3">Sl No</th>
                     <th className="p-3">Name</th>
                     <th className="p-3">Age/Sex</th>
-                    {activeTab === "school-spectacles" && <th className="p-3">School (Class)</th>}
+                    {activeTab === "school-spectacles" && (
+                      <>
+                        <th className="p-3">School (Class)</th>
+                        <th className="p-3">Teacher</th>
+                      </>
+                    )}
                     {activeTab === "blind-register" && (
                       <>
                         <th className="p-3">VA (RE/LE)</th>
@@ -581,12 +601,22 @@ export default function RegistersManager({ user, activeRegister }) {
                     )}
                     {(activeTab === "old-aged-spectacles" || activeTab === "school-spectacles") && (
                       <>
+                        <th className="p-3">Date</th>
                         <th className="p-3">Diagnosis</th>
-                        <th className="p-3">Prescription (RE/LE)</th>
+                        <th className="p-3">Vision RE (DV/NV)</th>
+                        <th className="p-3">Vision LE (DV/NV)</th>
+                        <th className="p-3">RE SPH/CYL/AXIS/ADD</th>
+                        <th className="p-3">LE SPH/CYL/AXIS/ADD</th>
+                        <th className="p-3">Corrected RE (DV/NV)</th>
+                        <th className="p-3">Corrected LE (DV/NV)</th>
+                        <th className="p-3">IPD/Frame size</th>
                       </>
                     )}
                     <th className="p-3">Address/Contact</th>
-                    <th className="p-3">Optometrist</th>
+                    <th className="p-3">District</th>
+                    <th className="p-3">Institution</th>
+                    <th className="p-3">Optometrist Name</th>
+                    <th className="p-3">Optometrist Phone</th>
                     <th className="p-3 text-center">Actions</th>
                   </tr>
                 </thead>
@@ -595,22 +625,25 @@ export default function RegistersManager({ user, activeRegister }) {
                     <tr key={r._id || r.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="p-3 text-slate-500">{index + 1}</td>
                       <td className="p-3 font-semibold text-slate-900">{r.name}</td>
-                      <td className="p-3">{r.age} Y / {r.sex}</td>
+                      <td className="p-3 whitespace-nowrap">{r.age} Y / {r.sex}</td>
                       {activeTab === "school-spectacles" && (
-                        <td className="p-3 text-indigo-600 font-semibold">
-                          {r.schoolName} {r.classStandard ? `(${r.classStandard})` : ""}
-                        </td>
+                        <>
+                          <td className="p-3 text-indigo-600 font-semibold whitespace-nowrap">
+                            {r.schoolName} {r.classStandard ? `(${r.classStandard})` : ""}
+                          </td>
+                          <td className="p-3 whitespace-nowrap">{r.teacherName || "—"}</td>
+                        </>
                       )}
                       {activeTab === "blind-register" && (
                         <>
-                          <td className="p-3">RE: {r.vaRE || "-"} | LE: {r.vaLE || "-"}</td>
-                          <td className="p-3 text-amber-700 font-semibold">{r.cause}</td>
+                          <td className="p-3 whitespace-nowrap">RE: {r.vaRE || "-"} | LE: {r.vaLE || "-"}</td>
+                          <td className="p-3 text-amber-700 font-semibold whitespace-nowrap">{r.cause}</td>
                         </>
                       )}
                       {activeTab === "cataract-backlog" && (
                         <>
-                          <td className="p-3 font-bold text-slate-600">{r.eyeOperated}</td>
-                          <td className="p-3">
+                          <td className="p-3 font-bold text-slate-600 whitespace-nowrap">{r.eyeOperated}</td>
+                          <td className="p-3 whitespace-nowrap">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
                               r.status === "Operated" 
                                 ? "bg-emerald-50 text-emerald-600 border-emerald-200" 
@@ -623,16 +656,26 @@ export default function RegistersManager({ user, activeRegister }) {
                       )}
                       {(activeTab === "old-aged-spectacles" || activeTab === "school-spectacles") && (
                         <>
-                          <td className="p-3 text-indigo-700">{r.diagnosis || "Refractive Error"}</td>
-                          <td className="p-3 font-mono text-slate-600">
-                            RE: {r.powerRE_Sph || "PL"}{r.powerRE_Cyl ? ` / ${r.powerRE_Cyl} x ${r.powerRE_Axis || "0"}` : ""}{r.powerRE_Add ? ` [Add: ${r.powerRE_Add}]` : ""}
-                            <br />
-                            LE: {r.powerLE_Sph || "PL"}{r.powerLE_Cyl ? ` / ${r.powerLE_Cyl} x ${r.powerLE_Axis || "0"}` : ""}{r.powerLE_Add ? ` [Add: ${r.powerLE_Add}]` : ""}
+                          <td className="p-3 whitespace-nowrap">{r.dateOfPrescription || "—"}</td>
+                          <td className="p-3 text-indigo-700 whitespace-nowrap">{r.diagnosis || "Refractive Error"}</td>
+                          <td className="p-3 font-mono whitespace-nowrap">{r.visionRE_DV || "—"} / {r.visionRE_NV || "—"}</td>
+                          <td className="p-3 font-mono whitespace-nowrap">{r.visionLE_DV || "—"} / {r.visionLE_NV || "—"}</td>
+                          <td className="p-3 font-mono whitespace-nowrap text-[#016eaa]">
+                            {r.powerRE_Sph || "PL"}{r.powerRE_Cyl ? ` / ${r.powerRE_Cyl}` : ""}{r.powerRE_Axis ? ` x ${r.powerRE_Axis}` : ""}{r.powerRE_Add ? ` [Add: ${r.powerRE_Add}]` : ""}
                           </td>
+                          <td className="p-3 font-mono whitespace-nowrap text-[#016eaa]">
+                            {r.powerLE_Sph || "PL"}{r.powerLE_Cyl ? ` / ${r.powerLE_Cyl}` : ""}{r.powerLE_Axis ? ` x ${r.powerLE_Axis}` : ""}{r.powerLE_Add ? ` [Add: ${r.powerLE_Add}]` : ""}
+                          </td>
+                          <td className="p-3 font-mono whitespace-nowrap">{r.correctedRE_DV || "—"} / {r.correctedRE_NV || "—"}</td>
+                          <td className="p-3 font-mono whitespace-nowrap">{r.correctedLE_DV || "—"} / {r.correctedLE_NV || "—"}</td>
+                          <td className="p-3 whitespace-nowrap">{r.ipdFrameSize || "—"}</td>
                         </>
                       )}
                       <td className="p-3 max-w-[200px] truncate text-slate-500" title={r.address}>{r.address || "—"}</td>
-                      <td className="p-3 text-slate-500 font-normal">{r.optometrist}</td>
+                      <td className="p-3 whitespace-nowrap">{r.district || "—"}</td>
+                      <td className="p-3 whitespace-nowrap">{r.institution || "—"}</td>
+                      <td className="p-3 font-semibold text-slate-900 whitespace-nowrap">{r.optometristName || r.optometrist || "—"}</td>
+                      <td className="p-3 whitespace-nowrap">{r.optometristPhone || "—"}</td>
                       <td className="p-3">
                         <div className="flex justify-center gap-2">
                           <button
@@ -1089,11 +1132,42 @@ export default function RegistersManager({ user, activeRegister }) {
             ></textarea>
           </div>
 
+          {/* Optometrist Details block */}
+          <div className="border border-slate-200 rounded-xl p-4 mb-6 bg-[#f4f7f6]">
+            <h4 className="text-xs font-extrabold text-[#134074] uppercase tracking-wider mb-3 border-b border-slate-200 pb-1.5">
+              Optometrist Details (Editable)
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Name of Optometrist</label>
+                <input
+                  type="text"
+                  name="optometristName"
+                  value={formData.optometristName}
+                  onChange={handleChange}
+                  placeholder="Enter optometrist name"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84] bg-white text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Contact Number of Optometrist</label>
+                <input
+                  type="text"
+                  name="optometristPhone"
+                  value={formData.optometristPhone}
+                  onChange={handleChange}
+                  placeholder="Enter contact number"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84] bg-white text-slate-800"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Prefilled Fields (Read Only) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-slate-50 p-4 rounded-lg border border-slate-100 text-xs text-slate-500 font-medium">
             <div>District: <span className="font-bold text-slate-700">{user?.district}</span></div>
             <div>Institution: <span className="font-bold text-slate-700">{user?.institution}</span></div>
-            <div>Logged by Optometrist: <span className="font-bold text-slate-700">{user?.username}</span></div>
+            <div>Logged by Optometrist ID: <span className="font-bold text-slate-700">{user?.username}</span></div>
           </div>
 
           {/* Buttons */}
