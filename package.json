@@ -25,7 +25,8 @@
     "electron-dev": "concurrently -k -n API,WEB,ELEC -c green,cyan,magenta \"npm:api:dev\" \"npm:web\" \"npm:electron:wait:3000\"",
     "//7": "────── Electron (waits for webpack @ 8080) ──────",
     "electron:wait:8080": "wait-on http://localhost:8080 && electron .",
-    "electron-dev:webpack": "concurrently -k -n API,WEB,ELEC -c green,cyan,magenta \"npm:api:dev\" \"npm:web:webpack\" \"npm:electron:wait:8080\""
+    "electron-dev:webpack": "concurrently -k -n API,WEB,ELEC -c green,cyan,magenta \"npm:api:dev\" \"npm:web:webpack\" \"npm:electron:wait:8080\"",
+    "electron:dist": "npm run build && electron-builder"
   },
   "keywords": [],
   "author": "",
@@ -85,5 +86,28 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "build": {
+    "extends": null,
+    "appId": "com.optometry.electron",
+    "productName": "Optometry Electron",
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.medical"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "files": [
+      "build/**/*",
+      "main.js",
+      "server.js",
+      "apiBase.js",
+      "preload.js",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist-electron"
+    }
   }
 }

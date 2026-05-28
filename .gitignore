@@ -7,6 +7,7 @@ yarn-error.log*
 # Build artifacts
 build/
 dist/
+dist-electron/
 # OS / editors
 .DS_Store
 *.swp

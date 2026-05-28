@@ -741,16 +741,11 @@ function ReportEntry({
   initialYear = "",
   disabled = false,
 }) {
-  /* --- safe no-ops if these aren’t defined elsewhere --- */
   const startFx = () =>
     typeof startFlute === "function" ? startFlute() : void 0;
   const stopFx = () =>
     typeof stopFlute === "function" ? stopFlute() : void 0;
 
-  /* ---------- recursive question flattener (fixes ADDL. REPORTS) ---------
-     IMPORTANT: this version skips table sections (Eye Bank & Vision Center)
-     so their rows are NOT counted in q1..qN for the ENTRY UI only.
-  ------------------------------------------------------------------------- */
   function flattenQuestionsFromBlock(blk) {
     const out = [];
 
@@ -771,7 +766,6 @@ function ReportEntry({
     const walk = (node, title = node?.title || "blk") => {
       if (!node || typeof node !== "object") return;
 
-      // 👉 table section like Eye Bank / Vision Center
       const isTableSection = node.table && Array.isArray(node.rows);
 
       const direct = Array.isArray(node.questions)
@@ -850,13 +844,11 @@ function ReportEntry({
   const canSave = month && year;
   const canSaveThisCombo = canSave && !alreadySubmitted;
 
-  /* ---------------------------- effects ---------------------------------- */
   React.useEffect(() => {
     startFx();
     return () => stopFx();
   }, []);
 
-  // check if a report already exists for this identity/month/year
   React.useEffect(() => {
     let cancelled = false;
     setAlreadySubmitted(false);
@@ -878,9 +870,7 @@ function ReportEntry({
           ? json
           : [];
         if (!cancelled) setAlreadySubmitted(items.length > 0);
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     })();
 
     return () => {
@@ -924,15 +914,11 @@ function ReportEntry({
     }
   };
 
-  /* --------- Build a stable question order (MATCHES VIEW REPORT) ---------
-     ✅ CRITICAL FIX: DO NOT slice to 84.
-     We keep the SAME order, but save ALL q rows (q1..qN).
-     Old alignment is preserved because first 84 stay identical.
-  ------------------------------------------------------------------------- */
-  const qDefsAll = React.useMemo(() => {
+  /* --------- Stable q1..q84 order (must match ViewReports) --------------- */
+  const qDefs84 = React.useMemo(() => {
     const flatRows = buildFlatRows(sections);
 
-    return flatRows
+    const qItems = flatRows
       .filter((item) => item.kind === "q")
       .map((item, idx) => {
         const row = item.row || {};
@@ -948,13 +934,23 @@ function ReportEntry({
           row.label || row.title || row.text || row.name || `Row ${idx + 1}`;
         return { ...row, id, label };
       });
+
+    return qItems.slice(0, 84);
   }, []);
 
-  // Map current answers to q1..qN, filling missing with "0"
-  const buildFullAnswersAll = () => {
+  /* ✅ ENTRY question order (includes subsections properly) */
+  const entryDefs = React.useMemo(() => {
+    const out = [];
+    sections
+      .filter((s) => !s.table)
+      .forEach((s) => out.push(...getQsLocal(s)));
+    return out;
+  }, []);
+
+  const buildFullAnswers84 = () => {
     const out = {};
-    for (let i = 0; i < qDefsAll.length; i++) {
-      const qDef = qDefsAll[i];
+    for (let i = 0; i < 84; i++) {
+      const qDef = qDefs84[i];
       const keyId = qDef?.id;
       const raw = keyId ? answers[keyId] : undefined;
       const clean =
@@ -977,20 +973,47 @@ function ReportEntry({
       return;
     }
     if (alreadySubmitted) {
-      alert(
-        "A report for this Month & Year already exists for your institution."
-      );
+      alert("A report for this Month & Year already exists for your institution.");
       return;
     }
 
-    // ✅ Build full answers q1..qN (this includes Tribal Cataract questions if they are q85/q86 etc.)
-    const answersFull = buildFullAnswersAll();
+    let answersFull = buildFullAnswers84();
 
-    // ✅ Clean tables
+    /* ✅ FIX ONLY FOR THE 2 TRIBAL QUESTIONS (no other changes)
+       We ensure their typed values land inside q1..q84.
+    */
+    try {
+      const TRIBAL_1 = "addl_tribal_cataract_cases";
+      const TRIBAL_2 = "addl_tribal_cataract_surgery";
+
+      // Find their index in ENTRY order (1-based q position)
+      const pos1 = entryDefs.findIndex((q) => q?.id === TRIBAL_1) + 1;
+      const pos2 = entryDefs.findIndex((q) => q?.id === TRIBAL_2) + 1;
+
+      // If they are within 84 (they SHOULD be in your questions.js)
+      const clean = (v) =>
+        v === undefined || v === null || String(v).trim() === ""
+          ? "0"
+          : String(v).trim();
+
+      if (pos1 > 0 && pos1 <= 84) {
+        answersFull[`q${pos1}`] = clean(answers?.[TRIBAL_1]);
+      } else {
+        console.warn("Tribal Q1 position out of range:", pos1);
+      }
+
+      if (pos2 > 0 && pos2 <= 84) {
+        answersFull[`q${pos2}`] = clean(answers?.[TRIBAL_2]);
+      } else {
+        console.warn("Tribal Q2 position out of range:", pos2);
+      }
+    } catch (e) {
+      console.warn("Tribal mapping failed:", e);
+    }
+
     const cleanEyeBank = sanitizeTableArrayLocal(eyeBank);
     const cleanVisionCenter = sanitizeTableArrayLocal(visionCenter);
 
-    // ✅ Check if anything non-zero was entered
     const anyAnswer = Object.values(answersFull).some((v) => String(v) !== "0");
     const hasEyeBank = someRowHasValuesLocal(cleanEyeBank);
     const hasVisionCenter = someRowHasValuesLocal(cleanVisionCenter);
@@ -1005,9 +1028,7 @@ function ReportEntry({
       visionCenter: cleanVisionCenter,
     };
 
-    if (!anyAnswer && !hasEyeBank && !hasVisionCenter) {
-      payload.forceSave = true;
-    }
+    if (!anyAnswer && !hasEyeBank && !hasVisionCenter) payload.forceSave = true;
 
     console.log("REPORT SAVE PAYLOAD", payload);
 
@@ -1022,9 +1043,7 @@ function ReportEntry({
       let data = {};
       try {
         data = raw ? JSON.parse(raw) : {};
-      } catch {
-        // ignore
-      }
+      } catch {}
 
       if (!res.ok || data?.ok === false) {
         const msg =
@@ -1080,12 +1099,10 @@ function ReportEntry({
 
         {alreadySubmitted && (
           <div className="mb-4 px-3 py-2 rounded bg-yellow-100 text-yellow-900 border border-yellow-300">
-            ⚠️ A report for <b>{month}</b> <b>{year}</b> already exists for your
-            institution.
+            ⚠️ A report for <b>{month}</b> <b>{year}</b> already exists for your institution.
           </div>
         )}
 
-        {/* All non-table sections (now includes nested ADDL. REPORTS) */}
         {sections
           .filter((s) => !s.table)
           .map((s) => {
@@ -1116,7 +1133,6 @@ function ReportEntry({
             );
           })}
 
-        {/* Eye Bank */}
         <div className="mb-12">
           <h4 className="text-lg font-bold text-[#017d8a] mb-4">
             III. EYE BANK PERFORMANCE
@@ -1128,7 +1144,6 @@ function ReportEntry({
           />
         </div>
 
-        {/* Vision Center */}
         <div className="mb-12">
           <h4 className="text-lg font-bold text-[#017d8a] mb-4">
             V. VISION CENTER
