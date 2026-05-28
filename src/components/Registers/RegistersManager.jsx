@@ -70,9 +70,10 @@ const renderSelect = (name, value, options, onChange, placeholder) => {
   );
 };
 
-const PowerSelector = ({ name, value, onChange }) => {
+const renderPowerSelect = (name, value, sign, onChange) => {
   const { plus, minus } = splitSigned(value);
-
+  const isSph = name.toLowerCase().includes("sph");
+  
   const handlePlus = (val) => {
     let newVal = "";
     if (val === "PL") newVal = "PL";
@@ -87,44 +88,43 @@ const PowerSelector = ({ name, value, onChange }) => {
     onChange({ target: { name, value: newVal } });
   };
 
-  const isSph = name.toLowerCase().includes("sph");
-  const PLUS_OPTIONS = [...(isSph ? SPH_PLUS : CYL_PLUS)];
-  const MINUS_OPTIONS = [...(isSph ? SPH_MINUS : CYL_MINUS)];
-
-  if (plus && !PLUS_OPTIONS.includes(plus)) {
-    PLUS_OPTIONS.push(plus);
-  }
-  if (minus && !MINUS_OPTIONS.includes(minus)) {
-    MINUS_OPTIONS.push(minus);
-  }
-
-  return (
-    <div className="flex gap-0.5">
+  if (sign === "plus") {
+    const options = [...(isSph ? SPH_PLUS : CYL_PLUS)];
+    if (plus && !options.includes(plus)) {
+      options.push(plus);
+    }
+    return (
       <select
         value={plus}
         onChange={(e) => handlePlus(e.target.value)}
-        className="w-1/2 min-w-[45px] px-1 py-1 border border-slate-200 rounded text-[11px] bg-white text-slate-800 focus:outline-none focus:border-[#396b84]"
+        className="w-full px-2 py-1 border border-slate-200 rounded text-xs bg-white text-slate-800 focus:outline-none focus:border-[#396b84]"
       >
-        {PLUS_OPTIONS.map((opt, i) => (
+        {options.map((opt, i) => (
           <option key={`plus-${opt}-${i}`} value={opt}>
             {opt === "" ? "+" : opt === "PL" ? "PL" : "+" + opt}
           </option>
         ))}
       </select>
-
+    );
+  } else {
+    const options = [...(isSph ? SPH_MINUS : CYL_MINUS)];
+    if (minus && !options.includes(minus)) {
+      options.push(minus);
+    }
+    return (
       <select
         value={minus}
         onChange={(e) => handleMinus(e.target.value)}
-        className="w-1/2 min-w-[45px] px-1 py-1 border border-slate-200 rounded text-[11px] bg-white text-slate-800 focus:outline-none focus:border-[#396b84]"
+        className="w-full px-2 py-1 border border-slate-200 rounded text-xs bg-white text-slate-800 focus:outline-none focus:border-[#396b84]"
       >
-        {MINUS_OPTIONS.map((opt, i) => (
+        {options.map((opt, i) => (
           <option key={`minus-${opt}-${i}`} value={opt}>
             {opt === "" ? "-" : opt === "PL" ? "PL" : "-" + opt}
           </option>
         ))}
       </select>
-    </div>
-  );
+    );
+  }
 };
 
 export default function RegistersManager({ user, activeRegister }) {
@@ -963,14 +963,22 @@ export default function RegistersManager({ user, activeRegister }) {
                   </div>
 
                   {/* RE Prescribed Power */}
-                  <div className="grid grid-cols-4 gap-1.5 mb-3">
+                  <div className="grid grid-cols-6 gap-1 mb-3">
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Sph</label>
-                      <PowerSelector name="powerRE_Sph" value={formData.powerRE_Sph} onChange={handleChange} />
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Sph (+)</label>
+                      {renderPowerSelect("powerRE_Sph", formData.powerRE_Sph, "plus", handleChange)}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Cyl</label>
-                      <PowerSelector name="powerRE_Cyl" value={formData.powerRE_Cyl} onChange={handleChange} />
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Sph (-)</label>
+                      {renderPowerSelect("powerRE_Sph", formData.powerRE_Sph, "minus", handleChange)}
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Cyl (+)</label>
+                      {renderPowerSelect("powerRE_Cyl", formData.powerRE_Cyl, "plus", handleChange)}
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Cyl (-)</label>
+                      {renderPowerSelect("powerRE_Cyl", formData.powerRE_Cyl, "minus", handleChange)}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Axis</label>
@@ -1013,14 +1021,22 @@ export default function RegistersManager({ user, activeRegister }) {
                   </div>
 
                   {/* LE Prescribed Power */}
-                  <div className="grid grid-cols-4 gap-1.5 mb-3">
+                  <div className="grid grid-cols-6 gap-1 mb-3">
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Sph</label>
-                      <PowerSelector name="powerLE_Sph" value={formData.powerLE_Sph} onChange={handleChange} />
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Sph (+)</label>
+                      {renderPowerSelect("powerLE_Sph", formData.powerLE_Sph, "plus", handleChange)}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Cyl</label>
-                      <PowerSelector name="powerLE_Cyl" value={formData.powerLE_Cyl} onChange={handleChange} />
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Sph (-)</label>
+                      {renderPowerSelect("powerLE_Sph", formData.powerLE_Sph, "minus", handleChange)}
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Cyl (+)</label>
+                      {renderPowerSelect("powerLE_Cyl", formData.powerLE_Cyl, "plus", handleChange)}
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Cyl (-)</label>
+                      {renderPowerSelect("powerLE_Cyl", formData.powerLE_Cyl, "minus", handleChange)}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Axis</label>
