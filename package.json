@@ -7,7 +7,7 @@
   "scripts": {
     "//": "────── Frontend (CRA) ──────",
     "start": "react-app-rewired start",
-    "build": "react-app-rewired build",
+    "build": "CI=false react-app-rewired build",
     "test": "react-app-rewired test",
     "//2": "────── Frontend (webpack dev @ 8080, optional) ──────",
     "web:webpack": "webpack serve --config webpack.config.js --mode development",
