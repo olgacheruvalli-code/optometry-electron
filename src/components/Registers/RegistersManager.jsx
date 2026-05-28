@@ -267,6 +267,10 @@ export default function RegistersManager({ user, activeRegister }) {
     schoolName: "",
     classStandard: "",
     teacherName: "",
+    taluk: "",
+    remarks: "",
+    parentName: "",
+    parentPhone: "",
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -556,37 +560,27 @@ export default function RegistersManager({ user, activeRegister }) {
         });
       } else if (activeTab === "school-spectacles") {
         dataToExport.push({
-          "Sl No": idx + 1,
-          "Name of Patient": r.name,
-          "Date of Prescription": r.dateOfPrescription,
-          "Sex": r.sex,
-          "Age": r.age,
-          "School Name": r.schoolName,
-          "Class/Standard": r.classStandard,
-          "Teacher Name": r.teacherName,
-          "Diagnosis": r.diagnosis,
-          "Vision RE DV": r.visionRE_DV,
-          "Vision RE NV": r.visionRE_NV,
-          "Vision LE DV": r.visionLE_DV,
-          "Vision LE NV": r.visionLE_NV,
-          "RE SPH": r.powerRE_Sph,
-          "RE CYL": r.powerRE_Cyl,
-          "RE Axis": r.powerRE_Axis,
-          "RE NV Add": r.powerRE_Add,
-          "LE SPH": r.powerLE_Sph,
-          "LE CYL": r.powerLE_Cyl,
-          "LE Axis": r.powerLE_Axis,
-          "LE NV Add": r.powerLE_Add,
-          "Corrected RE DV": r.correctedRE_DV,
-          "Corrected RE NV": r.correctedRE_NV,
-          "Corrected LE DV": r.correctedLE_DV,
-          "Corrected LE NV": r.correctedLE_NV,
-          "IPD/Frame size": r.ipdFrameSize,
-          "Contact Details": r.address,
-          "District": r.district,
-          "Institution": r.institution,
-          "Name of optometrist": r.optometristName || r.optometrist || "",
-          "Contact Number of optometrist": r.optometristPhone || "",
+          "Sl. No.": idx + 1,
+          "District Name": r.district || "",
+          "Taluk Name": r.taluk || "",
+          "Name of the Institution": r.institution || "",
+          "Date of consulting": r.dateOfPrescription || "",
+          "Name of Optometrist": r.optometristName || r.optometrist || "",
+          "Phone No. of Optometrist": r.optometristPhone || "",
+          "Name of student": r.name,
+          "Sex": r.sex || "",
+          "Age": r.age || "",
+          "Name of School": r.schoolName || "",
+          "Class": r.classStandard || "",
+          "Diagnosis": r.diagnosis || "",
+          "Vision RE": `${r.visionRE_DV || "—"} / ${r.visionRE_NV || "—"}`,
+          "Vision LE": `${r.visionLE_DV || "—"} / ${r.visionLE_NV || "—"}`,
+          "Prescribed Power": `RE: ${formatPower(r.powerRE_Sph, r.powerRE_Cyl, r.powerRE_Axis, r.powerRE_Add)} | LE: ${formatPower(r.powerLE_Sph, r.powerLE_Cyl, r.powerLE_Axis, r.powerLE_Add)}`,
+          "IPD Frame Size": r.ipdFrameSize || "",
+          "Reference if any": r.reference || "",
+          "Remarks": r.remarks || "",
+          "Name of parent": r.parentName || "",
+          "Phone No of Parent": r.parentPhone || "",
         });
       }
     });
@@ -753,116 +747,162 @@ export default function RegistersManager({ user, activeRegister }) {
           ) : (
             <div className="overflow-x-auto max-h-[60vh]">
               <table className={`text-left text-xs border-collapse ${
-                (activeTab === "old-aged-spectacles" || activeTab === "school-spectacles")
-                  ? "min-w-[1600px]" 
-                  : "w-full"
+                activeTab === "school-spectacles"
+                  ? "min-w-[2200px]"
+                  : activeTab === "old-aged-spectacles"
+                    ? "min-w-[1600px]"
+                    : "w-full"
               }`}>
                 <thead>
                   <tr className="bg-slate-800 text-white uppercase tracking-wider font-semibold border-b border-slate-200">
-                    <th className="p-3">Sl No</th>
-                    <th className="p-3">Name</th>
-                    <th className="p-3">Age/Sex</th>
-                    {activeTab === "school-spectacles" && (
+                    {activeTab === "school-spectacles" ? (
                       <>
-                        <th className="p-3">School (Class)</th>
-                        <th className="p-3">Teacher</th>
-                      </>
-                    )}
-                    {activeTab === "blind-register" && (
-                      <>
-                        <th className="p-3">Date</th>
-                        <th className="p-3">VA (RE/LE)</th>
-                        <th className="p-3">Cause</th>
-                      </>
-                    )}
-                    {activeTab === "cataract-backlog" && (
-                      <>
-                        <th className="p-3">Detection Date</th>
-                        <th className="p-3">Eye</th>
-                        <th className="p-3">Status</th>
-                        <th className="p-3">Surgery Date</th>
-                      </>
-                    )}
-                    {(activeTab === "old-aged-spectacles" || activeTab === "school-spectacles") && (
-                      <>
-                        <th className="p-3">Date</th>
+                        <th className="p-3">Sl. No.</th>
+                        <th className="p-3">District Name</th>
+                        <th className="p-3">Taluk Name</th>
+                        <th className="p-3">Name of the Institution</th>
+                        <th className="p-3">Date of consulting</th>
+                        <th className="p-3">Name of Optometrist</th>
+                        <th className="p-3">Phone No. of Optometrist</th>
+                        <th className="p-3">Name of student</th>
+                        <th className="p-3">Sex</th>
+                        <th className="p-3">Age</th>
+                        <th className="p-3">Name of School</th>
+                        <th className="p-3">Class</th>
                         <th className="p-3">Diagnosis</th>
-                        <th className="p-3">Vision RE (DV/NV)</th>
-                        <th className="p-3">Vision LE (DV/NV)</th>
-                        <th className="p-3">RE SPH CYL AXIS NV ADD</th>
-                        <th className="p-3">LE SPH CYL AXIS NV ADD</th>
-                        <th className="p-3">Corrected RE (DV/NV)</th>
-                        <th className="p-3">Corrected LE (DV/NV)</th>
-                        <th className="p-3">IPD/Frame size</th>
+                        <th className="p-3">Vision RE</th>
+                        <th className="p-3">Vision LE</th>
+                        <th className="p-3">Prescribed Power</th>
+                        <th className="p-3">IPD Frame Size</th>
+                        <th className="p-3">Reference if any</th>
+                        <th className="p-3">Remarks</th>
+                        <th className="p-3">Name of parent</th>
+                        <th className="p-3">Phone No of Parent</th>
+                      </>
+                    ) : (
+                      <>
+                        <th className="p-3">Sl No</th>
+                        <th className="p-3">Name</th>
+                        <th className="p-3">Age/Sex</th>
+                        {activeTab === "blind-register" && (
+                          <>
+                            <th className="p-3">Date</th>
+                            <th className="p-3">VA (RE/LE)</th>
+                            <th className="p-3">Cause</th>
+                          </>
+                        )}
+                        {activeTab === "cataract-backlog" && (
+                          <>
+                            <th className="p-3">Detection Date</th>
+                            <th className="p-3">Eye</th>
+                            <th className="p-3">Status</th>
+                            <th className="p-3">Surgery Date</th>
+                          </>
+                        )}
+                        {activeTab === "old-aged-spectacles" && (
+                          <>
+                            <th className="p-3">Date</th>
+                            <th className="p-3">Diagnosis</th>
+                            <th className="p-3">Vision RE (DV/NV)</th>
+                            <th className="p-3">Vision LE (DV/NV)</th>
+                            <th className="p-3">RE SPH CYL AXIS NV ADD</th>
+                            <th className="p-3">LE SPH CYL AXIS NV ADD</th>
+                            <th className="p-3">Corrected RE (DV/NV)</th>
+                            <th className="p-3">Corrected LE (DV/NV)</th>
+                            <th className="p-3">IPD/Frame size</th>
+                          </>
+                        )}
+                        <th className="p-3">Address/Contact</th>
+                        <th className="p-3">District</th>
+                        <th className="p-3">Institution</th>
+                        <th className="p-3">Optometrist Name</th>
+                        <th className="p-3">Optometrist Phone</th>
                       </>
                     )}
-                    <th className="p-3">Address/Contact</th>
-                    <th className="p-3">District</th>
-                    <th className="p-3">Institution</th>
-                    <th className="p-3">Optometrist Name</th>
-                    <th className="p-3">Optometrist Phone</th>
                     <th className="p-3 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                   {filteredRecords.map((r, index) => (
                     <tr key={r._id || r.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3 text-slate-500">{index + 1}</td>
-                      <td className="p-3 font-semibold text-slate-900">{r.name}</td>
-                      <td className="p-3 whitespace-nowrap">{r.age} Y / {r.sex}</td>
-                      {activeTab === "school-spectacles" && (
+                      {activeTab === "school-spectacles" ? (
                         <>
-                          <td className="p-3 text-indigo-600 font-semibold whitespace-nowrap">
-                            {r.schoolName} {r.classStandard ? `(${r.classStandard})` : ""}
-                          </td>
-                          <td className="p-3 whitespace-nowrap">{r.teacherName || "—"}</td>
-                        </>
-                      )}
-                      {activeTab === "blind-register" && (
-                        <>
-                          <td className="p-3 whitespace-nowrap">{r.date || "—"}</td>
-                          <td className="p-3 whitespace-nowrap">RE: {r.vaRE || "-"} | LE: {r.vaLE || "-"}</td>
-                          <td className="p-3 text-amber-700 font-semibold whitespace-nowrap">{r.cause}</td>
-                        </>
-                      )}
-                      {activeTab === "cataract-backlog" && (
-                        <>
-                          <td className="p-3 whitespace-nowrap">{r.detectionDate || "—"}</td>
-                          <td className="p-3 font-bold text-slate-600 whitespace-nowrap">{r.eyeOperated}</td>
-                          <td className="p-3 whitespace-nowrap">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
-                              r.status === "Operated" 
-                                ? "bg-emerald-100 text-emerald-800 border-emerald-300" 
-                                : "bg-rose-100 text-rose-800 border-rose-300"
-                            }`}>
-                              {r.status}
-                            </span>
-                          </td>
-                          <td className="p-3 whitespace-nowrap">{r.surgeryDate || "—"}</td>
-                        </>
-                      )}
-                      {(activeTab === "old-aged-spectacles" || activeTab === "school-spectacles") && (
-                        <>
+                          <td className="p-3 text-slate-500">{index + 1}</td>
+                          <td className="p-3 whitespace-nowrap">{r.district || "—"}</td>
+                          <td className="p-3 whitespace-nowrap">{r.taluk || "—"}</td>
+                          <td className="p-3 whitespace-nowrap">{r.institution || "—"}</td>
                           <td className="p-3 whitespace-nowrap">{r.dateOfPrescription || "—"}</td>
+                          <td className="p-3 font-semibold text-slate-900 whitespace-nowrap">{r.optometristName || r.optometrist || "—"}</td>
+                          <td className="p-3 whitespace-nowrap">{r.optometristPhone || "—"}</td>
+                          <td className="p-3 font-semibold text-slate-900">{r.name}</td>
+                          <td className="p-3 whitespace-nowrap">{r.sex || "—"}</td>
+                          <td className="p-3 whitespace-nowrap">{r.age || "—"}</td>
+                          <td className="p-3 text-indigo-600 font-semibold whitespace-nowrap">{r.schoolName || "—"}</td>
+                          <td className="p-3 whitespace-nowrap">{r.classStandard || "—"}</td>
                           <td className="p-3 text-indigo-700 whitespace-nowrap">{r.diagnosis || "Refractive Error"}</td>
                           <td className="p-3 font-mono whitespace-nowrap">{r.visionRE_DV || "—"} / {r.visionRE_NV || "—"}</td>
                           <td className="p-3 font-mono whitespace-nowrap">{r.visionLE_DV || "—"} / {r.visionLE_NV || "—"}</td>
                           <td className="p-3 font-mono whitespace-nowrap text-[#016eaa]">
-                            {formatPower(r.powerRE_Sph, r.powerRE_Cyl, r.powerRE_Axis, r.powerRE_Add)}
+                            RE: {formatPower(r.powerRE_Sph, r.powerRE_Cyl, r.powerRE_Axis, r.powerRE_Add)} | LE: {formatPower(r.powerLE_Sph, r.powerLE_Cyl, r.powerLE_Axis, r.powerLE_Add)}
                           </td>
-                          <td className="p-3 font-mono whitespace-nowrap text-[#016eaa]">
-                            {formatPower(r.powerLE_Sph, r.powerLE_Cyl, r.powerLE_Axis, r.powerLE_Add)}
-                          </td>
-                          <td className="p-3 font-mono whitespace-nowrap">{r.correctedRE_DV || "—"} / {r.correctedRE_NV || "—"}</td>
-                          <td className="p-3 font-mono whitespace-nowrap">{r.correctedLE_DV || "—"} / {r.correctedLE_NV || "—"}</td>
                           <td className="p-3 whitespace-nowrap">{r.ipdFrameSize || "—"}</td>
+                          <td className="p-3 whitespace-nowrap">{r.reference || "—"}</td>
+                          <td className="p-3 whitespace-nowrap">{r.remarks || "—"}</td>
+                          <td className="p-3 whitespace-nowrap">{r.parentName || "—"}</td>
+                          <td className="p-3 whitespace-nowrap">{r.parentPhone || "—"}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="p-3 text-slate-500">{index + 1}</td>
+                          <td className="p-3 font-semibold text-slate-900">{r.name}</td>
+                          <td className="p-3 whitespace-nowrap">{r.age} Y / {r.sex}</td>
+                          {activeTab === "blind-register" && (
+                            <>
+                              <td className="p-3 whitespace-nowrap">{r.date || "—"}</td>
+                              <td className="p-3 whitespace-nowrap">RE: {r.vaRE || "-"} | LE: {r.vaLE || "-"}</td>
+                              <td className="p-3 text-amber-700 font-semibold whitespace-nowrap">{r.cause}</td>
+                            </>
+                          )}
+                          {activeTab === "cataract-backlog" && (
+                            <>
+                              <td className="p-3 whitespace-nowrap">{r.detectionDate || "—"}</td>
+                              <td className="p-3 font-bold text-slate-600 whitespace-nowrap">{r.eyeOperated}</td>
+                              <td className="p-3 whitespace-nowrap">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                                  r.status === "Operated" 
+                                    ? "bg-emerald-100 text-emerald-800 border-emerald-300" 
+                                    : "bg-rose-100 text-rose-800 border-rose-300"
+                                }`}>
+                                  {r.status}
+                                </span>
+                              </td>
+                              <td className="p-3 whitespace-nowrap">{r.surgeryDate || "—"}</td>
+                            </>
+                          )}
+                          {activeTab === "old-aged-spectacles" && (
+                            <>
+                              <td className="p-3 whitespace-nowrap">{r.dateOfPrescription || "—"}</td>
+                              <td className="p-3 text-indigo-700 whitespace-nowrap">{r.diagnosis || "Refractive Error"}</td>
+                              <td className="p-3 font-mono whitespace-nowrap">{r.visionRE_DV || "—"} / {r.visionRE_NV || "—"}</td>
+                              <td className="p-3 font-mono whitespace-nowrap">{r.visionLE_DV || "—"} / {r.visionLE_NV || "—"}</td>
+                              <td className="p-3 font-mono whitespace-nowrap text-[#016eaa]">
+                                {formatPower(r.powerRE_Sph, r.powerRE_Cyl, r.powerRE_Axis, r.powerRE_Add)}
+                              </td>
+                              <td className="p-3 font-mono whitespace-nowrap text-[#016eaa]">
+                                {formatPower(r.powerLE_Sph, r.powerLE_Cyl, r.powerLE_Axis, r.powerLE_Add)}
+                              </td>
+                              <td className="p-3 font-mono whitespace-nowrap">{r.correctedRE_DV || "—"} / {r.correctedRE_NV || "—"}</td>
+                              <td className="p-3 font-mono whitespace-nowrap">{r.correctedLE_DV || "—"} / {r.correctedLE_NV || "—"}</td>
+                              <td className="p-3 whitespace-nowrap">{r.ipdFrameSize || "—"}</td>
+                            </>
+                          )}
+                          <td className="p-3 max-w-[200px] truncate text-slate-500" title={r.address}>{r.address || "—"}</td>
+                          <td className="p-3 whitespace-nowrap">{r.district || "—"}</td>
+                          <td className="p-3 whitespace-nowrap">{r.institution || "—"}</td>
+                          <td className="p-3 font-semibold text-slate-900 whitespace-nowrap">{r.optometristName || r.optometrist || "—"}</td>
+                          <td className="p-3 whitespace-nowrap">{r.optometristPhone || "—"}</td>
                         </>
                       )}
-                      <td className="p-3 max-w-[200px] truncate text-slate-500" title={r.address}>{r.address || "—"}</td>
-                      <td className="p-3 whitespace-nowrap">{r.district || "—"}</td>
-                      <td className="p-3 whitespace-nowrap">{r.institution || "—"}</td>
-                      <td className="p-3 font-semibold text-slate-900 whitespace-nowrap">{r.optometristName || r.optometrist || "—"}</td>
-                      <td className="p-3 whitespace-nowrap">{r.optometristPhone || "—"}</td>
                       <td className="p-3">
                         <div className="flex justify-center gap-2">
                           <button
@@ -974,6 +1014,50 @@ export default function RegistersManager({ user, activeRegister }) {
                     onChange={handleChange}
                     className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84]"
                     placeholder="Enter teacher's name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Taluk Name</label>
+                  <input
+                    type="text"
+                    name="taluk"
+                    value={formData.taluk}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84]"
+                    placeholder="Enter Taluk Name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Name of parent</label>
+                  <input
+                    type="text"
+                    name="parentName"
+                    value={formData.parentName}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84]"
+                    placeholder="Enter parent's name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Phone No of Parent</label>
+                  <input
+                    type="text"
+                    name="parentPhone"
+                    value={formData.parentPhone}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84]"
+                    placeholder="Enter parent's phone number"
+                  />
+                </div>
+                <div className="md:col-span-3">
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Remarks</label>
+                  <input
+                    type="text"
+                    name="remarks"
+                    value={formData.remarks}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84]"
+                    placeholder="Enter remarks"
                   />
                 </div>
               </>
