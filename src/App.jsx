@@ -1386,13 +1386,28 @@ const qDefs = useMemo(() => {
 
     (async () => {
       try {
-        const [all, blindReg, cataractReg, oldAgedReg, schoolReg] = await Promise.all([
-          fetchList(`${API_BASE}/api/reports`),
-          fetchList(`${API_BASE}/api/blind-register?district=${encodeURIComponent(selectedDistrict)}`),
-          fetchList(`${API_BASE}/api/cataract-backlog?district=${encodeURIComponent(selectedDistrict)}`),
-          fetchList(`${API_BASE}/api/old-aged-spectacles?district=${encodeURIComponent(selectedDistrict)}`),
-          fetchList(`${API_BASE}/api/school-spectacles?district=${encodeURIComponent(selectedDistrict)}`),
-        ]);
+        const isRegisterSubmenu =
+          menu === "performance-cataract" ||
+          menu === "op-eye-diseases" ||
+          menu === "seh-spectacles-eyebank" ||
+          menu === "other-diseases" ||
+          menu === "identified-cataract";
+
+        const fetches = [
+          fetchList(`${API_BASE}/api/reports?district=${encodeURIComponent(selectedDistrict)}`)
+        ];
+
+        if (isRegisterSubmenu) {
+          fetches.push(
+            fetchList(`${API_BASE}/api/blind-register?district=${encodeURIComponent(selectedDistrict)}`),
+            fetchList(`${API_BASE}/api/cataract-backlog?district=${encodeURIComponent(selectedDistrict)}`),
+            fetchList(`${API_BASE}/api/old-aged-spectacles?district=${encodeURIComponent(selectedDistrict)}`),
+            fetchList(`${API_BASE}/api/school-spectacles?district=${encodeURIComponent(selectedDistrict)}`)
+          );
+        }
+
+        const [all, blindReg = [], cataractReg = [], oldAgedReg = [], schoolReg = []] =
+          await Promise.all(fetches);
 
         const districtDocs = all.filter(
           (d) =>
@@ -1486,13 +1501,6 @@ const qDefs = useMemo(() => {
           byInstAgg.set(displayName, rec);
         });
 
-        const isRegisterSubmenu =
-          menu === "performance-cataract" ||
-          menu === "op-eye-diseases" ||
-          menu === "seh-spectacles-eyebank" ||
-          menu === "other-diseases" ||
-          menu === "identified-cataract";
-
         if (isRegisterSubmenu) {
           const getMonthNumber = (mName) => {
             const map = {
@@ -1511,12 +1519,13 @@ const qDefs = useMemo(() => {
           const isOperated = r => String(r.status || "").trim().toLowerCase() === "operated";
 
           const filterReg = (reg, dateField, prefixes, nameLower, extraFilter = () => true) => {
-            return reg.filter(r => {
-              const rInst = String(r.institution || "").trim().toLowerCase();
+            const arr = Array.isArray(reg) ? reg : [];
+            return arr.filter(r => {
+              const rInst = String(r?.institution || "").trim().toLowerCase();
               if (rInst !== nameLower) return false;
-              const dateVal = r[dateField];
+              const dateVal = r?.[dateField];
               if (!dateVal) return false;
-              const matchesDate = prefixes.some(pref => dateVal.startsWith(pref));
+              const matchesDate = prefixes.some(pref => String(dateVal).startsWith(pref));
               if (!matchesDate) return false;
               return extraFilter(r);
             }).length;
