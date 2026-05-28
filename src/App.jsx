@@ -1366,19 +1366,6 @@ const qDefs = useMemo(() => {
       }
     };
 
-    const hydrateDoc = async (doc) => {
-      const id = doc?._id || doc?.id;
-      if (!id) return doc;
-      try {
-        const r = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(id)}`);
-        if (!r.ok) return doc;
-        const j = await r.json().catch(() => ({}));
-        return j?.doc || j || doc;
-      } catch {
-        return doc;
-      }
-    };
-
     const ts = (d) => {
       const t = Date.parse(d?.updatedAt || d?.createdAt || 0);
       return Number.isFinite(t) ? t : 0;
@@ -1393,8 +1380,15 @@ const qDefs = useMemo(() => {
           menu === "other-diseases" ||
           menu === "identified-cataract";
 
+        // Query only the required months of the fiscal window in parallel
+        const reportFetches = fiscalPairs.map((p) =>
+          fetchList(
+            `${API_BASE}/api/reports?district=${encodeURIComponent(selectedDistrict)}&month=${encodeURIComponent(p.month)}&year=${encodeURIComponent(p.year)}`
+          )
+        );
+
         const fetches = [
-          fetchList(`${API_BASE}/api/reports?district=${encodeURIComponent(selectedDistrict)}`)
+          Promise.all(reportFetches)
         ];
 
         if (isRegisterSubmenu) {
@@ -1406,28 +1400,15 @@ const qDefs = useMemo(() => {
           );
         }
 
-        const [all, blindReg = [], cataractReg = [], oldAgedReg = [], schoolReg = []] =
+        const [reportMonthResults, blindReg = [], cataractReg = [], oldAgedReg = [], schoolReg = []] =
           await Promise.all(fetches);
 
-        const districtDocs = all.filter(
-          (d) =>
-            String(d?.district || "").trim().toLowerCase() ===
-            String(selectedDistrict).trim().toLowerCase()
-        );
-
-        const inFiscalWindow = districtDocs.filter((d) =>
-          fiscalPairs.some(
-            (p) =>
-              String(d?.month || "").trim().toLowerCase() === p.month.toLowerCase() &&
-              String(d?.year || "") === p.year
-          )
-        );
-
-        const hydrated = await Promise.all(inFiscalWindow.map(hydrateDoc));
         if (cancelled) return;
 
+        const allReports = reportMonthResults.flat();
+
         const latestByInstMonth = new Map();
-        hydrated.forEach((d) => {
+        allReports.forEach((d) => {
           const inst = String(d?.institution || "").trim();
           if (!inst || /^doc\s/i.test(inst) || /^dc\s/i.test(inst)) return;
           const instLower = inst.toLowerCase();
