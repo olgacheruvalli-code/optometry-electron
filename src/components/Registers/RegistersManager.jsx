@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import * as XLSX from "xlsx";
 import API_BASE from "../../apiBase";
-import { Plus, Table, Download, Search, Edit, Trash2, X, Check } from "lucide-react";
+import { Plus, Table, Download, Search, X, Check } from "lucide-react";
 
 const buildRange = (start, end, step, precision = 2) => {
   const arr = [];
@@ -43,13 +43,30 @@ const splitSigned = (value) => {
   if (!value) return { plus: "", minus: "" };
   const v = value.toString().trim();
   if (!v) return { plus: "", minus: "" };
-  if (v.toUpperCase() === "PL") return { plus: "PL", minus: "" };
+  if (v.toUpperCase() === "PL" || v.toUpperCase() === "PLANO") return { plus: "PL", minus: "" };
   if (v.startsWith("-")) return { plus: "", minus: v.slice(1) };
   if (v.startsWith("+")) return { plus: v.slice(1), minus: "" };
   return { plus: v, minus: "" };
 };
 
-const renderSelect = (name, value, options, onChange, placeholder) => {
+const formatPower = (sph, cyl, axis, add) => {
+  const parts = [];
+  if (sph) {
+    parts.push((sph === "PL" || sph === "Plano" || sph.toUpperCase() === "PL") ? "Plano" : sph);
+  }
+  if (cyl) {
+    parts.push(cyl);
+  }
+  if (axis) {
+    parts.push(`x ${axis}`);
+  }
+  if (add) {
+    parts.push(`[Add: ${add}]`);
+  }
+  return parts.join(" ") || "—";
+};
+
+const renderSelect = (name, value, options, onChange, placeholder, hideArrow = false) => {
   const optionsWithCurrent = [...options];
   if (value && !options.includes(value)) {
     optionsWithCurrent.push(value);
@@ -59,7 +76,9 @@ const renderSelect = (name, value, options, onChange, placeholder) => {
       name={name}
       value={value}
       onChange={onChange}
-      className="w-full px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84] bg-white text-slate-800"
+      className={`w-full py-1 border border-slate-200 rounded text-xs focus:outline-none focus:border-[#396b84] bg-white text-slate-800 ${
+        hideArrow ? "appearance-none text-center cursor-pointer px-1.5" : "px-2"
+      }`}
     >
       {optionsWithCurrent.map((opt, i) => (
         <option key={`${opt}-${i}`} value={opt}>
@@ -70,7 +89,7 @@ const renderSelect = (name, value, options, onChange, placeholder) => {
   );
 };
 
-const renderPowerSelect = (name, value, sign, onChange) => {
+const renderPowerSelect = (name, value, sign, onChange, hideArrow = false) => {
   const { plus, minus } = splitSigned(value);
   const isSph = name.toLowerCase().includes("sph");
   
@@ -97,7 +116,9 @@ const renderPowerSelect = (name, value, sign, onChange) => {
       <select
         value={plus}
         onChange={(e) => handlePlus(e.target.value)}
-        className="w-full px-2 py-1 border border-slate-200 rounded text-xs bg-white text-slate-800 focus:outline-none focus:border-[#396b84]"
+        className={`w-full py-1 border border-slate-200 rounded text-xs bg-white text-slate-800 focus:outline-none focus:border-[#396b84] ${
+          hideArrow ? "appearance-none text-center cursor-pointer px-1.5" : "px-2"
+        }`}
       >
         {options.map((opt, i) => (
           <option key={`plus-${opt}-${i}`} value={opt}>
@@ -115,7 +136,9 @@ const renderPowerSelect = (name, value, sign, onChange) => {
       <select
         value={minus}
         onChange={(e) => handleMinus(e.target.value)}
-        className="w-full px-2 py-1 border border-slate-200 rounded text-xs bg-white text-slate-800 focus:outline-none focus:border-[#396b84]"
+        className={`w-full py-1 border border-slate-200 rounded text-xs bg-white text-slate-800 focus:outline-none focus:border-[#396b84] ${
+          hideArrow ? "appearance-none text-center cursor-pointer px-1.5" : "px-2"
+        }`}
       >
         {options.map((opt, i) => (
           <option key={`minus-${opt}-${i}`} value={opt}>
@@ -143,6 +166,7 @@ export default function RegistersManager({ user, activeRegister }) {
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusMessage, setStatusMessage] = useState(null);
+  const [showCustomDiagnosis, setShowCustomDiagnosis] = useState(false);
 
   // Form State
   const initialFormState = {
@@ -194,7 +218,6 @@ export default function RegistersManager({ user, activeRegister }) {
 
   const [formData, setFormData] = useState(initialFormState);
   const [editingId, setEditingId] = useState(null);
-
   // Sync state with activeRegister prop from menu selection
   useEffect(() => {
     if (activeRegister) {
@@ -204,10 +227,9 @@ export default function RegistersManager({ user, activeRegister }) {
       setSearchQuery("");
       setEditingId(null);
       setFormData(initialFormState);
+      setShowCustomDiagnosis(false);
     }
   }, [activeRegister]);
-
-  // Fetch records
   const fetchRecords = async () => {
     setLoading(true);
     try {
@@ -236,7 +258,11 @@ export default function RegistersManager({ user, activeRegister }) {
   // Handle Form Change
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    let finalValue = value;
+    if (name === "name") {
+      finalValue = value.toUpperCase();
+    }
+    setFormData((prev) => ({ ...prev, [name]: finalValue }));
   };
 
   // Show status toast
@@ -291,6 +317,7 @@ export default function RegistersManager({ user, activeRegister }) {
           optometristName: formData.optometristName || "",
           optometristPhone: formData.optometristPhone || "",
         });
+        setShowCustomDiagnosis(false);
         setEditingId(null);
         setViewMode("table");
         fetchRecords();
@@ -312,6 +339,8 @@ export default function RegistersManager({ user, activeRegister }) {
       ...initialFormState,
       ...record,
     });
+    const isStandard = ["Presbiopia", "Hypermetropia", "Myopia", "Astigmatism", ""].includes(record.diagnosis || "");
+    setShowCustomDiagnosis(!isStandard);
     setViewMode("form");
   };
 
@@ -575,7 +604,11 @@ export default function RegistersManager({ user, activeRegister }) {
             <div className="text-center py-12 text-slate-400 italic">No records found. Click "Add New Entry" to log a record!</div>
           ) : (
             <div className="overflow-x-auto max-h-[60vh]">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className={`text-left text-xs border-collapse ${
+                (activeTab === "old-aged-spectacles" || activeTab === "school-spectacles")
+                  ? "min-w-[1600px]" 
+                  : "w-full"
+              }`}>
                 <thead>
                   <tr className="bg-slate-800 text-white uppercase tracking-wider font-semibold border-b border-slate-200">
                     <th className="p-3">Sl No</th>
@@ -605,8 +638,8 @@ export default function RegistersManager({ user, activeRegister }) {
                         <th className="p-3">Diagnosis</th>
                         <th className="p-3">Vision RE (DV/NV)</th>
                         <th className="p-3">Vision LE (DV/NV)</th>
-                        <th className="p-3">RE SPH/CYL/AXIS/ADD</th>
-                        <th className="p-3">LE SPH/CYL/AXIS/ADD</th>
+                        <th className="p-3">RE SPH CYL AXIS NV ADD</th>
+                        <th className="p-3">LE SPH CYL AXIS NV ADD</th>
                         <th className="p-3">Corrected RE (DV/NV)</th>
                         <th className="p-3">Corrected LE (DV/NV)</th>
                         <th className="p-3">IPD/Frame size</th>
@@ -661,10 +694,10 @@ export default function RegistersManager({ user, activeRegister }) {
                           <td className="p-3 font-mono whitespace-nowrap">{r.visionRE_DV || "—"} / {r.visionRE_NV || "—"}</td>
                           <td className="p-3 font-mono whitespace-nowrap">{r.visionLE_DV || "—"} / {r.visionLE_NV || "—"}</td>
                           <td className="p-3 font-mono whitespace-nowrap text-[#016eaa]">
-                            {r.powerRE_Sph || "PL"}{r.powerRE_Cyl ? ` / ${r.powerRE_Cyl}` : ""}{r.powerRE_Axis ? ` x ${r.powerRE_Axis}` : ""}{r.powerRE_Add ? ` [Add: ${r.powerRE_Add}]` : ""}
+                            {formatPower(r.powerRE_Sph, r.powerRE_Cyl, r.powerRE_Axis, r.powerRE_Add)}
                           </td>
                           <td className="p-3 font-mono whitespace-nowrap text-[#016eaa]">
-                            {r.powerLE_Sph || "PL"}{r.powerLE_Cyl ? ` / ${r.powerLE_Cyl}` : ""}{r.powerLE_Axis ? ` x ${r.powerLE_Axis}` : ""}{r.powerLE_Add ? ` [Add: ${r.powerLE_Add}]` : ""}
+                            {formatPower(r.powerLE_Sph, r.powerLE_Cyl, r.powerLE_Axis, r.powerLE_Add)}
                           </td>
                           <td className="p-3 font-mono whitespace-nowrap">{r.correctedRE_DV || "—"} / {r.correctedRE_NV || "—"}</td>
                           <td className="p-3 font-mono whitespace-nowrap">{r.correctedLE_DV || "—"} / {r.correctedLE_NV || "—"}</td>
@@ -680,17 +713,17 @@ export default function RegistersManager({ user, activeRegister }) {
                         <div className="flex justify-center gap-2">
                           <button
                             onClick={() => handleEdit(r)}
-                            className="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 transition"
+                            className="px-2.5 py-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition"
                             title="Edit"
                           >
-                            <Edit className="w-3.5 h-3.5" />
+                            Edit
                           </button>
                           <button
                             onClick={() => handleDelete(r._id || r.id)}
-                            className="p-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-600 transition"
+                            className="px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition flex items-center justify-center"
                             title="Delete"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            X
                           </button>
                         </div>
                       </td>
@@ -722,7 +755,7 @@ export default function RegistersManager({ user, activeRegister }) {
                 required
                 value={formData.name}
                 onChange={handleChange}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84]"
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84] uppercase"
                 placeholder="Enter full name"
               />
             </div>
@@ -966,14 +999,45 @@ export default function RegistersManager({ user, activeRegister }) {
                 </div>
                 <div className={activeTab === "school-spectacles" ? "md:col-span-2" : ""}>
                   <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Diagnosis</label>
-                  <input
-                    type="text"
-                    name="diagnosis"
-                    value={formData.diagnosis}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84]"
-                    placeholder="e.g. Presbyopia, Simple Myopia"
-                  />
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <select
+                      name="diagnosis_select"
+                      value={showCustomDiagnosis ? "Other" : formData.diagnosis}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "Other") {
+                          setShowCustomDiagnosis(true);
+                          setFormData(prev => ({ ...prev, diagnosis: "" }));
+                        } else {
+                          setShowCustomDiagnosis(false);
+                          setFormData(prev => ({ ...prev, diagnosis: val }));
+                        }
+                      }}
+                      className="w-full sm:w-1/2 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84] bg-white text-slate-800"
+                    >
+                      <option value="">Select Diagnosis</option>
+                      <option value="Presbiopia">Presbiopia</option>
+                      <option value="Hypermetropia">Hypermetropia</option>
+                      <option value="Myopia">Myopia</option>
+                      <option value="Astigmatism">Astigmatism</option>
+                      <option value="Other">Other</option>
+                    </select>
+
+                    {/* Custom Diagnosis Text Input (if Other selected) */}
+                    {showCustomDiagnosis && (
+                      <input
+                        type="text"
+                        name="diagnosis"
+                        value={formData.diagnosis}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormData(prev => ({ ...prev, diagnosis: val }));
+                        }}
+                        className="w-full sm:w-1/2 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84] bg-white text-slate-800"
+                        placeholder="Type custom diagnosis"
+                      />
+                    )}
+                  </div>
                 </div>
               </>
             )}
@@ -997,39 +1061,39 @@ export default function RegistersManager({ user, activeRegister }) {
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Vision DV</label>
-                      {renderSelect("visionRE_DV", formData.visionRE_DV, VISION_OPTIONS, handleChange, "DV")}
+                      {renderSelect("visionRE_DV", formData.visionRE_DV, VISION_OPTIONS, handleChange, "DV", true)}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Vision NV</label>
-                      {renderSelect("visionRE_NV", formData.visionRE_NV, NEAR_VISION_OPTIONS, handleChange, "NV")}
+                      {renderSelect("visionRE_NV", formData.visionRE_NV, NEAR_VISION_OPTIONS, handleChange, "NV", true)}
                     </div>
                   </div>
 
                   {/* RE Prescribed Power */}
-                  <div className="grid grid-cols-6 gap-1 mb-3">
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3">
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Sph (+)</label>
-                      {renderPowerSelect("powerRE_Sph", formData.powerRE_Sph, "plus", handleChange)}
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Sph (+)</label>
+                      {renderPowerSelect("powerRE_Sph", formData.powerRE_Sph, "plus", handleChange, true)}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Sph (-)</label>
-                      {renderPowerSelect("powerRE_Sph", formData.powerRE_Sph, "minus", handleChange)}
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Sph (-)</label>
+                      {renderPowerSelect("powerRE_Sph", formData.powerRE_Sph, "minus", handleChange, true)}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Cyl (+)</label>
-                      {renderPowerSelect("powerRE_Cyl", formData.powerRE_Cyl, "plus", handleChange)}
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Cyl (+)</label>
+                      {renderPowerSelect("powerRE_Cyl", formData.powerRE_Cyl, "plus", handleChange, true)}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Cyl (-)</label>
-                      {renderPowerSelect("powerRE_Cyl", formData.powerRE_Cyl, "minus", handleChange)}
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Cyl (-)</label>
+                      {renderPowerSelect("powerRE_Cyl", formData.powerRE_Cyl, "minus", handleChange, true)}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Axis</label>
-                      {renderSelect("powerRE_Axis", formData.powerRE_Axis, AXIS_OPTIONS, handleChange, "AXIS")}
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Axis</label>
+                      {renderSelect("powerRE_Axis", formData.powerRE_Axis, AXIS_OPTIONS, handleChange, "AXIS", true)}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">NV Add</label>
-                      {renderSelect("powerRE_Add", formData.powerRE_Add, NV_ADD_OPTIONS, handleChange, "ADD")}
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">NV Add</label>
+                      {renderSelect("powerRE_Add", formData.powerRE_Add, NV_ADD_OPTIONS, handleChange, "ADD", true)}
                     </div>
                   </div>
 
@@ -1037,11 +1101,11 @@ export default function RegistersManager({ user, activeRegister }) {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Corrected DV</label>
-                      {renderSelect("correctedRE_DV", formData.correctedRE_DV, VISION_OPTIONS, handleChange, "DV")}
+                      {renderSelect("correctedRE_DV", formData.correctedRE_DV, VISION_OPTIONS, handleChange, "DV", true)}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Corrected NV</label>
-                      {renderSelect("correctedRE_NV", formData.correctedRE_NV, NEAR_VISION_OPTIONS, handleChange, "NV")}
+                      {renderSelect("correctedRE_NV", formData.correctedRE_NV, NEAR_VISION_OPTIONS, handleChange, "NV", true)}
                     </div>
                   </div>
                 </div>
@@ -1055,39 +1119,39 @@ export default function RegistersManager({ user, activeRegister }) {
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Vision DV</label>
-                      {renderSelect("visionLE_DV", formData.visionLE_DV, VISION_OPTIONS, handleChange, "DV")}
+                      {renderSelect("visionLE_DV", formData.visionLE_DV, VISION_OPTIONS, handleChange, "DV", true)}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Vision NV</label>
-                      {renderSelect("visionLE_NV", formData.visionLE_NV, NEAR_VISION_OPTIONS, handleChange, "NV")}
+                      {renderSelect("visionLE_NV", formData.visionLE_NV, NEAR_VISION_OPTIONS, handleChange, "NV", true)}
                     </div>
                   </div>
 
                   {/* LE Prescribed Power */}
-                  <div className="grid grid-cols-6 gap-1 mb-3">
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3">
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Sph (+)</label>
-                      {renderPowerSelect("powerLE_Sph", formData.powerLE_Sph, "plus", handleChange)}
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Sph (+)</label>
+                      {renderPowerSelect("powerLE_Sph", formData.powerLE_Sph, "plus", handleChange, true)}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Sph (-)</label>
-                      {renderPowerSelect("powerLE_Sph", formData.powerLE_Sph, "minus", handleChange)}
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Sph (-)</label>
+                      {renderPowerSelect("powerLE_Sph", formData.powerLE_Sph, "minus", handleChange, true)}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Cyl (+)</label>
-                      {renderPowerSelect("powerLE_Cyl", formData.powerLE_Cyl, "plus", handleChange)}
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Cyl (+)</label>
+                      {renderPowerSelect("powerLE_Cyl", formData.powerLE_Cyl, "plus", handleChange, true)}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Cyl (-)</label>
-                      {renderPowerSelect("powerLE_Cyl", formData.powerLE_Cyl, "minus", handleChange)}
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Cyl (-)</label>
+                      {renderPowerSelect("powerLE_Cyl", formData.powerLE_Cyl, "minus", handleChange, true)}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">Axis</label>
-                      {renderSelect("powerLE_Axis", formData.powerLE_Axis, AXIS_OPTIONS, handleChange, "AXIS")}
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Axis</label>
+                      {renderSelect("powerLE_Axis", formData.powerLE_Axis, AXIS_OPTIONS, handleChange, "AXIS", true)}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase">NV Add</label>
-                      {renderSelect("powerLE_Add", formData.powerLE_Add, NV_ADD_OPTIONS, handleChange, "ADD")}
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">NV Add</label>
+                      {renderSelect("powerLE_Add", formData.powerLE_Add, NV_ADD_OPTIONS, handleChange, "ADD", true)}
                     </div>
                   </div>
 
@@ -1095,11 +1159,11 @@ export default function RegistersManager({ user, activeRegister }) {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Corrected DV</label>
-                      {renderSelect("correctedLE_DV", formData.correctedLE_DV, VISION_OPTIONS, handleChange, "DV")}
+                      {renderSelect("correctedLE_DV", formData.correctedLE_DV, VISION_OPTIONS, handleChange, "DV", true)}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase">Corrected NV</label>
-                      {renderSelect("correctedLE_NV", formData.correctedLE_NV, NEAR_VISION_OPTIONS, handleChange, "NV")}
+                      {renderSelect("correctedLE_NV", formData.correctedLE_NV, NEAR_VISION_OPTIONS, handleChange, "NV", true)}
                     </div>
                   </div>
                 </div>
