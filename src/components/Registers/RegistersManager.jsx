@@ -346,7 +346,20 @@ export default function RegistersManager({ user, activeRegister }) {
     if (name === "name") {
       finalValue = value.toUpperCase();
     }
-    setFormData((prev) => ({ ...prev, [name]: finalValue }));
+    setFormData((prev) => {
+      const next = { ...prev, [name]: finalValue };
+      if (
+        activeTab === "school-spectacles" &&
+        ["parentName", "parentPhone", "schoolName", "classStandard"].includes(name)
+      ) {
+        const prevAuto = `Parent: ${prev.parentName || ""}\nPhone: ${prev.parentPhone || ""}\nSchool: ${prev.schoolName || ""}\nClass: ${prev.classStandard || ""}`;
+        const prevClean = String(prev.address || "").trim();
+        if (!prevClean || prevClean === prevAuto.trim()) {
+          next.address = `Parent: ${next.parentName || ""}\nPhone: ${next.parentPhone || ""}\nSchool: ${next.schoolName || ""}\nClass: ${next.classStandard || ""}`;
+        }
+      }
+      return next;
+    });
   };
 
   // Show status toast
@@ -586,7 +599,6 @@ export default function RegistersManager({ user, activeRegister }) {
         dataToExport.push({
           "Sl. No.": idx + 1,
           "District Name": r.district || "",
-          "Taluk Name": r.taluk || "",
           "Name of the Institution": r.institution || "",
           "Date of consulting": r.dateOfPrescription || "",
           "Name of Optometrist": r.optometristName || r.optometrist || "",
@@ -805,7 +817,6 @@ export default function RegistersManager({ user, activeRegister }) {
                       <>
                         <th className="p-3">Sl. No.</th>
                         <th className="p-3">District Name</th>
-                        <th className="p-3">Taluk Name</th>
                         <th className="p-3">Name of the Institution</th>
                         <th className="p-3">Date of consulting</th>
                         <th className="p-3">Name of Optometrist</th>
@@ -875,7 +886,6 @@ export default function RegistersManager({ user, activeRegister }) {
                         <>
                           <td className="p-3 text-slate-500">{index + 1}</td>
                           <td className="p-3 whitespace-nowrap">{r.district || "—"}</td>
-                          <td className="p-3 whitespace-nowrap">{r.taluk || "—"}</td>
                           <td className="p-3 whitespace-nowrap">{r.institution || "—"}</td>
                           <td className="p-3 whitespace-nowrap">{r.dateOfPrescription || "—"}</td>
                           <td className="p-3 font-semibold text-slate-900 whitespace-nowrap">{r.optometristName || r.optometrist || "—"}</td>
@@ -1051,28 +1061,7 @@ export default function RegistersManager({ user, activeRegister }) {
                     placeholder="e.g. 5-A, HS"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Class Teacher Name</label>
-                  <input
-                    type="text"
-                    name="teacherName"
-                    value={formData.teacherName}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84]"
-                    placeholder="Enter teacher's name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Taluk Name</label>
-                  <input
-                    type="text"
-                    name="taluk"
-                    value={formData.taluk}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-[#396b84]"
-                    placeholder="Enter Taluk Name"
-                  />
-                </div>
+
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Name of parent</label>
                   <input
@@ -1315,16 +1304,16 @@ export default function RegistersManager({ user, activeRegister }) {
 
           {/* SPECTACLE POWER AND VISION GRID - FOR OLD AGED & SCHOOL */}
           {(activeTab === "old-aged-spectacles" || activeTab === "school-spectacles") && (
-            <div className="border border-slate-200 rounded-xl p-4 mb-6 bg-slate-50">
-              <h4 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">
+            <div className="border border-indigo-200 rounded-xl p-4 mb-6 bg-[#f0f4ff]">
+              <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-4 border-b border-indigo-200 pb-2">
                 Spectacle Power & Refraction Details
               </h4>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
                 {/* Right Eye (RE) Block */}
-                <div className="bg-white rounded-lg p-4 border border-slate-200">
-                  <h5 className="text-xs font-bold text-sky-700 border-b border-slate-100 pb-1.5 mb-3 uppercase tracking-wider">
+                <div className="bg-white rounded-lg p-4 border border-indigo-100 shadow-sm">
+                  <h5 className="text-xs font-bold text-indigo-700 border-b border-indigo-50 pb-1.5 mb-3 uppercase tracking-wider">
                     Right Eye (RE / OD)
                   </h5>
                                    {/* RE Vision */}
@@ -1381,8 +1370,8 @@ export default function RegistersManager({ user, activeRegister }) {
                 </div>
 
                 {/* Left Eye (LE) Block */}
-                <div className="bg-white rounded-lg p-4 border border-slate-200">
-                  <h5 className="text-xs font-bold text-emerald-700 border-b border-slate-100 pb-1.5 mb-3 uppercase tracking-wider">
+                <div className="bg-white rounded-lg p-4 border border-indigo-100 shadow-sm">
+                  <h5 className="text-xs font-bold text-indigo-700 border-b border-indigo-50 pb-1.5 mb-3 uppercase tracking-wider">
                     Left Eye (LE / OS)
                   </h5>
                                    {/* LE Vision */}
