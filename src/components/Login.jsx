@@ -85,7 +85,7 @@ export default function Login({ onLogin, onShowRegister }) {
 
       console.log("Login → POST", `${API_BASE}/api/login`, payload);
 
-      // 2️⃣ One login request with 20s timeout
+      // 2️⃣ One login request with 75s timeout to allow Render backend to wake up
       const res = await fetchWithTimeout(
         `${API_BASE}/api/login`,
         {
@@ -93,7 +93,7 @@ export default function Login({ onLogin, onShowRegister }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         },
-        20000 // 20 seconds
+        75000 // 75 seconds
       );
 
       const raw = await res.text();
@@ -123,9 +123,8 @@ export default function Login({ onLogin, onShowRegister }) {
 
       if (err.name === "AbortError") {
         setError(
-          "Server did not respond in time. Please open " +
-            `${API_BASE}/api/ping` +
-            " in a browser tab to wake it, then try again."
+          "Server did not respond in time. Please try logging in again. " +
+            "The backend server might still be waking up."
         );
       } else if (!navigator.onLine) {
         setError("No internet connection. Please check your network.");
@@ -258,10 +257,16 @@ export default function Login({ onLogin, onShowRegister }) {
       {/* LOADER OVERLAY */}
       {isLoading && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="flex flex-col items-center">
-            <div className="w-12 h-12 border-4 border-t-4 border-gray-200 border-t-green-700 rounded-full animate-spin" />
-            <p className="mt-3 text-white font-medium animate-pulse">
+          <div className="flex flex-col items-center bg-white/95 px-8 py-6 rounded-xl shadow-2xl max-w-sm text-center">
+            <div className="w-12 h-12 border-4 border-t-4 border-gray-200 border-t-green-700 rounded-full animate-spin animate-spin-fast" />
+            <p className="mt-4 text-gray-800 font-bold text-lg">
               Signing you in...
+            </p>
+            <p className="mt-2 text-sm text-gray-600">
+              Please wait while the server wakes up.
+            </p>
+            <p className="mt-1 text-xs text-gray-500 italic">
+              (This can take up to a minute if the app was inactive)
             </p>
           </div>
         </div>
