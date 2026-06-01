@@ -443,13 +443,14 @@ export default function EditReport({ user }) {
     }
 
     try {
+      const finalCumulative = { ...cumulative, q22: answers.q22 };
       const payload = {
         district,
         institution,
         month,
         year,
         answers, // numbers are OK; backend also accepts strings
-        cumulative, // optional; viewers have client fallback
+        cumulative: finalCumulative, // optional; viewers have client fallback
       };
 
       const ebOut = ebNormalizeOut(eyeBank);
@@ -672,11 +673,11 @@ export default function EditReport({ user }) {
                     inputMode="numeric"
                     pattern="[0-9]*"
                     className="w-full border rounded p-1 text-right"
-                    value={cumulative[k]}
+                    value={k === "q22" ? answers[k] : cumulative[k]}
                     onChange={(e) =>
-                      handleChange(k, e.target.value, setCumulative)
+                      k !== "q22" && handleChange(k, e.target.value, setCumulative)
                     }
-                    disabled={!unlocked}
+                    disabled={!unlocked || k === "q22"}
                   />
                 </div>
               </React.Fragment>

@@ -355,10 +355,15 @@ function ViewReports({ reportData, month, year }) {
           const ans = (d && d.answers) || {};
           for (let i = 1; i <= 84; i++) {
             const key = `q${i}`;
+            if (key === "q22") continue;
             const val = getMonthValueForKey(ans, key);
             out[key] += val;
           }
         }
+        // schools_in_area (q22) is a fixed number, no cumulative summation
+        const activePair = fiscalPairs[fiscalPairs.length - 1];
+        const activeDoc = activePair ? latestByMY.get(`${activePair.month}|${activePair.year}`) : null;
+        out["q22"] = getMonthValueForKey(activeDoc?.answers || {}, "q22");
 
         if (!cancelled) setCumFallback(out);
       } catch (e) {
@@ -660,7 +665,7 @@ function ViewReports({ reportData, month, year }) {
                 // ----------------------------------------------------------------
 
                 const monthVal = Number(rawMonth ?? 0) || 0;
-                const cumVal = Number(rawCum ?? 0) || 0;
+                const cumVal = key === "q22" ? monthVal : (Number(rawCum ?? 0) || 0);
 
                 return (
                   <tr key={`r-${idx}`}>
@@ -878,6 +883,56 @@ function ReportEntry({
       cancelled = true;
     };
   }, [user?.district, user?.institution, month, year]);
+
+  // Pre-populate schools_in_area (q22) from the institution's most recent report
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!user?.district || !user?.institution) return;
+
+    (async () => {
+      try {
+        const url =
+          `${API_BASE}/api/reports?` +
+          `district=${encodeURIComponent(user.district)}` +
+          `&institution=${encodeURIComponent(user.institution)}`;
+        const res = await fetch(url);
+        const json = await res.json().catch(() => ({}));
+        const items = Array.isArray(json?.docs)
+          ? json.docs
+          : Array.isArray(json)
+          ? json
+          : [];
+        
+        if (cancelled) return;
+
+        if (items.length > 0) {
+          // Sort to find the latest submitted report by updatedAt / createdAt
+          const ts = (d) =>
+            new Date(d?.updatedAt || d?.createdAt || 0).getTime() || 0;
+          const sorted = [...items].sort((a, b) => ts(b) - ts(a));
+          const latestDoc = sorted[0];
+          
+          // q22 corresponds to index 21, id is "schools_in_area"
+          const lastSchoolsVal = latestDoc?.answers?.q22;
+          if (lastSchoolsVal !== undefined && lastSchoolsVal !== null) {
+            setAnswers((prev) => {
+              // Only carry over if schools_in_area is not yet entered (undefined or empty)
+              if (prev["schools_in_area"] === undefined || prev["schools_in_area"] === "") {
+                return { ...prev, schools_in_area: String(lastSchoolsVal) };
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch latest report for schools_in_area carryover:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.district, user?.institution]);
 
   /* ----------------------------- helpers --------------------------------- */
   const sanitizeTableArrayLocal = (arr) =>
@@ -1486,9 +1541,12 @@ const qDefs = useMemo(() => {
             const a = d?.answers || {};
             for (let i = 0; i < qDefs.length; i++) {
               const k = `q${i + 1}`;
+              if (i === 21) continue; // Skip schools_in_area (q22 / index 21) from cumulative addition
               rec.cumulativeData[i] += Number(a[k] ?? 0) || 0;
             }
           }
+          // schools_in_area cumulative is equal to the active month's value (no summation)
+          rec.cumulativeData[21] = rec.monthData[21];
           byInstAgg.set(displayName, rec);
         });
 
