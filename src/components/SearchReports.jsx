@@ -16,8 +16,8 @@ export default function SearchReports({ user, onOpen }) {
   const [error, setError] = React.useState("");
   const [result, setResult] = React.useState(null); // the single chosen report
 
-  const district = user?.district || "";
-  const isDOC = !!(user?.institution || "").toLowerCase().startsWith("doc ");
+  const district = user?.isGuest ? "Kozhikode" : user?.district || "";
+  const isDOC = !!(user?.institution || "").toLowerCase().startsWith("doc ") || user?.isGuest;
 
   // Only institutions of the user’s district, and hide DOC/DC rows
   const instList = React.useMemo(() => {

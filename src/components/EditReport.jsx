@@ -294,8 +294,8 @@ function normalizeGlaucomaDRBlock(src = {}) {
 /* ==================================================================== */
 
 export default function EditReport({ user }) {
-  const [district, setDistrict] = useState(user?.district || "");
-  const [institution, setInstitution] = useState(user?.institution || "");
+  const [district, setDistrict] = useState(user?.isGuest ? "Kozhikode" : user?.district || "");
+  const [institution, setInstitution] = useState(user?.isGuest ? "CHC Narikkuni" : user?.institution || "");
   const [month, setMonth] = useState("April");
   const [year, setYear] = useState(String(new Date().getFullYear()));
 
@@ -310,7 +310,7 @@ export default function EditReport({ user }) {
 
   // admin gate
   const [pwd, setPwd] = useState("");
-  const [unlocked, setUnlocked] = useState(false);
+  const [unlocked, setUnlocked] = useState(!!user?.isGuest);
 
   // editable fields: month answers + (optional) cumulative
   const [answers, setAnswers] = useState(() =>
@@ -432,6 +432,10 @@ export default function EditReport({ user }) {
 
   // ADMIN SAVE: create a new record for same D/I/M/Y so it becomes the latest.
   const saveAsLatest = async () => {
+    if (user?.isGuest) {
+      alert("Guest Mode: Saving data is disabled.");
+      return;
+    }
     if (!unlocked) return;
     if (!district || !institution || !month || !year) {
       alert("Pick District, Institution, Month and Year.");
@@ -681,7 +685,12 @@ export default function EditReport({ user }) {
         </div>
       </div>
 
-      {!unlocked && (
+      {user?.isGuest && (
+        <div className="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+          🕶️ <b>Guest Mode Preview</b>: You can edit fields and play around with the report editor, but saving is disabled.
+        </div>
+      )}
+      {!unlocked && !user?.isGuest && (
         <div className="mt-3 text-sm text-yellow-800 bg-yellow-100 border border-yellow-200 rounded px-3 py-2">
           🔒 Enter the admin password and click <b>Unlock</b> to enable editing
           and saving.

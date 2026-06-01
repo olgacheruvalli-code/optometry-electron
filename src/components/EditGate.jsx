@@ -84,6 +84,10 @@ export default function EditGate({ user, children }) {
     setError("");
   }
 
+  if (user?.isGuest) {
+    return <>{children}</>;
+  }
+
   if (!hasHash) {
     return (
       <div className="max-w-xl mx-auto bg-white border rounded-lg shadow p-5 font-serif">

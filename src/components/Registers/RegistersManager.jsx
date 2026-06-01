@@ -232,10 +232,10 @@ export default function RegistersManager({ user, activeRegister }) {
   const [selectedInstitutionFilter, setSelectedInstitutionFilter] = useState("all");
 
   const instList = useMemo(() => {
-    const district = user?.district || "";
+    const district = user?.isGuest ? "Kozhikode" : user?.district || "";
     const arr = Array.isArray(districtInstitutions[district]) ? districtInstitutions[district] : [];
     return arr.filter((n) => n && !/^doc\s/i.test(n) && !/^dc\s/i.test(n));
-  }, [user?.district]);
+  }, [user?.district, user?.isGuest]);
 
   // Form State
   const initialFormState = {
@@ -310,8 +310,9 @@ export default function RegistersManager({ user, activeRegister }) {
   const fetchRecords = async () => {
     setLoading(true);
     try {
-      let q = `district=${encodeURIComponent(user?.district || "")}`;
-      if (userRole === "DOC") {
+      const dist = user?.isGuest ? "Kozhikode" : user?.district || "";
+      let q = `district=${encodeURIComponent(dist)}`;
+      if (userRole === "DOC" || user?.isGuest) {
         if (selectedInstitutionFilter && selectedInstitutionFilter !== "all") {
           q += `&institution=${encodeURIComponent(selectedInstitutionFilter)}`;
         }
@@ -371,6 +372,10 @@ export default function RegistersManager({ user, activeRegister }) {
   // Submit Form
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (user?.isGuest) {
+      triggerStatus("error", "Guest Mode: Saving data is disabled.");
+      return;
+    }
     if (!formData.name.trim()) {
       triggerStatus("error", "Patient Name is required!");
       return;
@@ -443,6 +448,10 @@ export default function RegistersManager({ user, activeRegister }) {
 
   // Trigger Delete
   const handleDelete = async (id) => {
+    if (user?.isGuest) {
+      alert("Guest Mode: Deleting data is disabled.");
+      return;
+    }
     if (!window.confirm("Are you sure you want to delete this record?")) return;
     try {
       const res = await fetch(`${API_BASE}/api/${activeTab}/${id}`, {
@@ -992,6 +1001,12 @@ export default function RegistersManager({ user, activeRegister }) {
           <h3 className="text-lg font-bold text-[#134074] border-b border-slate-100 pb-3 mb-5 flex items-center gap-2">
             {editingId ? "Modify Existing Entry" : `New ${tabLabels[activeTab]} Entry`}
           </h3>
+
+          {user?.isGuest && (
+            <div className="mb-4 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              🕶️ <b>Guest Mode Preview</b>: You can fill out and test the form, but saving is disabled.
+            </div>
+          )}
 
           {/* Form Fields Layout Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">

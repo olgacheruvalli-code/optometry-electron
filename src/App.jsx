@@ -1298,7 +1298,7 @@ const qDefs = useMemo(() => {
     return allQs;
   }, [qDefs]);
 
-  const selectedDistrict = user?.district || "Kozhikode";
+  const selectedDistrict = user?.isGuest ? "Kozhikode" : user?.district || "Kozhikode";
 
   const institutionNamesMemo = useMemo(
     () =>
@@ -1620,10 +1620,12 @@ const qDefs = useMemo(() => {
 
     (async () => {
       try {
+        const dist = user?.isGuest ? "Kozhikode" : user?.district || "";
+        const inst = user?.isGuest ? "CHC Narikkuni" : user?.institution || "";
         const url =
           `${API_BASE}/api/reports?` +
-          `district=${encodeURIComponent(user?.district || "")}` +
-          `&institution=${encodeURIComponent(user?.institution || "")}` +
+          `district=${encodeURIComponent(dist)}` +
+          `&institution=${encodeURIComponent(inst)}` +
           `&month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}`;
 
         const res = await fetch(url);
@@ -1637,9 +1639,9 @@ const qDefs = useMemo(() => {
         const mine = items.filter(
           (d) =>
             String(d?.district || "").trim().toLowerCase() ===
-              String(user?.district || "").trim().toLowerCase() &&
+              String(dist).trim().toLowerCase() &&
             String(d?.institution || "").trim().toLowerCase() ===
-              String(user?.institution || "").trim().toLowerCase() &&
+              String(inst).trim().toLowerCase() &&
             String(d?.month || "").trim().toLowerCase() ===
               String(month).toLowerCase() &&
             String(d?.year || "") === String(year)
@@ -1656,7 +1658,7 @@ const qDefs = useMemo(() => {
     return () => {
       cancelled = true;
     };
-  }, [menu, month, year, userRole, user?.district, user?.institution]);
+  }, [menu, month, year, userRole, user?.district, user?.institution, user?.isGuest]);
 
   /* =======================  EXCEL DOWNLOADS  ======================= */
 
@@ -1971,8 +1973,8 @@ const qDefs = useMemo(() => {
             <ReportsList
               filterMonth={month}
               filterYear={year}
-              filterDistrict={user?.district}
-              filterInstitution={viewerInstitution}
+              filterDistrict={user?.isGuest ? "Kozhikode" : user?.district}
+              filterInstitution={user?.isGuest ? "" : viewerInstitution}
               onSelect={(report) => setCurrent(report || null)}
             />
 

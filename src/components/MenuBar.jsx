@@ -3,6 +3,7 @@ import { ChevronDown } from "lucide-react";
 
 export default function MenuBar({ onMenu, onLogout, active, user }) {
   const isDistrictCoordinator = user?.institution?.startsWith("DOC ");
+  const isGuest = !!user?.isGuest;
   const [openSubmenuKey, setOpenSubmenuKey] = useState(null);
   const submenuRefs = useRef({});
 
@@ -59,13 +60,13 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
   /* ------------------------------- Menu --------------------------------- */
   const menuItems = [
     { key: "entry", label: "Report Entry" },
-    ...(!isDistrictCoordinator ? [{ key: "view", label: "View/Edit Reports" }] : []),
+    ...((!isDistrictCoordinator || isGuest) ? [{ key: "view", label: "View/Edit Reports" }] : []),
     { key: "search", label: "Search Reports" },
     { key: "print", label: "Print Reports" },
     { key: "edit", label: "Edit Report" },
   ];
 
-  if (isDistrictCoordinator) {
+  if (isDistrictCoordinator || isGuest) {
     menuItems.push({
       key: "district",
       label: "District Report",
