@@ -965,6 +965,10 @@ function ReportEntry({
 
   /* ------------------------------ save ----------------------------------- */
   const confirm = async () => {
+    if (user?.isGuest) {
+      alert("Guest Mode: Saving data is disabled.");
+      return;
+    }
     if (!month || !year) {
       alert("Please select both Month and Year before saving.");
       return;
@@ -1087,6 +1091,12 @@ function ReportEntry({
           District: <b>{user.district}</b> | Institution:{" "}
           <b>{user.institution}</b>
         </div>
+
+        {user?.isGuest && (
+          <div className="mb-4 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 text-center max-w-md mx-auto">
+            🕶️ <b>Guest Mode Preview</b>: You can fill out and test the form, but saving is disabled.
+          </div>
+        )}
 
         <div className="flex justify-end mb-2">
           <MonthYearSelector
@@ -1936,7 +1946,7 @@ const qDefs = useMemo(() => {
             initialVisionCenter={visionCenter}
             initialMonth={month}
             initialYear={year}
-            disabled={user?.isGuest}
+            disabled={false}
           />
         )}
 
