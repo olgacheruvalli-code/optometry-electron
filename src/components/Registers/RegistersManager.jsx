@@ -558,6 +558,7 @@ export default function RegistersManager({ user, activeRegister }) {
     const isSchool = activeTab === "school-spectacles";
     const name = isSchool ? (record.parentName || "Parent") : record.name;
     const instName = record.institution || user?.institution || "";
+    const optName = record.optometristName || record.optometrist || user?.name || user?.username || "Optometrist";
     
     let rawPhone = isSchool ? record.parentPhone : extractPhoneFromAddress(record.address);
     const phone = sanitizeWhatsAppPhone(rawPhone);
@@ -566,9 +567,11 @@ export default function RegistersManager({ user, activeRegister }) {
       return;
     }
     
-    const message = isSchool
-      ? `Dear ${name}, താങ്കളുടെ മകളുടെ / മകന്റെ കണ്ണട ആശുപത്രിയിൽ (${instName}) എത്തിയിട്ടുണ്ട് .വന്നു വാങ്ങിക്കുമല്ലോ`
-      : `Dear ${name}, താങ്കളുടെ കണ്ണട ആശുപത്രിയിൽ (${instName}) എത്തിയിട്ടുണ്ട് .വന്നു വാങ്ങിക്കുമല്ലോ`;
+    const bodyText = isSchool
+      ? `താങ്കളുടെ മകളുടെ / മകന്റെ കണ്ണട ആശുപത്രിയിൽ (${instName}) എത്തിയിട്ടുണ്ട് .വന്നു വാങ്ങിക്കുമല്ലോ`
+      : `താങ്കളുടെ കണ്ണട ആശുപത്രിയിൽ (${instName}) എത്തിയിട്ടുണ്ട് .വന്നു വാങ്ങിക്കുമല്ലോ`;
+      
+    const message = `Dear ${name}, \n${bodyText}\n\n${optName}\nOptometrist\n${instName}`;
       
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank", "noopener,noreferrer");
