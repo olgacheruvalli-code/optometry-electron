@@ -134,3 +134,19 @@ th.sticky.top-40 {
     margin: 1cm;
   }
 }
+
+@media (max-width: 768px) {
+  .a4-wrapper {
+    padding: 1rem !important;
+    margin: 0.5rem auto !important;
+    min-height: auto !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05) !important;
+  }
+  
+  .legal-landscape {
+    padding: 1rem !important;
+    margin: 0.5rem auto !important;
+    min-height: auto !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05) !important;
+  }
+}
