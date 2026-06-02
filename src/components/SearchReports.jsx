@@ -17,7 +17,17 @@ export default function SearchReports({ user, onOpen }) {
   const [result, setResult] = React.useState(null); // the single chosen report
 
   const district = user?.isGuest ? "Kozhikode" : user?.district || "";
-  const isDOC = !!(user?.institution || "").toLowerCase().startsWith("doc ") || user?.isGuest;
+  const instStr = String(user?.institution || "").trim().toLowerCase();
+  const roleStr = String(user?.role || "").trim().toLowerCase();
+  const isDOC =
+    !!(user?.isDoc ||
+      roleStr === "doc" ||
+      roleStr === "dc" ||
+      /^doc/i.test(instStr) ||
+      /^dc/i.test(instStr) ||
+      /^doc/i.test(user?.username || "") ||
+      /^dc/i.test(user?.username || "")) ||
+    user?.isGuest;
 
   // Only institutions of the user’s district, and hide DOC/DC rows
   const instList = React.useMemo(() => {

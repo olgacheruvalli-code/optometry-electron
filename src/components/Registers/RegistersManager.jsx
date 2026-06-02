@@ -224,17 +224,27 @@ export default function RegistersManager({ user, activeRegister }) {
 
   // DOC role detection and institution filtering
   const instStr = String(user?.institution || "").trim().toLowerCase();
+  const roleStr = String(user?.role || "").trim().toLowerCase();
   const userRole =
-    user?.isDoc || /^doc\s/.test(instStr) || /^dc\s/.test(instStr)
+    user?.isDoc ||
+    roleStr === "doc" ||
+    roleStr === "dc" ||
+    /^doc/i.test(instStr) ||
+    /^dc/i.test(instStr) ||
+    /^doc/i.test(user?.username || "") ||
+    /^dc/i.test(user?.username || "") ||
+    user?.role === "DOC"
       ? "DOC"
       : user?.role || "USER";
+
+  const showActions = userRole !== "DOC" && !user?.isGuest;
 
   const [selectedInstitutionFilter, setSelectedInstitutionFilter] = useState("all");
 
   const instList = useMemo(() => {
     const district = user?.isGuest ? "Kozhikode" : user?.district || "";
     const arr = Array.isArray(districtInstitutions[district]) ? districtInstitutions[district] : [];
-    return arr.filter((n) => n && !/^doc\s/i.test(n) && !/^dc\s/i.test(n));
+    return arr.filter((n) => n && !/^doc/i.test(n) && !/^dc/i.test(n));
   }, [user?.district, user?.isGuest]);
 
   // Form State
@@ -373,8 +383,8 @@ export default function RegistersManager({ user, activeRegister }) {
   // Submit Form
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (user?.isGuest) {
-      triggerStatus("error", "Guest Mode: Saving data is disabled.");
+    if (userRole === "DOC" || user?.isGuest) {
+      triggerStatus("error", "View Only Mode: Saving data is disabled.");
       return;
     }
     if (!formData.name.trim()) {
@@ -388,6 +398,11 @@ export default function RegistersManager({ user, activeRegister }) {
       institution: user?.institution || "",
       optometrist: user?.username || "",
     };
+
+    // Auto-trigger WhatsApp synchronously inside user event handler to bypass popup blocker
+    if (showActions && (activeTab === "school-spectacles" || activeTab === "old-aged-spectacles") && payload.deliveryStatus === "Received") {
+      handleSendWhatsApp(payload);
+    }
 
     setLoading(true);
     try {
@@ -449,11 +464,11 @@ export default function RegistersManager({ user, activeRegister }) {
 
   // Trigger Delete
   const handleDelete = async (id) => {
-    if (user?.isGuest) {
-      alert("Guest Mode: Deleting data is disabled.");
+    if (userRole === "DOC" || user?.isGuest) {
+      alert("View Only Mode: Deleting data is disabled.");
       return;
     }
-    if (!window.confirm("Are you sure you want to delete this record?")) return;
+    if (!window.confirm("WARNING: Deleting this record is permanent and cannot be undone. Are you sure you want to delete this register entry?")) return;
     try {
       const res = await fetch(`${API_BASE}/api/${activeTab}/${id}`, {
         method: "DELETE",
@@ -472,14 +487,20 @@ export default function RegistersManager({ user, activeRegister }) {
 
   // Handle Quick Status Change from table dropdown
   const handleQuickStatusChange = async (record, newStatus) => {
-    if (user?.isGuest) {
-      triggerStatus("error", "Guest Mode: Saving data is disabled.");
+    if (userRole === "DOC" || user?.isGuest) {
+      triggerStatus("error", "View Only Mode: Saving data is disabled.");
       return;
     }
     const updatedRecord = {
       ...record,
       deliveryStatus: newStatus,
     };
+
+    // Auto-trigger WhatsApp synchronously inside user event handler to bypass popup blocker
+    if (showActions && (activeTab === "school-spectacles" || activeTab === "old-aged-spectacles") && newStatus === "Received") {
+      handleSendWhatsApp(updatedRecord);
+    }
+
     try {
       const res = await fetch(`${API_BASE}/api/${activeTab}/${record._id || record.id}`, {
         method: "PUT",
@@ -508,6 +529,46 @@ export default function RegistersManager({ user, activeRegister }) {
       return base + "bg-yellow-100 text-yellow-800 border-yellow-300";
     }
     return base + "bg-rose-100 text-rose-800 border-rose-300";
+  };
+
+  const sanitizeWhatsAppPhone = (phone) => {
+    if (!phone) return "";
+    let cleaned = String(phone).replace(/\D/g, "");
+    if (cleaned.length === 10) {
+      return "91" + cleaned;
+    }
+    return cleaned;
+  };
+
+  const extractPhoneFromAddress = (address) => {
+    if (!address) return "";
+    const match = String(address).match(/\b\d{10}\b/) || String(address).match(/\b\d{5}\s\d{5}\b/);
+    if (match) {
+      return match[0].replace(/\s/g, "");
+    }
+    const cleaned = String(address).replace(/[^0-9]/g, "");
+    const cleanMatch = cleaned.match(/\d{10}/);
+    return cleanMatch ? cleanMatch[0] : "";
+  };
+
+  const handleSendWhatsApp = (record) => {
+    const isSchool = activeTab === "school-spectacles";
+    const name = isSchool ? (record.parentName || "Parent") : record.name;
+    const instName = record.institution || user?.institution || "";
+    
+    let rawPhone = isSchool ? record.parentPhone : extractPhoneFromAddress(record.address);
+    const phone = sanitizeWhatsAppPhone(rawPhone);
+    if (!phone) {
+      alert(isSchool ? "Invalid or missing parent contact number." : "Could not find a 10-digit phone number in the patient's address/contact details.");
+      return;
+    }
+    
+    const message = isSchool
+      ? `Dear ${name}, താങ്കളുടെ മകളുടെ / മകന്റെ കണ്ണട ആശുപത്രിയിൽ (${instName}) എത്തിയിട്ടുണ്ട് .വന്നു വാങ്ങിക്കുമല്ലോ`
+      : `Dear ${name}, താങ്കളുടെ കണ്ണട ആശുപത്രിയിൽ (${instName}) എത്തിയിട്ടുണ്ട് .വന്നു വാങ്ങിക്കുമല്ലോ`;
+      
+    const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   // Filtered records for search & period range
@@ -769,7 +830,7 @@ export default function RegistersManager({ user, activeRegister }) {
             <Table className="w-4 h-4" />
             View Records ({filteredRecords.length})
           </button>
-          {(userRole !== "DOC" || editingId) && (
+          {(showActions || editingId) && (
             <button
               onClick={() => {
                 setViewMode("form");
@@ -1018,7 +1079,7 @@ export default function RegistersManager({ user, activeRegister }) {
                         <th className="p-3">Optometrist Phone</th>
                       </>
                     )}
-                    <th className="p-3 text-center">Actions</th>
+                    {showActions && <th className="p-3 text-center">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
@@ -1053,7 +1114,8 @@ export default function RegistersManager({ user, activeRegister }) {
                             <select
                               value={r.deliveryStatus || "Pending"}
                               onChange={(e) => handleQuickStatusChange(r, e.target.value)}
-                              className={getStatusSelectClass(r.deliveryStatus || "Pending")}
+                              disabled={!showActions}
+                              className={getStatusSelectClass(r.deliveryStatus || "Pending") + (!showActions ? " cursor-not-allowed opacity-90" : "")}
                             >
                               <option value="Pending" className="bg-white text-rose-800 font-bold">Pending</option>
                               <option value="Received" className="bg-white text-yellow-800 font-bold">Received</option>
@@ -1063,7 +1125,22 @@ export default function RegistersManager({ user, activeRegister }) {
                           <td className="p-3 whitespace-nowrap">{r.reference || "—"}</td>
                           <td className="p-3 whitespace-nowrap">{r.remarks || "—"}</td>
                           <td className="p-3 whitespace-nowrap">{r.parentName || "—"}</td>
-                          <td className="p-3 whitespace-nowrap">{r.parentPhone || "—"}</td>
+                          <td className="p-3 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              <span>{r.parentPhone || "—"}</span>
+                               {r.parentPhone && showActions && (
+                                 <button
+                                   onClick={() => handleSendWhatsApp(r)}
+                                   className="p-1 rounded hover:bg-emerald-50 text-emerald-600 transition flex items-center justify-center"
+                                   title="Send WhatsApp Notification"
+                                 >
+                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.455 5.703 1.457h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          </td>
                         </>
                       ) : (
                         <>
@@ -1112,7 +1189,8 @@ export default function RegistersManager({ user, activeRegister }) {
                                 <select
                                   value={r.deliveryStatus || "Pending"}
                                   onChange={(e) => handleQuickStatusChange(r, e.target.value)}
-                                  className={getStatusSelectClass(r.deliveryStatus || "Pending")}
+                                  disabled={!showActions}
+                                  className={getStatusSelectClass(r.deliveryStatus || "Pending") + (!showActions ? " cursor-not-allowed opacity-90" : "")}
                                 >
                                   <option value="Pending" className="bg-white text-rose-800 font-bold">Pending</option>
                                   <option value="Received" className="bg-white text-yellow-800 font-bold">Received</option>
@@ -1121,31 +1199,51 @@ export default function RegistersManager({ user, activeRegister }) {
                               </td>
                             </>
                           )}
-                          <td className="p-3 max-w-[200px] truncate text-slate-500" title={r.address}>{r.address || "—"}</td>
+                          <td className="p-3 max-w-[200px] truncate text-slate-500" title={r.address}>
+                            <div className="flex items-center gap-1.5 justify-between">
+                              <span className="truncate">{r.address || "—"}</span>
+                              {(() => {
+                                const phone = extractPhoneFromAddress(r.address);
+                                return phone && showActions && (
+                                  <button
+                                    onClick={() => handleSendWhatsApp(r)}
+                                    className="p-1 rounded hover:bg-emerald-50 text-emerald-600 transition flex items-center justify-center flex-shrink-0"
+                                    title={`Send WhatsApp Notification to ${phone}`}
+                                  >
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.455 5.703 1.457h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                                    </svg>
+                                  </button>
+                                );
+                              })()}
+                            </div>
+                          </td>
                           <td className="p-3 whitespace-nowrap">{r.district || "—"}</td>
                           <td className="p-3 whitespace-nowrap">{r.institution || "—"}</td>
                           <td className="p-3 font-semibold text-slate-900 whitespace-nowrap">{r.optometristName || r.optometrist || "—"}</td>
                           <td className="p-3 whitespace-nowrap">{r.optometristPhone || "—"}</td>
                         </>
                       )}
-                      <td className="p-3">
-                        <div className="flex justify-center gap-2">
-                          <button
-                            onClick={() => handleEdit(r)}
-                            className="px-2.5 py-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition"
-                            title="Edit"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(r._id || r.id)}
-                            className="px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition flex items-center justify-center"
-                            title="Delete"
-                          >
-                            X
-                          </button>
-                        </div>
-                      </td>
+                      {showActions && (
+                        <td className="p-3">
+                          <div className="flex justify-center gap-2">
+                            <button
+                              onClick={() => handleEdit(r)}
+                              className="px-2.5 py-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition"
+                              title="Edit"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDelete(r._id || r.id)}
+                              className="px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition flex items-center justify-center"
+                              title="Delete"
+                            >
+                              X
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                     );
                   })}

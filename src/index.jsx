@@ -26,11 +26,18 @@ ReactDOM.render(
   document.getElementById("root")
 );
 
+// Actively unregister service workers and clear caches to prevent layout/styling corruption in Electron
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .register("./service-worker.js")
-      .then((reg) => console.log("PWA SW registered:", reg.scope))
-      .catch((err) => console.error("PWA SW registration failed:", err));
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (let registration of registrations) {
+      registration.unregister().then(() => {
+        console.log("Service Worker unregistered successfully.");
+      });
+    }
+  });
+}
+if (typeof window !== "undefined" && "caches" in window) {
+  caches.keys().then((keys) => {
+    keys.forEach((key) => caches.delete(key));
   });
 }

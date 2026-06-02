@@ -2,7 +2,17 @@ import React, { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 export default function MenuBar({ onMenu, onLogout, active, user }) {
-  const isDistrictCoordinator = user?.institution?.startsWith("DOC ");
+  const instStr = String(user?.institution || "").trim().toLowerCase();
+  const roleStr = String(user?.role || "").trim().toLowerCase();
+  const isDistrictCoordinator =
+    !!(user?.isDoc ||
+      roleStr === "doc" ||
+      roleStr === "dc" ||
+      /^doc/i.test(instStr) ||
+      /^dc/i.test(instStr) ||
+      /^doc/i.test(user?.username || "") ||
+      /^dc/i.test(user?.username || "") ||
+      user?.role === "DOC");
   const isGuest = !!user?.isGuest;
   const [openSubmenuKey, setOpenSubmenuKey] = useState(null);
   const submenuRefs = useRef({});
@@ -59,13 +69,14 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     }
   };
 
-  /* ------------------------------- Menu --------------------------------- */
   const menuItems = [
     { key: "entry", label: "Report Entry" },
-    ...((!isDistrictCoordinator || isGuest) ? [{ key: "view", label: "View/Edit Reports" }] : []),
+    ...((!isDistrictCoordinator || isGuest) ? [
+      { key: "view", label: "View/Edit Reports" },
+      { key: "edit", label: "Edit Report" }
+    ] : []),
     { key: "search", label: "Search Reports" },
     { key: "print", label: "Print Reports" },
-    { key: "edit", label: "Edit Report" },
   ];
 
   if (isDistrictCoordinator || isGuest) {

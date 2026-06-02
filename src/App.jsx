@@ -846,7 +846,17 @@ function ReportEntry({
   const [mode, setMode] = React.useState("edit");
   const [alreadySubmitted, setAlreadySubmitted] = React.useState(false);
 
-  const isDoc = user?.institution?.startsWith("DOC ");
+  const instStrReportEntry = String(user?.institution || "").trim().toLowerCase();
+  const roleStrReportEntry = String(user?.role || "").trim().toLowerCase();
+  const isDoc =
+    !!(user?.isDoc ||
+      roleStrReportEntry === "doc" ||
+      roleStrReportEntry === "dc" ||
+      /^doc/i.test(instStrReportEntry) ||
+      /^dc/i.test(instStrReportEntry) ||
+      /^doc/i.test(user?.username || "") ||
+      /^dc/i.test(user?.username || "") ||
+      user?.role === "DOC");
   const canSave = month && year;
   const canSaveThisCombo = canSave && !alreadySubmitted;
 
@@ -1292,8 +1302,16 @@ function App() {
 
   // DOC/DC detection
   const instStr = String(user?.institution || "").trim().toLowerCase();
+  const roleStr = String(user?.role || "").trim().toLowerCase();
   const userRole =
-    user?.isDoc || /^doc\s/.test(instStr) || /^dc\s/.test(instStr)
+    user?.isDoc ||
+    roleStr === "doc" ||
+    roleStr === "dc" ||
+    /^doc/i.test(instStr) ||
+    /^dc/i.test(instStr) ||
+    /^doc/i.test(user?.username || "") ||
+    /^dc/i.test(user?.username || "") ||
+    user?.role === "DOC"
       ? "DOC"
       : user?.role || "USER";
 

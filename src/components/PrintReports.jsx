@@ -11,7 +11,15 @@ export default function PrintReports({ user }) {
   const [loading, setLoading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
-  const isDOC = user?.institution?.startsWith("DOC ");
+  const instStr = String(user?.institution || "").trim().toLowerCase();
+  const roleStr = String(user?.role || "").trim().toLowerCase();
+  const isDOC = !!(user?.isDoc ||
+    roleStr === "doc" ||
+    roleStr === "dc" ||
+    /^doc/i.test(instStr) ||
+    /^dc/i.test(instStr) ||
+    /^doc/i.test(user?.username || "") ||
+    /^dc/i.test(user?.username || ""));
 
   const fetchReport = async () => {
     if (!month || !year) return;
