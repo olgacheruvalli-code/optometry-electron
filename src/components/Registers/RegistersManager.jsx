@@ -576,6 +576,22 @@ export default function RegistersManager({ user, activeRegister }) {
     return result;
   }, [records, searchQuery, periodMode, customStartDate, customEndDate, activeTab]);
 
+  const stats = useMemo(() => {
+    const total = filteredRecords.length;
+    if (activeTab === "old-aged-spectacles" || activeTab === "school-spectacles") {
+      const pending = filteredRecords.filter((r) => (r.deliveryStatus || "Pending") === "Pending").length;
+      const received = filteredRecords.filter((r) => r.deliveryStatus === "Received").length;
+      const delivered = filteredRecords.filter((r) => r.deliveryStatus === "Delivered").length;
+      return { total, pending, received, delivered };
+    }
+    if (activeTab === "cataract-backlog") {
+      const pending = filteredRecords.filter((r) => (r.status || "Pending") === "Pending").length;
+      const operated = filteredRecords.filter((r) => r.status === "Operated").length;
+      return { total, pending, operated };
+    }
+    return { total };
+  }, [filteredRecords, activeTab]);
+
   // Export Table to Excel
   const handleExportExcel = () => {
     let dataToExport = [];
@@ -737,17 +753,17 @@ export default function RegistersManager({ user, activeRegister }) {
         </div>
       </div>
 
-      {/* Toggle View Options */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-2">
+      {/* Toggle View Options & Stats Bar */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => {
               setViewMode("table");
               setEditingId(null);
               setFormData(initialFormState);
             }}
-            className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-              viewMode === "table" ? "bg-slate-800 text-white" : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
+            className={`px-4 py-2.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+              viewMode === "table" ? "bg-[#396b84] text-white shadow-sm" : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
             }`}
           >
             <Table className="w-4 h-4" />
@@ -758,8 +774,8 @@ export default function RegistersManager({ user, activeRegister }) {
               onClick={() => {
                 setViewMode("form");
               }}
-              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-                viewMode === "form" ? "bg-slate-800 text-white" : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
+              className={`px-4 py-2.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                viewMode === "form" ? "bg-[#396b84] text-white shadow-sm" : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
               }`}
             >
               <Plus className="w-4 h-4" />
@@ -768,14 +784,86 @@ export default function RegistersManager({ user, activeRegister }) {
           )}
         </div>
 
-        {viewMode === "table" && records.length > 0 && (
+        {/* Big Letters/Numbers Stats Space */}
+        <div className="flex flex-wrap items-center gap-3 lg:gap-4 my-1 lg:my-0">
+          {(activeTab === "old-aged-spectacles" || activeTab === "school-spectacles") && (
+            <>
+              <div className="flex items-center gap-2 bg-slate-50 px-3.5 py-1.5 rounded-xl border border-slate-150 shadow-sm">
+                <div className="w-2 h-2 rounded-full bg-slate-400"></div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-450 leading-none">Total</span>
+                  <span className="text-xl font-extrabold text-slate-700 mt-0.5">{stats.total}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 bg-rose-50 px-3.5 py-1.5 rounded-xl border border-rose-150 shadow-sm">
+                <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-extrabold uppercase tracking-wider text-rose-500 leading-none">Pending</span>
+                  <span className="text-xl font-extrabold text-rose-600 mt-0.5">{stats.pending}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 bg-yellow-50 px-3.5 py-1.5 rounded-xl border border-yellow-250 shadow-sm">
+                <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-extrabold uppercase tracking-wider text-yellow-600 leading-none">Received</span>
+                  <span className="text-xl font-extrabold text-yellow-600 mt-0.5">{stats.received}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-150 shadow-sm">
+                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-600 leading-none">Delivered</span>
+                  <span className="text-xl font-extrabold text-emerald-600 mt-0.5">{stats.delivered}</span>
+                </div>
+              </div>
+            </>
+          )}
+          {activeTab === "cataract-backlog" && (
+            <>
+              <div className="flex items-center gap-2 bg-slate-50 px-3.5 py-1.5 rounded-xl border border-slate-150 shadow-sm">
+                <div className="w-2 h-2 rounded-full bg-slate-400"></div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-450 leading-none">Total</span>
+                  <span className="text-xl font-extrabold text-slate-700 mt-0.5">{stats.total}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 bg-rose-50 px-3.5 py-1.5 rounded-xl border border-rose-150 shadow-sm">
+                <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-extrabold uppercase tracking-wider text-rose-500 leading-none">Pending</span>
+                  <span className="text-xl font-extrabold text-rose-600 mt-0.5">{stats.pending}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-150 shadow-sm">
+                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-600 leading-none">Operated</span>
+                  <span className="text-xl font-extrabold text-emerald-600 mt-0.5">{stats.operated}</span>
+                </div>
+              </div>
+            </>
+          )}
+          {activeTab === "blind-register" && (
+            <div className="flex items-center gap-2 bg-slate-50 px-3.5 py-1.5 rounded-xl border border-slate-150 shadow-sm">
+              <div className="w-2 h-2 rounded-full bg-[#396b84]"></div>
+              <div className="flex flex-col">
+                <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-450 leading-none">Total Cases</span>
+                <span className="text-xl font-extrabold text-slate-700 mt-0.5">{stats.total}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {viewMode === "table" && records.length > 0 ? (
           <button
             onClick={handleExportExcel}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5 shadow-sm transition self-stretch lg:self-auto justify-center"
           >
             <Download className="w-4 h-4" />
             Export to Excel
           </button>
+        ) : (
+          <div className="w-0 h-0 hidden lg:block"></div>
         )}
       </div>
 
