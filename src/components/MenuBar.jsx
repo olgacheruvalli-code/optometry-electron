@@ -6,6 +6,8 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
   const isGuest = !!user?.isGuest;
   const [openSubmenuKey, setOpenSubmenuKey] = useState(null);
   const submenuRefs = useRef({});
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [expandedSubmenuKey, setExpandedSubmenuKey] = useState(null);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -144,12 +146,12 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
   });
 
   return (
-    <div className="min-w-full w-max border-b border-gray-200">
-      {/* Top white bar with title and user info */}
+    <div className="w-full border-b border-gray-200">
+      {/* Top white bar with title, user info, and Hamburger toggle */}
       <div className="bg-white flex justify-between items-center px-6 py-4">
         <h1 className="text-2xl font-bold text-gray-900">OPTOMETRY</h1>
         <div className="flex items-center gap-4">
-          <div className="text-right text-sm text-gray-700 leading-tight font-medium">
+          <div className="hidden md:block text-right text-sm text-gray-700 leading-tight font-medium">
             <div>
               District: <b>{user?.district}</b>
             </div>
@@ -157,7 +159,7 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
               Institution: <b>{user?.institution}</b>
             </div>
           </div>
-          <div className="w-9 h-9 bg-[#3b6e8f] rounded-full flex items-center justify-center">
+          <div className="hidden md:flex w-9 h-9 bg-[#3b6e8f] rounded-full items-center justify-center">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="w-5 h-5 text-white"
@@ -167,11 +169,108 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
               <path d="M12 12c2.7 0 4.5-1.8 4.5-4.5S14.7 3 12 3 7.5 4.8 7.5 7.5 9.3 12 12 12Zm0 1.5c-3 0-9 1.5-9 4.5V21h18v-3c0-3-6-4.5-9-4.5Z" />
             </svg>
           </div>
+
+          {/* Mobile Hamburger toggle */}
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="md:hidden p-2 rounded-md hover:bg-gray-100 focus:outline-none"
+            aria-label="Toggle menu"
+          >
+            {isMobileMenuOpen ? (
+              <svg className="w-6 h-6 text-gray-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="w-6 h-6 text-gray-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
 
-      {/* Flat blue menu bar */}
-      <div className="bg-[#396b84] flex items-center justify-between px-10 py-2 font-serif text-sm text-white">
+      {/* Mobile Menu Panel */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden bg-[#396b84] text-white w-full border-t border-blue-700 max-h-[calc(100vh-80px)] overflow-y-auto">
+          {/* User Info inside mobile menu */}
+          <div className="px-6 py-4 bg-[#2f5a70] border-b border-blue-800 text-xs">
+            <div>District: <span className="font-bold">{user?.district}</span></div>
+            <div className="mt-1">Institution: <span className="font-bold">{user?.institution}</span></div>
+          </div>
+
+          <div className="flex flex-col py-2 font-serif text-sm">
+            {menuItems.map((item) =>
+              item.sub ? (
+                <div key={item.key} className="border-b border-blue-800/40">
+                  <button
+                    onClick={() =>
+                      setExpandedSubmenuKey(expandedSubmenuKey === item.key ? null : item.key)
+                    }
+                    className="w-full px-6 py-3 flex justify-between items-center font-semibold text-left hover:bg-[#2f5a70]"
+                  >
+                    <span>{item.label}</span>
+                    <ChevronDown
+                      className={`w-4 h-4 transition-transform duration-200 ${
+                        expandedSubmenuKey === item.key ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  {expandedSubmenuKey === item.key && (
+                    <div className="bg-[#2f5a70]/50 py-1">
+                      {item.sub.map((subItem) => (
+                        <button
+                          key={subItem.key}
+                          onClick={() => {
+                            setIsMobileMenuOpen(false);
+                            if (typeof subItem.onClick === "function") {
+                              subItem.onClick();
+                            } else {
+                              onMenu(subItem.key);
+                            }
+                          }}
+                          className="w-full px-10 py-2.5 text-left hover:bg-[#2f5a70] text-gray-200 hover:text-white"
+                        >
+                          {subItem.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  key={item.key}
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    onMenu(item.key);
+                  }}
+                  className={`w-full px-6 py-3 text-left font-semibold border-b border-blue-800/40 hover:bg-[#2f5a70] ${
+                    active === item.key ? "bg-[#2f5a70]" : ""
+                  }`}
+                >
+                  {item.label}
+                </button>
+              )
+            )}
+            
+            {/* Logout button */}
+            <div className="p-4">
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  onLogout();
+                }}
+                className="w-full bg-[#dc2626] hover:bg-red-700 text-white font-bold py-2.5 px-4 rounded transition text-center"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Flat blue menu bar */}
+      <div className="hidden md:flex bg-[#396b84] items-center justify-between px-10 py-2 font-serif text-sm text-white">
         <div className="flex space-x-6 relative">
           {menuItems.map((item) =>
             item.sub ? (
