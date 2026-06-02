@@ -1477,7 +1477,7 @@ export default function RegistersManager({ user, activeRegister }) {
               </div>
 
               {/* Extra Spectacle Fields */}
-              <div className="grid grid-cols-3 gap-4 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-600 uppercase">IPD / Frame Size</label>
                   <input type="text" name="ipdFrameSize" value={formData.ipdFrameSize} onChange={handleChange} placeholder="e.g. 62/20" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-[#396b84]" />
