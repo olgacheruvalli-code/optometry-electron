@@ -534,6 +534,9 @@ export default function RegistersManager({ user, activeRegister }) {
   const sanitizeWhatsAppPhone = (phone) => {
     if (!phone) return "";
     let cleaned = String(phone).replace(/\D/g, "");
+    if (cleaned.startsWith("0") && cleaned.length === 11) {
+      cleaned = cleaned.slice(1);
+    }
     if (cleaned.length === 10) {
       return "91" + cleaned;
     }
@@ -567,7 +570,7 @@ export default function RegistersManager({ user, activeRegister }) {
       ? `Dear ${name}, താങ്കളുടെ മകളുടെ / മകന്റെ കണ്ണട ആശുപത്രിയിൽ (${instName}) എത്തിയിട്ടുണ്ട് .വന്നു വാങ്ങിക്കുമല്ലോ`
       : `Dear ${name}, താങ്കളുടെ കണ്ണട ആശുപത്രിയിൽ (${instName}) എത്തിയിട്ടുണ്ട് .വന്നു വാങ്ങിക്കുമല്ലോ`;
       
-    const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
