@@ -257,6 +257,7 @@ export default function RegistersManager({ user, activeRegister }) {
     referral: "",
     status: "Pending",
     surgeryDate: "",
+    deliveryStatus: "Pending",
     // Old Aged / School Spectacles specific
     slNo: "",
     dateOfPrescription: new Date().toISOString().split("T")[0],
@@ -598,6 +599,7 @@ export default function RegistersManager({ user, activeRegister }) {
           "Corrected LE DV": r.correctedLE_DV,
           "Corrected LE NV": r.correctedLE_NV,
           "IPD/Frame size": r.ipdFrameSize,
+          "Delivery Status": r.deliveryStatus || "Pending",
           "Contact Details": r.address,
           "District": r.district,
           "Institution": r.institution,
@@ -622,6 +624,7 @@ export default function RegistersManager({ user, activeRegister }) {
           "Vision LE": `${r.visionLE_DV || "—"} / ${r.visionLE_NV || "—"}`,
           "Prescribed Power": `RE: ${formatPower(r.powerRE_Sph, r.powerRE_Cyl, r.powerRE_Axis, r.powerRE_Add)} | LE: ${formatPower(r.powerLE_Sph, r.powerLE_Cyl, r.powerLE_Axis, r.powerLE_Add)}`,
           "IPD Frame Size": r.ipdFrameSize || "",
+          "Delivery Status": r.deliveryStatus || "Pending",
           "Reference if any": r.reference || "",
           "Remarks": r.remarks || "",
           "Name of parent": r.parentName || "",
@@ -815,9 +818,9 @@ export default function RegistersManager({ user, activeRegister }) {
             <div className="overflow-x-auto max-h-[60vh]">
               <table className={`text-left text-xs border-collapse ${
                 activeTab === "school-spectacles"
-                  ? "min-w-[2200px]"
+                  ? "min-w-[2300px]"
                   : activeTab === "old-aged-spectacles"
-                    ? "min-w-[1600px]"
+                    ? "min-w-[1700px]"
                     : "w-full"
               }`}>
                 <thead>
@@ -840,6 +843,7 @@ export default function RegistersManager({ user, activeRegister }) {
                         <th className="p-3">Vision LE</th>
                         <th className="p-3">Prescribed Power</th>
                         <th className="p-3">IPD Frame Size</th>
+                        <th className="p-3">Delivery Status</th>
                         <th className="p-3">Reference if any</th>
                         <th className="p-3">Remarks</th>
                         <th className="p-3">Name of parent</th>
@@ -876,6 +880,7 @@ export default function RegistersManager({ user, activeRegister }) {
                             <th className="p-3">Corrected RE (DV/NV)</th>
                             <th className="p-3">Corrected LE (DV/NV)</th>
                             <th className="p-3">IPD/Frame size</th>
+                            <th className="p-3">Delivery Status</th>
                           </>
                         )}
                         <th className="p-3">Address/Contact</th>
@@ -889,8 +894,13 @@ export default function RegistersManager({ user, activeRegister }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                  {filteredRecords.map((r, index) => (
-                    <tr key={r._id || r.id} className="hover:bg-slate-50/80 transition-colors">
+                  {filteredRecords.map((r, index) => {
+                    const isDelivered = r.deliveryStatus === "Delivered";
+                    const rowBgClass = isDelivered
+                      ? "bg-emerald-50 hover:bg-emerald-100/80 text-emerald-950 font-semibold"
+                      : "hover:bg-slate-50/80";
+                    return (
+                      <tr key={r._id || r.id} className={`${rowBgClass} transition-colors`}>
                       {activeTab === "school-spectacles" ? (
                         <>
                           <td className="p-3 text-slate-500">{index + 1}</td>
@@ -911,6 +921,17 @@ export default function RegistersManager({ user, activeRegister }) {
                             RE: {formatPower(r.powerRE_Sph, r.powerRE_Cyl, r.powerRE_Axis, r.powerRE_Add)} | LE: {formatPower(r.powerLE_Sph, r.powerLE_Cyl, r.powerLE_Axis, r.powerLE_Add)}
                           </td>
                           <td className="p-3 whitespace-nowrap">{r.ipdFrameSize || "—"}</td>
+                          <td className="p-3 whitespace-nowrap">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                              (r.deliveryStatus || "Pending") === "Delivered"
+                                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                : (r.deliveryStatus || "Pending") === "Received"
+                                  ? "bg-yellow-100 text-yellow-800 border-yellow-300"
+                                  : "bg-rose-100 text-rose-800 border-rose-300"
+                            }`}>
+                              {r.deliveryStatus || "Pending"}
+                            </span>
+                          </td>
                           <td className="p-3 whitespace-nowrap">{r.reference || "—"}</td>
                           <td className="p-3 whitespace-nowrap">{r.remarks || "—"}</td>
                           <td className="p-3 whitespace-nowrap">{r.parentName || "—"}</td>
@@ -959,6 +980,17 @@ export default function RegistersManager({ user, activeRegister }) {
                               <td className="p-3 font-mono whitespace-nowrap">{r.correctedRE_DV || "—"} / {r.correctedRE_NV || "—"}</td>
                               <td className="p-3 font-mono whitespace-nowrap">{r.correctedLE_DV || "—"} / {r.correctedLE_NV || "—"}</td>
                               <td className="p-3 whitespace-nowrap">{r.ipdFrameSize || "—"}</td>
+                              <td className="p-3 whitespace-nowrap">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                                  (r.deliveryStatus || "Pending") === "Delivered"
+                                    ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                    : (r.deliveryStatus || "Pending") === "Received"
+                                      ? "bg-yellow-100 text-yellow-800 border-yellow-300"
+                                      : "bg-rose-100 text-rose-800 border-rose-300"
+                                }`}>
+                                  {r.deliveryStatus || "Pending"}
+                                </span>
+                              </td>
                             </>
                           )}
                           <td className="p-3 max-w-[200px] truncate text-slate-500" title={r.address}>{r.address || "—"}</td>
@@ -987,7 +1019,8 @@ export default function RegistersManager({ user, activeRegister }) {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1444,7 +1477,7 @@ export default function RegistersManager({ user, activeRegister }) {
               </div>
 
               {/* Extra Spectacle Fields */}
-              <div className="grid grid-cols-2 gap-4 mt-4">
+              <div className="grid grid-cols-3 gap-4 mt-4">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-600 uppercase">IPD / Frame Size</label>
                   <input type="text" name="ipdFrameSize" value={formData.ipdFrameSize} onChange={handleChange} placeholder="e.g. 62/20" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-[#396b84]" />
@@ -1452,6 +1485,19 @@ export default function RegistersManager({ user, activeRegister }) {
                 <div>
                   <label className="block text-[10px] font-bold text-slate-600 uppercase">Reference Details (If any)</label>
                   <input type="text" name="reference" value={formData.reference} onChange={handleChange} placeholder="e.g. Referred to Ophthalmologist for Glaucoma check" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-[#396b84]" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase">Delivery Status</label>
+                  <select
+                    name="deliveryStatus"
+                    value={formData.deliveryStatus || "Pending"}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-[#396b84] bg-white font-semibold"
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="Received">Received</option>
+                    <option value="Delivered">Delivered</option>
+                  </select>
                 </div>
               </div>
             </div>
