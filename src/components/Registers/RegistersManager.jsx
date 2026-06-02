@@ -470,6 +470,46 @@ export default function RegistersManager({ user, activeRegister }) {
     }
   };
 
+  // Handle Quick Status Change from table dropdown
+  const handleQuickStatusChange = async (record, newStatus) => {
+    if (user?.isGuest) {
+      triggerStatus("error", "Guest Mode: Saving data is disabled.");
+      return;
+    }
+    const updatedRecord = {
+      ...record,
+      deliveryStatus: newStatus,
+    };
+    try {
+      const res = await fetch(`${API_BASE}/api/${activeTab}/${record._id || record.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedRecord),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        triggerStatus("success", `Delivery status updated to ${newStatus}`);
+        fetchRecords();
+      } else {
+        triggerStatus("error", data.error || "Failed to update status.");
+      }
+    } catch (err) {
+      console.error("Quick status update error:", err);
+      triggerStatus("error", "Network error. Failed to update status.");
+    }
+  };
+
+  const getStatusSelectClass = (status) => {
+    const base = "px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border focus:outline-none cursor-pointer ";
+    if (status === "Delivered") {
+      return base + "bg-emerald-100 text-emerald-800 border-emerald-300";
+    }
+    if (status === "Received") {
+      return base + "bg-yellow-100 text-yellow-800 border-yellow-300";
+    }
+    return base + "bg-rose-100 text-rose-800 border-rose-300";
+  };
+
   // Filtered records for search & period range
   const filteredRecords = useMemo(() => {
     const getRecordDate = (r) => {
@@ -922,15 +962,15 @@ export default function RegistersManager({ user, activeRegister }) {
                           </td>
                           <td className="p-3 whitespace-nowrap">{r.ipdFrameSize || "—"}</td>
                           <td className="p-3 whitespace-nowrap">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
-                              (r.deliveryStatus || "Pending") === "Delivered"
-                                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                : (r.deliveryStatus || "Pending") === "Received"
-                                  ? "bg-yellow-100 text-yellow-800 border-yellow-300"
-                                  : "bg-rose-100 text-rose-800 border-rose-300"
-                            }`}>
-                              {r.deliveryStatus || "Pending"}
-                            </span>
+                            <select
+                              value={r.deliveryStatus || "Pending"}
+                              onChange={(e) => handleQuickStatusChange(r, e.target.value)}
+                              className={getStatusSelectClass(r.deliveryStatus || "Pending")}
+                            >
+                              <option value="Pending" className="bg-white text-rose-800 font-bold">Pending</option>
+                              <option value="Received" className="bg-white text-yellow-800 font-bold">Received</option>
+                              <option value="Delivered" className="bg-white text-emerald-800 font-bold">Delivered</option>
+                            </select>
                           </td>
                           <td className="p-3 whitespace-nowrap">{r.reference || "—"}</td>
                           <td className="p-3 whitespace-nowrap">{r.remarks || "—"}</td>
@@ -981,15 +1021,15 @@ export default function RegistersManager({ user, activeRegister }) {
                               <td className="p-3 font-mono whitespace-nowrap">{r.correctedLE_DV || "—"} / {r.correctedLE_NV || "—"}</td>
                               <td className="p-3 whitespace-nowrap">{r.ipdFrameSize || "—"}</td>
                               <td className="p-3 whitespace-nowrap">
-                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
-                                  (r.deliveryStatus || "Pending") === "Delivered"
-                                    ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                    : (r.deliveryStatus || "Pending") === "Received"
-                                      ? "bg-yellow-100 text-yellow-800 border-yellow-300"
-                                      : "bg-rose-100 text-rose-800 border-rose-300"
-                                }`}>
-                                  {r.deliveryStatus || "Pending"}
-                                </span>
+                                <select
+                                  value={r.deliveryStatus || "Pending"}
+                                  onChange={(e) => handleQuickStatusChange(r, e.target.value)}
+                                  className={getStatusSelectClass(r.deliveryStatus || "Pending")}
+                                >
+                                  <option value="Pending" className="bg-white text-rose-800 font-bold">Pending</option>
+                                  <option value="Received" className="bg-white text-yellow-800 font-bold">Received</option>
+                                  <option value="Delivered" className="bg-white text-emerald-800 font-bold">Delivered</option>
+                                </select>
                               </td>
                             </>
                           )}
