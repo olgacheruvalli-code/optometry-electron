@@ -2,6 +2,7 @@
   "name": "optometry-electron",
   "version": "1.0.0",
   "private": true,
+  "homepage": ".",
   "description": "",
   "main": "main.js",
   "scripts": {
