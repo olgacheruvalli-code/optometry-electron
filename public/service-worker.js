@@ -1,4 +1,4 @@
-const CACHE_NAME = "optometry-cache-v1";
+const CACHE_NAME = "optometry-cache-v2";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -34,13 +34,37 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Fetch Event (Stale-While-Revalidate Strategy)
+// Fetch Event
 self.addEventListener("fetch", (event) => {
   // Bypass non-GET requests and API requests (which require network)
   if (event.request.method !== "GET" || event.request.url.includes("/api/")) {
     return;
   }
 
+  const url = new URL(event.request.url);
+  const isHtml = url.pathname === "/" || url.pathname === "/index.html" || event.request.headers.get("accept")?.includes("text/html");
+
+  // Network-First strategy for HTML pages to prevent stylesheet/bundle hash mismatches on updates
+  if (isHtml) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+
+  // Stale-While-Revalidate strategy for static resources (CSS, JS, images)
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
