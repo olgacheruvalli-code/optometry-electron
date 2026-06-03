@@ -558,6 +558,7 @@ export default function RegistersManager({ user, activeRegister }) {
     const isSchool = activeTab === "school-spectacles";
     const name = isSchool ? (record.parentName || "Parent") : record.name;
     const instName = record.institution || user?.institution || "";
+    const schoolName = record.schoolName || "";
     const optName = record.optometristName || record.optometrist || user?.name || user?.username || "Optometrist";
     
     let rawPhone = isSchool ? record.parentPhone : extractPhoneFromAddress(record.address);
@@ -568,10 +569,10 @@ export default function RegistersManager({ user, activeRegister }) {
     }
     
     const bodyText = isSchool
-      ? `താങ്കളുടെ മകളുടെ / മകന്റെ കണ്ണട ആശുപത്രിയിൽ (${instName}) വന്നു വാങ്ങിക്കുമല്ലോ`
+      ? `NPCB സ്കൂൾ ഹെൽത്ത് പ്രോഗ്രാമിന്റെ ഭാഗമായി താങ്കളുടെ കുട്ടിയുടെ കണ്ണ് പരിശോധന ${schoolName} ൽ വെച്ച് നടത്തി കണ്ണട നിർദേശിച്ചിരുന്നു .  സർക്കാർ സൗജന്യമായി നൽകുന്ന ഈ കണ്ണട ${instName} ൽ എത്തിയിട്ടുണ്ട് . OP യുള്ള ദിവസങ്ങളിൽ  വന്നു കണ്ണട വാങ്ങിക്കുക .കൂടാതെ സ്ഥിരമായി കുട്ടി കണ്ണട ധരിക്കുന്നെണ്ടെന്നു ഉറപ്പുവരുത്തുകയും ചെയ്യുമല്ലോ`
       : `താങ്കൾക്കു കണ്ണട ആശുപത്രിയിൽ (${instName}) വന്നു വാങ്ങിക്കുമല്ലോ`;
       
-    const message = `Dear ${name}, \n${bodyText}\n\n${optName}\nOptometrist\n${instName}`;
+    const message = `Dear ${name},\n${bodyText}\n\n${optName}\nOptometrist\n${instName}`;
     console.log('WhatsApp message:', message);
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank", "noopener,noreferrer");
