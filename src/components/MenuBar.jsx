@@ -30,44 +30,6 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  /* --------------------------- Connected Links --------------------------- */
-  const district = String(user?.district || "");
-  const districtLower = district.toLowerCase();
-
-  // Default: empty links (other districts can be filled later)
-  const emptyLinks = {
-    blindRegister: "",
-    cataractBacklog: "",
-    oldAgedSpectacles: "",
-    schoolSpectacles: "",
-  };
-
-  // Per-district links. Filled only for Kozhikode as requested.
-  const connectedLinksMap = {
-    kozhikode: {
-      blindRegister:
-        "https://docs.google.com/spreadsheets/d/19MlrGzm6WYUEt7BRFP2VMxhUOzOd_C7sHloI7LBBXrI/edit?gid=0#gid=0",
-      cataractBacklog:
-        "https://docs.google.com/spreadsheets/d/1DMOOQ3ZVyxPlgVhl3vI0huDcb1vuGNVkaPsokxdler4/edit?gid=0#gid=0",
-      oldAgedSpectacles:
-        "https://docs.google.com/spreadsheets/d/1lNOg6bl5NJu2j8q-BVITfkdL3CWwsC65pWM29fioPhw/edit?gid=738688079#gid=738688079",
-      schoolSpectacles:
-        "https://docs.google.com/spreadsheets/d/1MDhuyGOamcoHv1Gl0hkcqeP86hQeY84O3X3KZvMx0pc/edit?gid=1604714197#gid=1604714197",
-    },
-  };
-
-  const connectedLinks = connectedLinksMap[districtLower] || emptyLinks;
-
-  // Helper to open external link (if available) or fall back to onMenu key
-  const openLinkOrMenu = (url, fallbackKey) => {
-    if (url) {
-      window.open(url, "_blank", "noopener,noreferrer");
-      setOpenSubmenuKey(null);
-    } else {
-      setOpenSubmenuKey(null);
-      onMenu(fallbackKey);
-    }
-  };
 
   const menuItems = [
     { key: "entry", label: "Report Entry" },
@@ -99,33 +61,7 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     });
   }
 
-  // Connected Link
-  menuItems.push({
-    key: "others-connected",
-    label: "Connected Link",
-    sub: [
-      {
-        key: "blind-register",
-        label: "Blind Register",
-        onClick: () => openLinkOrMenu(connectedLinks.blindRegister, "blind-register"),
-      },
-      {
-        key: "cataract-backlog",
-        label: "Cataract Backlog",
-        onClick: () => openLinkOrMenu(connectedLinks.cataractBacklog, "cataract-backlog"),
-      },
-      {
-        key: "old-aged-spectacles",
-        label: "Old Aged - Spectacles",
-        onClick: () => openLinkOrMenu(connectedLinks.oldAgedSpectacles, "old-aged-spectacles"),
-      },
-      {
-        key: "school-spectacles",
-        label: "School Children - Spectacles",
-        onClick: () => openLinkOrMenu(connectedLinks.schoolSpectacles, "school-spectacles"),
-      },
-    ],
-  });
+  
 
   // NEW: Registers (New)
   menuItems.push({

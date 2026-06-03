@@ -568,11 +568,11 @@ export default function RegistersManager({ user, activeRegister }) {
     }
     
     const bodyText = isSchool
-      ? `താങ്കളുടെ മകളുടെ / മകന്റെ കണ്ണട ആശുപത്രിയിൽ (${instName}) എത്തിയിട്ടുണ്ട് .വന്നു വാങ്ങിക്കുമല്ലോ`
-      : `താങ്കളുടെ കണ്ണട ആശുപത്രിയിൽ (${instName}) എത്തിയിട്ടുണ്ട് .വന്നു വാങ്ങിക്കുമല്ലോ`;
+      ? `താങ്കളുടെ മകളുടെ / മകന്റെ കണ്ണട ആശുപത്രിയിൽ (${instName}) വന്നു വാങ്ങിക്കുമല്ലോ`
+      : `താങ്കൾക്കു കണ്ണട ആശുപത്രിയിൽ (${instName}) വന്നു വാങ്ങിക്കുമല്ലോ`;
       
     const message = `Dear ${name}, \n${bodyText}\n\n${optName}\nOptometrist\n${instName}`;
-      
+    console.log('WhatsApp message:', message);
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
