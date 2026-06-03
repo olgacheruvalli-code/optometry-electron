@@ -374,6 +374,71 @@ export default function RegistersManager({ user, activeRegister }) {
     });
   };
 
+  const handleCopyREtoLE = () => {
+    setFormData(prev => ({
+      ...prev,
+      visionLE_DV: prev.visionRE_DV || "",
+      visionLE_NV: prev.visionRE_NV || "",
+      powerLE_Sph: prev.powerRE_Sph || "",
+      powerLE_Cyl: prev.powerRE_Cyl || "",
+      powerLE_Axis: prev.powerRE_Axis || "",
+      powerLE_Add: prev.powerRE_Add || "",
+      correctedLE_DV: prev.correctedRE_DV || "",
+      correctedLE_NV: prev.correctedRE_NV || ""
+    }));
+  };
+
+  const handleClearRE = () => {
+    setFormData(prev => ({
+      ...prev,
+      visionRE_DV: "",
+      visionRE_NV: "",
+      powerRE_Sph: "",
+      powerRE_Cyl: "",
+      powerRE_Axis: "",
+      powerRE_Add: "",
+      correctedRE_DV: "",
+      correctedRE_NV: ""
+    }));
+  };
+
+  const handleClearLE = () => {
+    setFormData(prev => ({
+      ...prev,
+      visionLE_DV: "",
+      visionLE_NV: "",
+      powerLE_Sph: "",
+      powerLE_Cyl: "",
+      powerLE_Axis: "",
+      powerLE_Add: "",
+      correctedLE_DV: "",
+      correctedLE_NV: ""
+    }));
+  };
+
+  const handleClearAllRefraction = () => {
+    setFormData(prev => ({
+      ...prev,
+      visionRE_DV: "",
+      visionRE_NV: "",
+      powerRE_Sph: "",
+      powerRE_Cyl: "",
+      powerRE_Axis: "",
+      powerRE_Add: "",
+      correctedRE_DV: "",
+      correctedRE_NV: "",
+      visionLE_DV: "",
+      visionLE_NV: "",
+      powerLE_Sph: "",
+      powerLE_Cyl: "",
+      powerLE_Axis: "",
+      powerLE_Add: "",
+      correctedLE_DV: "",
+      correctedLE_NV: ""
+    }));
+  };
+
+
   // Show status toast
   const triggerStatus = (type, text) => {
     setStatusMessage({ type, text });
@@ -1586,9 +1651,40 @@ export default function RegistersManager({ user, activeRegister }) {
           {/* SPECTACLE POWER AND VISION GRID - FOR OLD AGED & SCHOOL */}
           {(activeTab === "old-aged-spectacles" || activeTab === "school-spectacles") && (
             <div className="border border-indigo-200 rounded-xl p-4 mb-6 bg-[#f0f4ff]">
-              <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-4 border-b border-indigo-200 pb-2">
+              <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-2 border-b border-indigo-200 pb-2">
                 Spectacle Power & Refraction Details
               </h4>
+              
+              <div className="flex flex-wrap gap-2 mb-4">
+                <button
+                  type="button"
+                  onClick={handleCopyREtoLE}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold shadow-sm transition"
+                >
+                  COPY RE
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearRE}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold shadow-sm transition"
+                >
+                  Clear RE
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearLE}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold shadow-sm transition"
+                >
+                  Clear LE
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearAllRefraction}
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-semibold shadow-sm transition"
+                >
+                  Clear All
+                </button>
+              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
