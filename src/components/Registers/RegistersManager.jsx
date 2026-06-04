@@ -902,7 +902,7 @@ export default function RegistersManager({ user, activeRegister }) {
             <Table className="w-4 h-4" />
             View Records ({filteredRecords.length})
           </button>
-          {(showActions || editingId) && (
+          {(showActions || editingId || user?.isGuest) && (
             <button
               onClick={() => {
                 setViewMode("form");
@@ -1898,8 +1898,10 @@ export default function RegistersManager({ user, activeRegister }) {
             </button>
             <button
               type="submit"
-              disabled={loading}
-              className="px-6 py-2 rounded-lg text-xs font-bold bg-[#396b84] hover:bg-[#2f5a70] text-white shadow-md shadow-sky-800/10 transition"
+              disabled={loading || user?.isGuest}
+              className={`px-6 py-2 rounded-lg text-xs font-bold text-white shadow-md shadow-sky-800/10 transition ${
+                (loading || user?.isGuest) ? "bg-slate-400 cursor-not-allowed opacity-60" : "bg-[#396b84] hover:bg-[#2f5a70]"
+              }`}
             >
               {loading ? "Saving..." : editingId ? "Update Record" : "Save Record"}
             </button>
