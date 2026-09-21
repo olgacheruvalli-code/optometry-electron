@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import API_BASE from "../apiBase";
 import { districtInstitutions } from "../data/districtInstitutions";
 import crystalImg from "../assets/crystal_transparent.png";
+import pradeepProfileImg from "../assets/pradeep_profile.jpg";
 import ForgotPasswordModal from "./ForgotPasswordModal";
 
 // ⚡ Universal fetch with timeout
@@ -260,10 +261,31 @@ export default function Login({ onLogin, onShowRegister }) {
         
         {/* Left Column: Brand Hero & 3D Crystal Graphic */}
         <div className="lg:col-span-6 flex flex-col justify-between space-y-6 sm:space-y-8 pr-0 lg:pr-4">
+          
+          {/* Upper portion: Circular Photo with Caption - Pradeep Innovations */}
+          <div className="flex items-center gap-4 justify-center lg:justify-start">
+            <div className="relative">
+              <div className="absolute -inset-1 bg-gradient-to-tr from-amber-500 via-yellow-400 to-amber-600 rounded-full blur-md opacity-70"></div>
+              <img
+                src={pradeepProfileImg}
+                alt="Pradeep Innovations"
+                className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover object-top border-2 border-amber-300/90 shadow-2xl"
+              />
+            </div>
+            <div className="text-left">
+              <span className="text-[11px] font-bold text-amber-400 tracking-widest uppercase block">
+                Creator
+              </span>
+              <span className="text-lg sm:text-xl font-extrabold text-white tracking-wide block">
+                Pradeep Innovations
+              </span>
+            </div>
+          </div>
+
           <h1 className="text-3xl sm:text-4xl lg:text-[44px] font-extrabold tracking-tight text-white leading-[1.18] text-center lg:text-left">
             Elevate Your Healthcare<br />
             <span className="bg-gradient-to-r from-white via-amber-200 to-amber-400 bg-clip-text text-transparent">
-              with Optometry Reporting
+              with timely and precise Reporting.
             </span>
           </h1>
 
