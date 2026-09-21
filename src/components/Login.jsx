@@ -263,7 +263,7 @@ export default function Login({ onLogin, onShowRegister }) {
         <div className="lg:col-span-6 flex flex-col justify-between space-y-6 sm:space-y-8 pr-0 lg:pr-4">
           
           {/* Upper portion: Circular Photo with Caption - Pradeep Innovations */}
-          <div className="flex items-center gap-4 justify-center lg:justify-start">
+          <div className="flex items-center gap-4 justify-center">
             <div className="relative">
               <div className="absolute -inset-1 bg-gradient-to-tr from-amber-500 via-yellow-400 to-amber-600 rounded-full blur-md opacity-70"></div>
               <img
@@ -279,7 +279,7 @@ export default function Login({ onLogin, onShowRegister }) {
             </div>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl lg:text-[44px] font-extrabold tracking-tight text-white leading-[1.18] text-center lg:text-left">
+          <h1 className="text-3xl sm:text-4xl lg:text-[44px] font-extrabold tracking-tight text-white leading-[1.18] text-center">
             Elevate Your Healthcare<br />
             <span className="bg-gradient-to-r from-white via-amber-200 to-amber-400 bg-clip-text text-transparent">
               with timely and precise Reporting.
@@ -299,11 +299,11 @@ export default function Login({ onLogin, onShowRegister }) {
           </div>
 
           {/* Feature Highlights */}
-          <div className="space-y-3 pt-1 text-center lg:text-left max-w-lg mx-auto lg:mx-0">
+          <div className="space-y-3 pt-1 text-center max-w-lg mx-auto">
             <p className="text-slate-300 text-xs sm:text-sm leading-relaxed font-normal">
               Comprehensive clinical reporting for OPD, Cataract Surgeries, School Health Screening & Vision Centers across all institutions.
             </p>
-            <div className="text-xs font-semibold text-amber-300/90 tracking-wide flex flex-wrap gap-2 justify-center lg:justify-start">
+            <div className="text-xs font-semibold text-amber-300/90 tracking-wide flex flex-wrap gap-2 justify-center">
               <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/25">🔒 Encrypted Records</span>
               <span className="px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/25">🏛️ Multi-District Ready</span>
               <span className="px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/25">⚡ Real-Time MIS</span>
