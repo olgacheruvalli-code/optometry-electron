@@ -63,12 +63,14 @@ const normMonth = (m) => {
 };
 
 /* ---------------------- Question flattening ------------------------- */
-const getQs = (blk) =>
-  Array.isArray(blk?.questions)
+const getQs = (blk) => {
+  if (blk?.table && !/eye\s*bank/i.test(blk?.title || "")) return [];
+  return Array.isArray(blk?.questions)
     ? blk.questions
     : Array.isArray(blk?.rows)
     ? blk.rows
     : [];
+};
 
 function buildFlatRows(secs) {
   const out = [];

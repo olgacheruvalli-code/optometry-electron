@@ -14,7 +14,7 @@ const FISCAL_MONTHS = [
   "April","May","June","July","August","September",
   "October","November","December","January","February","March",
 ];
-const ALL_QUESTION_KEYS = Array.from({ length: 84 }, (_, i) => `q${i + 1}`);
+const ALL_QUESTION_KEYS = Array.from({ length: 86 }, (_, i) => `q${i + 1}`);
 
 /* ======================= Name Normalization ======================= */
 const sanitize = (s="") =>
@@ -88,6 +88,12 @@ const _sum84 = (a = [], b = []) => {
 const _normalize84 = (obj = {}) => {
   const out = {};
   for (const k of ALL_QUESTION_KEYS) out[k] = _num(obj[k]);
+  // Also preserve any named semantic keys in answers
+  for (const [k, v] of Object.entries(obj)) {
+    if (!k.startsWith("q") && v !== undefined && v !== null && v !== "") {
+      out[k] = _num(v);
+    }
+  }
   return out;
 };
 const _ensure84OnDoc = (doc) => {

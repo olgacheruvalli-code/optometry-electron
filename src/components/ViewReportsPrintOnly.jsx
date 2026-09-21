@@ -72,7 +72,8 @@ export default function ViewReportsPrintOnly({ reportData, month, year }) {
                 {[...(sec.questions || []), ...(sec.subsections || []).flatMap(sub =>
                   [{ isHeader: true, label: sub.title }, ...sub.questions]
                 )].map((row, idx) => {
-                  const key = row.key;
+                  const key = row.id || row.key;
+                  const monthVal = reportData.answers?.[key] ?? 0;
                   return (
                     <tr key={idx}>
                       <td className="border p-1">
@@ -82,7 +83,7 @@ export default function ViewReportsPrintOnly({ reportData, month, year }) {
                           row.label
                         )}
                       </td>
-                      <td className="border p-1 text-right">{reportData.answers?.[key] || 0}</td>
+                      <td className="border p-1 text-right">{monthVal}</td>
                       <td className="border p-1 text-right">{computeCumulative(key)}</td>
                     </tr>
                   );

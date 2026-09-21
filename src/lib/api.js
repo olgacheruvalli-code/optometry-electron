@@ -1,6 +1,6 @@
 import API_BASE from "../apiBase";
 
-export const ALL_QUESTION_KEYS = Array.from({ length: 84 }, (_, i) => `q${i + 1}`);
+export const ALL_QUESTION_KEYS = Array.from({ length: 86 }, (_, i) => `q${i + 1}`);
 
 const ZERO = Object.fromEntries(ALL_QUESTION_KEYS.map(k => [k, 0]));
 

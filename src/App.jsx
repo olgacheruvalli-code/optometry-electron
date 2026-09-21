@@ -25,6 +25,7 @@ import ViewInstitutionWiseReport from "./components/ViewInstitutionWiseReport";
 import ViewDistrictTables from "./components/ViewDistrictTables";
 import EditReport from "./components/EditReport";
 import Register from "./components/Register";
+import AdminApprovals from "./components/AdminApprovals";
 import { startFlute, stopFlute } from "./utils/sound";
 import EditGate from "./components/EditGate";
 import SearchReports from "./components/SearchReports";
@@ -58,12 +59,14 @@ const MONTHS = [
 /* -------------------------------------------------------------------------- */
 
 /** Return an array of question defs from a block that might use `questions` or `rows`. */
-const getQs = (blk) =>
-  Array.isArray(blk?.questions)
+const getQs = (blk) => {
+  if (blk?.table && !/eye\s*bank/i.test(blk?.title || "")) return [];
+  return Array.isArray(blk?.questions)
     ? blk.questions
     : Array.isArray(blk?.rows)
     ? blk.rows
     : [];
+};
 
 /** Build flat rows in display order (headers, subheaders, q-rows, and table markers). */
 function buildFlatRows(secs) {
@@ -99,16 +102,16 @@ function orderedQuestions(secs) {
   return buildFlatRows(secs).filter((r) => r.kind === "q").map((r) => r.row);
 }
 
-const KEYS = Array.from({ length: 84 }, (_, i) => `q${i + 1}`);
+const KEYS = Array.from({ length: 86 }, (_, i) => `q${i + 1}`);
 
 /**
- * ✅ CANONICAL / FROZEN q1..q84 DEF LIST
- * Single source of truth for q1..q84 order (matches ViewReports order)
+ * ✅ CANONICAL / FROZEN q1..q86 DEF LIST
+ * Single source of truth for q1..q86 order (matches ViewReports order)
  */
 const Q_DEFS_84 = buildFlatRows(sections)
   .filter((x) => x.kind === "q")
   .map((x) => x.row)
-  .slice(0, 84);
+  .slice(0, 86);
 
 /** Convert table rows: keep names as strings; numeric-looking cells -> numbers; null/undefined -> "" */
 const sanitizeTableArray = (arr) =>
@@ -348,12 +351,12 @@ function ViewReports({ reportData, month, year }) {
 
         // sum *displayed month values* across FY window
         const out = {};
-        for (let i = 1; i <= 84; i++) out[`q${i}`] = 0;
+        for (let i = 1; i <= 86; i++) out[`q${i}`] = 0;
 
         for (const p of fiscalPairs) {
           const d = latestByMY.get(`${p.month}|${p.year}`);
           const ans = (d && d.answers) || {};
-          for (let i = 1; i <= 84; i++) {
+          for (let i = 1; i <= 86; i++) {
             const key = `q${i}`;
             if (key === "q22") continue;
             const val = getMonthValueForKey(ans, key);
@@ -447,50 +450,6 @@ function ViewReports({ reportData, month, year }) {
     {};
 
   if (!reportData) return null;
-
-  // ✅ NEW: Tribal cataract IDs (these are ID-based, not q-based now)
-  const TRIBAL1 = "addl_tribal_cataract_cases";
-  const TRIBAL2 = "addl_tribal_cataract_surgery";
-
-  // Read tribal values from ID-based save, fallback to q mapping if old data
-  const getTribalMonth = (fallbackQKey) => {
-    const v = answersRawOriginal?.[fallbackQKey]; // old qXX if it existed
-    const v2 = answersRawOriginal?.[fallbackQKey]; // kept same; safe
-    // Prefer ID-based
-    const idVal =
-      answersRawOriginal?.[fallbackQKey] !== undefined
-        ? undefined
-        : undefined; // no-op; keep logic below
-    const direct =
-      answersRawOriginal?.[TRIBAL1] !== undefined ||
-      answersRawOriginal?.[TRIBAL2] !== undefined;
-
-    // Use ID if present; else use q fallback
-    return direct
-      ? null
-      : Number(v ?? v2 ?? 0) || 0;
-  };
-
-  const tribalMonth1 =
-    answersRawOriginal?.[TRIBAL1] != null
-      ? Number(answersRawOriginal?.[TRIBAL1] ?? 0) || 0
-      : 0;
-
-  const tribalMonth2 =
-    answersRawOriginal?.[TRIBAL2] != null
-      ? Number(answersRawOriginal?.[TRIBAL2] ?? 0) || 0
-      : 0;
-
-  // For cumulative of these 2, we can only use cumSrc if server/local returns q-based.
-  // If you want perfect cumulative for these 2 also, we should add them to the FY-cumulative endpoint later.
-  const tribalCum1 =
-    cumSrc?.[TRIBAL1] != null
-      ? Number(cumSrc?.[TRIBAL1] ?? 0) || 0
-      : 0;
-  const tribalCum2 =
-    cumSrc?.[TRIBAL2] != null
-      ? Number(cumSrc?.[TRIBAL2] ?? 0) || 0
-      : 0;
 
   return (
     <div className="a4-wrapper text-[12pt] font-serif">
@@ -614,30 +573,21 @@ function ViewReports({ reportData, month, year }) {
 
                 const key = `q${qNumber}`;
 
-                // ✅ NEW: override tribal cataract labels to read ID-based values
-                const isTribal1 =
-                  String(label).trim() ===
-                  "No of cataract cases detected in tribal population";
-                const isTribal2 =
-                  String(label).trim() ===
-                  "No of cases undergone for cataract surgery in tribal population";
-
-                if (isTribal1 || isTribal2) {
-                  const monthVal = isTribal1 ? tribalMonth1 : tribalMonth2;
-                  const cumVal = isTribal1 ? tribalCum1 : tribalCum2;
-
-                  return (
-                    <tr key={`r-${idx}`}>
-                      <td className="border p-1">{label}</td>
-                      <td className="border p-1 text-right">{monthVal}</td>
-                      <td className="border p-1 text-right">{cumVal}</td>
-                    </tr>
-                  );
-                }
-
                 // ----- special fix: Glaucoma "Screened" bug (q36 vs q34) -----
                 let rawMonth = answersRaw[key];
                 let rawCum = cumSrc && cumSrc[key];
+
+                const rowId = item.row?.id;
+                if ((rawMonth == null || rawMonth === "" || Number(rawMonth) === 0) && rowId) {
+                  if (answersRawOriginal?.[rowId] != null && answersRawOriginal[rowId] !== "") {
+                    rawMonth = answersRawOriginal[rowId];
+                  }
+                }
+                if ((rawCum == null || rawCum === "" || Number(rawCum) === 0) && rowId) {
+                  if (cumSrc?.[rowId] != null && cumSrc[rowId] !== "") {
+                    rawCum = cumSrc[rowId];
+                  }
+                }
 
                 if (key === "q36") {
                   const altMonth = answersRaw?.q34;
@@ -1001,7 +951,7 @@ function ReportEntry({
         return { ...row, id, label };
       });
 
-    return qItems.slice(0, 84);
+    return qItems.slice(0, 86);
   }, []);
 
   /* ✅ ENTRY question order (includes subsections properly) */
@@ -1015,7 +965,7 @@ function ReportEntry({
 
   const buildFullAnswers84 = () => {
     const out = {};
-    for (let i = 0; i < 84; i++) {
+    for (let i = 0; i < qDefs84.length; i++) {
       const qDef = qDefs84[i];
       const keyId = qDef?.id;
       const raw = keyId ? answers[keyId] : undefined;
@@ -1024,6 +974,16 @@ function ReportEntry({
           ? "0"
           : String(raw).trim();
       out[`q${i + 1}`] = clean;
+    }
+    // Also save semantic named keys for compatibility
+    for (const qDef of qDefs84) {
+      if (qDef?.id && answers[qDef.id] !== undefined) {
+        const raw = answers[qDef.id];
+        out[qDef.id] =
+          raw === undefined || raw === null || String(raw).trim() === ""
+            ? "0"
+            : String(raw).trim();
+      }
     }
     return out;
   };
@@ -1048,38 +1008,6 @@ function ReportEntry({
     }
 
     let answersFull = buildFullAnswers84();
-
-    /* ✅ FIX ONLY FOR THE 2 TRIBAL QUESTIONS (no other changes)
-       We ensure their typed values land inside q1..q84.
-    */
-    try {
-      const TRIBAL_1 = "addl_tribal_cataract_cases";
-      const TRIBAL_2 = "addl_tribal_cataract_surgery";
-
-      // Find their index in ENTRY order (1-based q position)
-      const pos1 = entryDefs.findIndex((q) => q?.id === TRIBAL_1) + 1;
-      const pos2 = entryDefs.findIndex((q) => q?.id === TRIBAL_2) + 1;
-
-      // If they are within 84 (they SHOULD be in your questions.js)
-      const clean = (v) =>
-        v === undefined || v === null || String(v).trim() === ""
-          ? "0"
-          : String(v).trim();
-
-      if (pos1 > 0 && pos1 <= 84) {
-        answersFull[`q${pos1}`] = clean(answers?.[TRIBAL_1]);
-      } else {
-        console.warn("Tribal Q1 position out of range:", pos1);
-      }
-
-      if (pos2 > 0 && pos2 <= 84) {
-        answersFull[`q${pos2}`] = clean(answers?.[TRIBAL_2]);
-      } else {
-        console.warn("Tribal Q2 position out of range:", pos2);
-      }
-    } catch (e) {
-      console.warn("Tribal mapping failed:", e);
-    }
 
     const cleanEyeBank = sanitizeTableArrayLocal(eyeBank);
     const cleanVisionCenter = sanitizeTableArrayLocal(visionCenter);
@@ -1300,22 +1228,29 @@ function App() {
     cumulativeData: [],
   });
 
-  // DOC/DC detection
+  // DOC/DC/ADMIN detection
   const instStr = String(user?.institution || "").trim().toLowerCase();
   const roleStr = String(user?.role || "").trim().toLowerCase();
-  const userRole =
-    user?.isDoc ||
-    roleStr === "doc" ||
-    roleStr === "dc" ||
-    /^doc/i.test(instStr) ||
-    /^dc/i.test(instStr) ||
-    /^doc/i.test(user?.username || "") ||
-    /^dc/i.test(user?.username || "") ||
-    user?.role === "DOC"
-      ? "DOC"
-      : user?.role || "USER";
+  const isSuperAdmin = !!(
+    user?.isAdmin ||
+    user?.isSuperAdmin ||
+    user?.role === "ADMIN" ||
+    roleStr === "admin"
+  );
+  const userRole = isSuperAdmin
+    ? "ADMIN"
+    : user?.isDoc ||
+      roleStr === "doc" ||
+      roleStr === "dc" ||
+      /^doc/i.test(instStr) ||
+      /^dc/i.test(instStr) ||
+      /^doc/i.test(user?.username || "") ||
+      /^dc/i.test(user?.username || "") ||
+      user?.role === "DOC"
+    ? "DOC"
+    : user?.role || "USER";
 
-  // 🔁 Use the SAME 84-question order as ViewReports / saving (q1..q84)
+  // 🔁 Use the SAME 86-question order as ViewReports / saving (q1..q86)
 const qDefs = useMemo(() => {
   const flatRows = buildFlatRows(sections);
   const qItems = flatRows
@@ -1335,11 +1270,11 @@ const qDefs = useMemo(() => {
       return { ...row, id, label };
     });
 
-  return qItems.slice(0, 84);
+  return qItems.slice(0, 86);
 }, []);
 
 
-  // Labels aligned with q1..q84 (index i → q{i+1})
+  // Labels aligned with q1..q86 (index i → q{i+1})
   const qLabels = useMemo(
     () => qDefs.map((q) => q.label || ""),
     [qDefs]
@@ -1949,12 +1884,20 @@ const qDefs = useMemo(() => {
   /* ------------------------- Auth & shells ------------------------- */
   if (!user) {
     return showRegister ? (
-      <Register onRegister={() => setShowRegister(false)} />
+      <Register
+        onRegister={() => setShowRegister(false)}
+        onBackToLogin={() => setShowRegister(false)}
+      />
     ) : (
       <Login
         onLogin={(loggedInUser) => {
           setUser(loggedInUser);
           setShowVideo(true);
+          if (loggedInUser?.role === "ADMIN") {
+            setMenu("admin-approvals");
+          } else {
+            setMenu("entry");
+          }
         }}
         onShowRegister={() => setShowRegister(true)}
       />
@@ -1981,7 +1924,7 @@ const qDefs = useMemo(() => {
     );
   }
 
-  const viewerInstitution = userRole === "DOC" ? undefined : user?.institution || "";
+  const viewerInstitution = userRole === "DOC" || userRole === "ADMIN" ? undefined : user?.institution || "";
 
   // DEBUG — remove later
   console.log("ACTIVE MENU =", menu);
@@ -2013,6 +1956,11 @@ const qDefs = useMemo(() => {
       )}
 
       <div className="p-4 font-serif text-[12pt]">
+        {/* Admin Approvals Portal */}
+        {menu === "admin-approvals" && (
+          <AdminApprovals user={user} onClose={() => setMenu("entry")} />
+        )}
+
         {/* Report Entry */}
         {menu === "entry" && (
           <ReportEntry

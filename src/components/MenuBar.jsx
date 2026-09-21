@@ -4,15 +4,24 @@ import { ChevronDown } from "lucide-react";
 export default function MenuBar({ onMenu, onLogout, active, user }) {
   const instStr = String(user?.institution || "").trim().toLowerCase();
   const roleStr = String(user?.role || "").trim().toLowerCase();
+  const isSuperAdmin = !!(
+    user?.isAdmin ||
+    user?.isSuperAdmin ||
+    user?.role === "ADMIN" ||
+    roleStr === "admin"
+  );
   const isDistrictCoordinator =
-    !!(user?.isDoc ||
+    isSuperAdmin ||
+    !!(
+      user?.isDoc ||
       roleStr === "doc" ||
       roleStr === "dc" ||
       /^doc/i.test(instStr) ||
       /^dc/i.test(instStr) ||
       /^doc/i.test(user?.username || "") ||
       /^dc/i.test(user?.username || "") ||
-      user?.role === "DOC");
+      user?.role === "DOC"
+    );
   const isGuest = !!user?.isGuest;
   const [openSubmenuKey, setOpenSubmenuKey] = useState(null);
   const submenuRefs = useRef({});
@@ -30,13 +39,17 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-
   const menuItems = [
+    ...(isSuperAdmin
+      ? [{ key: "admin-approvals", label: "👑 Approvals Portal" }]
+      : []),
     { key: "entry", label: "Report Entry" },
-    ...((!isDistrictCoordinator || isGuest) ? [
-      { key: "view", label: "View/Edit Reports" },
-      { key: "edit", label: "Edit Report" }
-    ] : []),
+    ...(!isDistrictCoordinator || isSuperAdmin || isGuest
+      ? [
+          { key: "view", label: "View/Edit Reports" },
+          { key: "edit", label: "Edit Report" },
+        ]
+      : []),
     { key: "search", label: "Search Reports" },
     { key: "print", label: "Print Reports" },
   ];
@@ -99,12 +112,25 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
         <h1 className="text-2xl font-bold text-gray-900">OPTOMETRY</h1>
         <div className="flex items-center gap-4">
           <div className="hidden md:block text-right text-sm text-gray-700 leading-tight font-medium">
-            <div>
-              District: <b>{user?.district}</b>
-            </div>
-            <div>
-              Institution: <b>{user?.institution}</b>
-            </div>
+            {isSuperAdmin ? (
+              <div>
+                <span className="px-2.5 py-0.5 text-xs font-bold bg-purple-100 text-purple-800 rounded-full">
+                  👑 Super Admin (Developer)
+                </span>
+                <div className="text-[11px] text-gray-500 mt-1">
+                  Access: <b>All Institutions</b>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  District: <b>{user?.district}</b>
+                </div>
+                <div>
+                  Institution: <b>{user?.institution}</b>
+                </div>
+              </>
+            )}
           </div>
           <div className="hidden md:flex w-9 h-9 bg-[#3b6e8f] rounded-full items-center justify-center">
             <svg
@@ -141,8 +167,14 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
         <div className="md:hidden bg-[#396b84] text-white w-full border-t border-blue-700 max-h-[calc(100vh-80px)] overflow-y-auto">
           {/* User Info inside mobile menu */}
           <div className="px-6 py-4 bg-[#2f5a70] border-b border-blue-800 text-xs">
-            <div>District: <span className="font-bold">{user?.district}</span></div>
-            <div className="mt-1">Institution: <span className="font-bold">{user?.institution}</span></div>
+            {isSuperAdmin ? (
+              <div className="font-bold text-amber-300">👑 Super Admin (Developer Mode)</div>
+            ) : (
+              <>
+                <div>District: <span className="font-bold">{user?.district}</span></div>
+                <div className="mt-1">Institution: <span className="font-bold">{user?.institution}</span></div>
+              </>
+            )}
           </div>
 
           <div className="flex flex-col py-2 font-serif text-sm">
