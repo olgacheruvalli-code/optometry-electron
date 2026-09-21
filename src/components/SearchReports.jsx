@@ -2,6 +2,7 @@
 import React from "react";
 import API_BASE from "../apiBase";
 import { districtInstitutions } from "../data/districtInstitutions";
+import { DEMO_DISTRICT, DEMO_INSTITUTIONS, createDemoReport } from "../data/demoData";
 
 export default function SearchReports({ user, onOpen }) {
   const MONTHS = [
@@ -16,7 +17,7 @@ export default function SearchReports({ user, onOpen }) {
   const [error, setError] = React.useState("");
   const [result, setResult] = React.useState(null); // the single chosen report
 
-  const district = user?.isGuest ? "Kozhikode" : user?.district || "";
+  const district = user?.isGuest ? DEMO_DISTRICT : user?.district || "";
   const instStr = String(user?.institution || "").trim().toLowerCase();
   const roleStr = String(user?.role || "").trim().toLowerCase();
   const isDOC =
@@ -31,9 +32,10 @@ export default function SearchReports({ user, onOpen }) {
 
   // Only institutions of the user’s district, and hide DOC/DC rows
   const instList = React.useMemo(() => {
+    if (user?.isGuest) return DEMO_INSTITUTIONS;
     const arr = Array.isArray(districtInstitutions[district]) ? districtInstitutions[district] : [];
     return arr.filter((n) => n && !/^doc\s/i.test(n) && !/^dc\s/i.test(n));
-  }, [district]);
+  }, [district, user?.isGuest]);
 
   const norm = (s) => String(s || "").trim().toLowerCase();
   const pickLatest = (arr) =>
@@ -55,6 +57,13 @@ export default function SearchReports({ user, onOpen }) {
     }
     if (!district || !institution || !month || !year) {
       setError("Select Institution, Month and Year.");
+      return;
+    }
+
+    if (user?.isGuest) {
+      const demo = createDemoReport(month, year);
+      demo.institution = institution;
+      setResult(demo);
       return;
     }
 

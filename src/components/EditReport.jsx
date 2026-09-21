@@ -4,6 +4,7 @@ import API_BASE from "../apiBase";
 import sections from "../data/questions";
 import EyeBankTable from "./EyeBankTable";
 import VisionCenterTable from "./VisionCenterTable";
+import { DEMO_DISTRICT, DEMO_INSTITUTION, createDemoReport } from "../data/demoData";
 
 /* ------------------------------ Config ------------------------------ */
 // Change this to your real admin password (kept on frontend by request).
@@ -296,8 +297,8 @@ function normalizeGlaucomaDRBlock(src = {}) {
 /* ==================================================================== */
 
 export default function EditReport({ user }) {
-  const [district, setDistrict] = useState(user?.isGuest ? "Kozhikode" : user?.district || "");
-  const [institution, setInstitution] = useState(user?.isGuest ? "CHC Narikkuni" : user?.institution || "");
+  const [district, setDistrict] = useState(user?.isGuest ? DEMO_DISTRICT : user?.district || "");
+  const [institution, setInstitution] = useState(user?.isGuest ? DEMO_INSTITUTION : user?.institution || "");
   const [month, setMonth] = useState("April");
   const [year, setYear] = useState(String(new Date().getFullYear()));
 
@@ -337,6 +338,15 @@ export default function EditReport({ user }) {
   // Fetch the latest report strictly by (district, institution, month, year)
   const fetchSelected = async () => {
     if (!district || !institution || !month || !year) return;
+    if (user?.isGuest) {
+      const demo = createDemoReport(month, year);
+      setDoc(demo);
+      setAnswers(demo.answers);
+      setCumulative(demo.cumulative || demo.answers);
+      setEyeBank(demo.eyeBank || [{}, {}]);
+      setVisionCenter(demo.visionCenter || Array.from({ length: 10 }, () => ({})));
+      return;
+    }
     setLoading(true);
     try {
       const q =

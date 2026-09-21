@@ -34,6 +34,7 @@ import AmblyopiaView from "./components/Amblyopia/AmblyopiaView";
 import AmblyopiaAnalytics from "./components/Amblyopia/AmblyopiaAnalytics";
 import TestVisionCenter from "./components/TestVisionCenter";
 import RegistersManager from "./components/Registers/RegistersManager";
+import { DEMO_DISTRICT, DEMO_INSTITUTION, DEMO_INSTITUTIONS, createDemoReport, getDemoDistrictData } from "./data/demoData";
 
 // Wake up Render backend when app starts
 fetch("https://optometry-backend-iiuk.onrender.com/api/ping").catch(() => {});
@@ -196,6 +197,10 @@ function ViewReports({ reportData, month, year }) {
   // Hydrate the selected document (so month column shows full data)
   useEffect(() => {
     if (!id) return;
+    if (String(id).startsWith("demo-") || reportData?.isDemo) {
+      setDoc(reportData);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -242,6 +247,7 @@ function ViewReports({ reportData, month, year }) {
     };
   }, [
     id,
+    reportData,
     reportData?.district,
     reportData?.institution,
     reportData?.month,
@@ -252,6 +258,10 @@ function ViewReports({ reportData, month, year }) {
   useEffect(() => {
     setCumTotals({});
     if (!baseDistrict || !baseInstitution || !month || !year) return;
+    if (String(id).startsWith("demo-") || reportData?.isDemo) {
+      setCumTotals(reportData?.cumulative || reportData?.answers || {});
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -818,6 +828,7 @@ function ReportEntry({
   React.useEffect(() => {
     let cancelled = false;
     setAlreadySubmitted(false);
+    if (user?.isGuest) return;
 
     (async () => {
       if (!user?.district || !user?.institution || !month || !year) return;
@@ -842,11 +853,12 @@ function ReportEntry({
     return () => {
       cancelled = true;
     };
-  }, [user?.district, user?.institution, month, year]);
+  }, [user?.district, user?.institution, month, year, user?.isGuest]);
 
   // Pre-populate schools_in_area (q22) from the institution's most recent report
   React.useEffect(() => {
     let cancelled = false;
+    if (user?.isGuest) return;
     if (!user?.district || !user?.institution) return;
 
     (async () => {
@@ -1316,14 +1328,16 @@ const qDefs = useMemo(() => {
     return allQs;
   }, [qDefs]);
 
-  const selectedDistrict = user?.isGuest ? "Kozhikode" : user?.district || "Kozhikode";
+  const selectedDistrict = user?.isGuest ? DEMO_DISTRICT : user?.district || "Kozhikode";
 
   const institutionNamesMemo = useMemo(
-    () =>
-      Array.isArray(districtInstitutions[selectedDistrict])
+    () => {
+      if (user?.isGuest) return DEMO_INSTITUTIONS;
+      return Array.isArray(districtInstitutions[selectedDistrict])
         ? districtInstitutions[selectedDistrict]
-        : [],
-    [selectedDistrict]
+        : [];
+    },
+    [selectedDistrict, user?.isGuest]
   );
 
   const printWithPageSize = (size = "A4 portrait", margin = "10mm") => {
@@ -1358,6 +1372,13 @@ const qDefs = useMemo(() => {
       !selectedDistrict
     )
       return;
+
+    if (user?.isGuest) {
+      const demoDistrict = getDemoDistrictData(month, year);
+      setInstitutionData(demoDistrict.institutionData);
+      setDistrictPerformance(demoDistrict.districtPerformance);
+      return;
+    }
 
     let cancelled = false;
 
@@ -1628,6 +1649,12 @@ const qDefs = useMemo(() => {
     }
     if (userRole === "DOC") return;
 
+    if (user?.isGuest) {
+      const demo = createDemoReport(month, year);
+      setCurrent(demo);
+      return;
+    }
+
     let cancelled = false;
 
     const pickLatest = (arr) =>
@@ -1641,8 +1668,8 @@ const qDefs = useMemo(() => {
 
     (async () => {
       try {
-        const dist = user?.isGuest ? "Kozhikode" : user?.district || "";
-        const inst = user?.isGuest ? "CHC Narikkuni" : user?.institution || "";
+        const dist = user?.district || "";
+        const inst = user?.institution || "";
         const url =
           `${API_BASE}/api/reports?` +
           `district=${encodeURIComponent(dist)}` +
@@ -1955,8 +1982,9 @@ const qDefs = useMemo(() => {
       </div>
 
       {user?.isGuest && (
-        <div className="bg-yellow-100 text-yellow-800 text-center py-2 font-semibold shadow-md">
-          🕶️ Guest Mode — Preview Only (No data will be saved)
+        <div className="bg-amber-950/40 border-b border-amber-500/20 text-amber-200 text-center py-2 px-4 text-xs font-semibold tracking-wide flex items-center justify-center gap-2">
+          <span>🕶️</span>
+          <span><b>Guest Demo Mode</b>: Viewing sample simulated data. No real patient or institution data is accessible, and saving is disabled.</span>
         </div>
       )}
 
@@ -2012,8 +2040,9 @@ const qDefs = useMemo(() => {
             <ReportsList
               filterMonth={month}
               filterYear={year}
-              filterDistrict={user?.isGuest ? "Kozhikode" : user?.district}
+              filterDistrict={user?.isGuest ? DEMO_DISTRICT : user?.district}
               filterInstitution={user?.isGuest ? "" : viewerInstitution}
+              isGuest={!!user?.isGuest}
               onSelect={(report) => setCurrent(report || null)}
             />
 

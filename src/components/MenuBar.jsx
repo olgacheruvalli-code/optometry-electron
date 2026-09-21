@@ -125,6 +125,15 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
                   Access: <b>All Institutions</b>
                 </div>
               </div>
+            ) : isGuest ? (
+              <div>
+                <span className="px-2.5 py-0.5 text-xs font-bold bg-amber-100 text-amber-800 rounded-full">
+                  🕶️ Guest Demo Mode
+                </span>
+                <div className="text-[11px] text-gray-500 mt-1">
+                  Sample Data: <b>Demo Institution</b>
+                </div>
+              </div>
             ) : (
               <>
                 <div>

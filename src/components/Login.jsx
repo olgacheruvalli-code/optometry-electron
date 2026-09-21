@@ -238,7 +238,12 @@ export default function Login({ onLogin, onShowRegister }) {
   };
 
   const handleGuestLogin = () => {
-    onLogin({ district: "Guest", institution: "Guest User", isGuest: true });
+    onLogin({
+      district: "Demo District",
+      institution: "Demo General Hospital (Sample)",
+      role: "GUEST",
+      isGuest: true,
+    });
   };
 
   const isSubmitDisabled =

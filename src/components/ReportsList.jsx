@@ -1,12 +1,13 @@
-// src/components/ReportsList.jsx
 import React, { useEffect, useState } from "react";
 import API_BASE from "../apiBase";
+import { DEMO_REPORTS_LIST, DEMO_DISTRICT } from "../data/demoData";
 
 export default function ReportsList({
   filterMonth = "",
   filterYear = "",
   filterDistrict = "",
   filterInstitution = "",
+  isGuest = false,
   onSelect,
 }) {
   const [reports, setReports] = useState([]);
@@ -18,6 +19,17 @@ export default function ReportsList({
 
   useEffect(() => {
     let cancelled = false;
+
+    // 🕶️ GUEST DEMO MODE: return pre-generated sample reports (no backend call)
+    if (isGuest || filterDistrict === DEMO_DISTRICT) {
+      setLoading(false);
+      setError(null);
+      let list = [...DEMO_REPORTS_LIST];
+      if (filterMonth) list = list.filter((d) => eq(d.month, filterMonth));
+      if (filterYear) list = list.filter((d) => String(d.year) === String(filterYear));
+      setReports(list);
+      return;
+    }
 
     // Build server query (use only provided filters)
     const qs = new URLSearchParams(
@@ -73,15 +85,24 @@ export default function ReportsList({
     return () => {
       cancelled = true;
     };
-  }, [filterMonth, filterYear, filterDistrict, filterInstitution]);
+  }, [filterMonth, filterYear, filterDistrict, filterInstitution, isGuest]);
 
   if (loading) return <div>Loading reports...</div>;
   if (error) return <div className="text-red-600">{error}</div>;
 
+  const isDemoMode = isGuest || filterDistrict === DEMO_DISTRICT;
+
   if (!reports.length) {
     return (
       <div className="max-w-md mx-auto bg-white p-4 rounded shadow">
-        <h3 className="text-xl font-bold mb-2">Saved Reports</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xl font-bold">Saved Reports</h3>
+          {isDemoMode && (
+            <span className="text-[11px] font-semibold bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full">
+              Demo Sample Data
+            </span>
+          )}
+        </div>
         <div className="text-gray-600">No saved reports.</div>
       </div>
     );
@@ -89,15 +110,27 @@ export default function ReportsList({
 
   return (
     <div className="max-w-md mx-auto bg-white p-4 rounded shadow">
-      <h3 className="text-xl font-bold mb-2">Saved Reports</h3>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-xl font-bold">Saved Reports</h3>
+        {isDemoMode && (
+          <span className="text-[11px] font-semibold bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full">
+            Demo Sample Data
+          </span>
+        )}
+      </div>
       <ul>
         {reports.map((r) => (
           <li key={r._id || `${r.institution}-${r.month}-${r.year}`} className="border-b py-2">
             <button
-              className="w-full text-left hover:underline"
+              className="w-full text-left hover:underline flex justify-between items-center"
               onClick={() => onSelect && onSelect(r)}
             >
-              {r.month} {r.year} — {r.institution}, {r.district}
+              <span>{r.month} {r.year} — {r.institution}, {r.district}</span>
+              {isDemoMode && (
+                <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                  Demo
+                </span>
+              )}
             </button>
           </li>
         ))}
