@@ -1893,7 +1893,12 @@ const qDefs = useMemo(() => {
         onLogin={(loggedInUser) => {
           setUser(loggedInUser);
           setShowVideo(true);
-          if (loggedInUser?.role === "ADMIN") {
+          const isGlobalAdmin =
+            loggedInUser?.role === "ADMIN" &&
+            (!loggedInUser?.institution ||
+              loggedInUser?.institution === "All Institutions" ||
+              loggedInUser?.district === "All");
+          if (isGlobalAdmin) {
             setMenu("admin-approvals");
           } else {
             setMenu("entry");
