@@ -1,7 +1,7 @@
 // src/components/SearchReports.jsx
 import React from "react";
 import API_BASE from "../apiBase";
-import { districtInstitutions } from "../data/districtInstitutions";
+import { districts, districtInstitutions } from "../data/districtInstitutions";
 import { DEMO_DISTRICT, DEMO_INSTITUTIONS, createDemoReport } from "../data/demoData";
 
 export default function SearchReports({ user, onOpen }) {
@@ -10,17 +10,18 @@ export default function SearchReports({ user, onOpen }) {
     "October","November","December","January","February","March",
   ];
 
-  const [institution, setInstitution] = React.useState("");
-  const [month, setMonth] = React.useState("");
-  const [year, setYear] = React.useState("");
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState("");
-  const [result, setResult] = React.useState(null); // the single chosen report
-
-  const district = user?.isGuest ? DEMO_DISTRICT : user?.district || "";
   const instStr = String(user?.institution || "").trim().toLowerCase();
   const roleStr = String(user?.role || "").trim().toLowerCase();
+  const isSuperUser = !!(
+    user?.isAdmin ||
+    user?.isSuperAdmin ||
+    user?.district === "All" ||
+    user?.district === "All Districts" ||
+    roleStr === "admin"
+  );
+
   const isDOC =
+    isSuperUser ||
     !!(user?.isDoc ||
       roleStr === "doc" ||
       roleStr === "dc" ||
@@ -30,12 +31,33 @@ export default function SearchReports({ user, onOpen }) {
       /^dc/i.test(user?.username || "")) ||
     user?.isGuest;
 
-  // Only institutions of the user’s district, and hide DOC/DC rows
+  const [district, setDistrict] = React.useState(() => {
+    if (user?.isGuest) return DEMO_DISTRICT;
+    if (isSuperUser) return "Kozhikode";
+    return user?.district || "Kozhikode";
+  });
+
+  const [institution, setInstitution] = React.useState("");
+  const [month, setMonth] = React.useState("");
+  const [year, setYear] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [result, setResult] = React.useState(null); // the single chosen report
+
+  // Only institutions of the selected district, and hide DOC/DC rows
   const instList = React.useMemo(() => {
     if (user?.isGuest) return DEMO_INSTITUTIONS;
-    const arr = Array.isArray(districtInstitutions[district]) ? districtInstitutions[district] : [];
+    const currentDist = district || (isSuperUser ? "Kozhikode" : user?.district || "Kozhikode");
+    const arr = Array.isArray(districtInstitutions[currentDist]) ? districtInstitutions[currentDist] : [];
     return arr.filter((n) => n && !/^doc\s/i.test(n) && !/^dc\s/i.test(n));
-  }, [district, user?.isGuest]);
+  }, [district, user?.isGuest, isSuperUser, user?.district]);
+
+  const handleDistrictChange = (newDist) => {
+    setDistrict(newDist);
+    setInstitution("");
+    setError("");
+    setResult(null);
+  };
 
   const norm = (s) => String(s || "").trim().toLowerCase();
   const pickLatest = (arr) =>
@@ -52,11 +74,11 @@ export default function SearchReports({ user, onOpen }) {
     setResult(null);
 
     if (!isDOC) {
-      setError("Only DOC users can use this page.");
+      setError("Only DOC and Admin users can use this page.");
       return;
     }
     if (!district || !institution || !month || !year) {
-      setError("Select Institution, Month and Year.");
+      setError("Select District, Institution, Month and Year.");
       return;
     }
 
@@ -128,7 +150,27 @@ export default function SearchReports({ user, onOpen }) {
     <div className="max-w-3xl mx-auto bg-white p-4 rounded-xl shadow font-serif">
       <h2 className="text-xl font-bold text-[#134074] mb-4">Search Reports (DOC)</h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+        <div>
+          <label className="text-sm font-semibold">District</label>
+          <select
+            className={`w-full border rounded p-2 ${!isSuperUser && !user?.isGuest ? "bg-gray-100 cursor-not-allowed text-gray-700" : ""}`}
+            value={district}
+            onChange={(e) => handleDistrictChange(e.target.value)}
+            disabled={!isSuperUser && !user?.isGuest}
+          >
+            {user?.isGuest ? (
+              <option value={DEMO_DISTRICT}>{DEMO_DISTRICT}</option>
+            ) : isSuperUser ? (
+              districts.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))
+            ) : (
+              <option value={user?.district || "Kozhikode"}>{user?.district || "Kozhikode"}</option>
+            )}
+          </select>
+        </div>
+
         <div>
           <label className="text-sm font-semibold">Institution</label>
           <select

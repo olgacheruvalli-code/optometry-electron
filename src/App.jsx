@@ -10,7 +10,7 @@ import React, {
 } from "react";
 import API_BASE from "./apiBase";
 import sections from "./data/questions";
-import { districtInstitutions } from "./data/districtInstitutions";
+import { districts, districtInstitutions } from "./data/districtInstitutions";
 import "./index.css";
 
 import MonthYearSelector from "./components/MonthYearSelector";
@@ -1328,7 +1328,19 @@ const qDefs = useMemo(() => {
     return allQs;
   }, [qDefs]);
 
-  const selectedDistrict = user?.isGuest ? DEMO_DISTRICT : user?.district || "Kozhikode";
+  const isSuperUser = !!(
+    user?.isAdmin ||
+    user?.isSuperAdmin ||
+    user?.district === "All" ||
+    user?.district === "All Districts"
+  );
+  const [adminDistrict, setAdminDistrict] = useState("Kozhikode");
+
+  const selectedDistrict = user?.isGuest
+    ? DEMO_DISTRICT
+    : isSuperUser
+    ? adminDistrict
+    : user?.district || "Kozhikode";
 
   const institutionNamesMemo = useMemo(
     () => {
@@ -2087,6 +2099,20 @@ const qDefs = useMemo(() => {
           menu === "other-diseases" ||
           menu === "identified-cataract") && (
           <>
+            {isSuperUser && (
+              <div className="flex justify-center items-center gap-2 mb-3 no-print">
+                <span className="text-sm font-semibold text-[#134074]">Select District:</span>
+                <select
+                  className="border rounded px-3 py-1.5 text-sm bg-white font-medium shadow-sm"
+                  value={adminDistrict}
+                  onChange={(e) => setAdminDistrict(e.target.value)}
+                >
+                  {districts.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <MonthYearSelector
               month={month}
               year={year}

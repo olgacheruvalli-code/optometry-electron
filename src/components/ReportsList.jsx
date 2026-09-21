@@ -31,15 +31,18 @@ export default function ReportsList({
       return;
     }
 
+    const isAllDistricts = !filterDistrict || filterDistrict.toLowerCase() === "all" || filterDistrict.toLowerCase() === "all districts";
+    const isAllInstitutions = !filterInstitution || filterInstitution.toLowerCase() === "all" || filterInstitution.toLowerCase() === "all institutions";
+
     // Build server query (use only provided filters)
     const qs = new URLSearchParams(
       Object.fromEntries(
         [
           ["month", filterMonth || ""],
           ["year", filterYear || ""],
-          ["district", filterDistrict || ""],
+          ["district", isAllDistricts ? "" : filterDistrict],
           // NOTE: the API typically doesn’t filter by institution unless passed.
-          ["institution", filterInstitution || ""],
+          ["institution", isAllInstitutions ? "" : filterInstitution],
         ].filter(([, v]) => v !== "")
       )
     ).toString();
@@ -60,8 +63,8 @@ export default function ReportsList({
         // Defensive client-side filtering too (in case backend returns extra)
         if (filterMonth) list = list.filter((d) => eq(d.month, filterMonth));
         if (filterYear) list = list.filter((d) => String(d.year) === String(filterYear));
-        if (filterDistrict) list = list.filter((d) => eq(d.district, filterDistrict));
-        if (filterInstitution) list = list.filter((d) => eq(d.institution, filterInstitution));
+        if (!isAllDistricts && filterDistrict) list = list.filter((d) => eq(d.district, filterDistrict));
+        if (!isAllInstitutions && filterInstitution) list = list.filter((d) => eq(d.institution, filterInstitution));
 
         // Sort newest first
         list.sort(
