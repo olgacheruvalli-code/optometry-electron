@@ -31,8 +31,6 @@ async function warmUpBackend() {
   }
 }
 
-const ADMIN_EMAILS = ["cpc.amma@gmail.com", "admin@optometry.com", "developer@optometry.com", "admin", "developer"];
-
 export default function Login({ onLogin, onShowRegister }) {
   // Main form fields
   const [district, setDistrict] = useState(() => localStorage.getItem("opt_last_district") || "");
@@ -74,11 +72,6 @@ export default function Login({ onLogin, onShowRegister }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const isDevEmail = useMemo(() => {
-    const e = String(email || "").toLowerCase().trim();
-    return ADMIN_EMAILS.includes(e) || e.includes("developer") || e.includes("admin");
-  }, [email]);
-
   const institutionOptions = useMemo(() => {
     if (!district) return [];
     const base = Array.isArray(districtInstitutions[district])
@@ -119,17 +112,9 @@ export default function Login({ onLogin, onShowRegister }) {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // If it's the developer/admin email, district and institution are NOT required!
-    if (!isDevEmail) {
-      if (!district || !institution || !cleanEmail || !password) {
-        setError("Please select District, Institution, and enter Email ID & Password.");
-        return;
-      }
-    } else {
-      if (!password) {
-        setError("Please enter your password.");
-        return;
-      }
+    if (!district || !institution || !cleanEmail || !password) {
+      setError("Please select District, Institution, and enter Email ID & Password.");
+      return;
     }
 
     setError("");
@@ -144,7 +129,7 @@ export default function Login({ onLogin, onShowRegister }) {
         email: cleanEmail,
         password,
         username: institution.trim() || cleanEmail,
-        isAdminLogin: isDevEmail,
+        isAdminLogin: false,
       };
 
       console.log("Login → POST", `${API_BASE}/api/login`, payload);
@@ -247,9 +232,7 @@ export default function Login({ onLogin, onShowRegister }) {
   };
 
   const isSubmitDisabled =
-    isLoading ||
-    (!password) ||
-    (!isDevEmail && (!district || !institution || !email.trim()));
+    isLoading || !district || !institution || !email.trim() || !password;
 
   return (
     <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-b from-[#e9f1f8] to-[#f7fafc] font-serif p-4">
@@ -270,7 +253,7 @@ export default function Login({ onLogin, onShowRegister }) {
             {/* DISTRICT */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
-                District {!isDevEmail && "*"}
+                District *
               </label>
               <select
                 value={district}
@@ -293,7 +276,7 @@ export default function Login({ onLogin, onShowRegister }) {
             {/* INSTITUTION */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Institution {!isDevEmail && "*"}
+                Institution *
               </label>
               <select
                 value={institution}
@@ -301,7 +284,7 @@ export default function Login({ onLogin, onShowRegister }) {
                   setInstitution(e.target.value);
                   setError("");
                 }}
-                disabled={!district && !isDevEmail}
+                disabled={!district}
                 className="w-full px-3 py-2 text-sm rounded-lg bg-gray-50 border border-gray-200 text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
               >
                 <option value="">Select Institution</option>

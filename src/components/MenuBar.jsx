@@ -39,8 +39,12 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const isDevAccount =
+    String(user?.email || "").trim().toLowerCase() === "cpc.amma@gmail.com";
+  const canAccessApprovals = isSuperAdmin || isDevAccount;
+
   const menuItems = [
-    ...(isSuperAdmin
+    ...(canAccessApprovals
       ? [{ key: "admin-approvals", label: "👑 Approvals Portal" }]
       : []),
     { key: "entry", label: "Report Entry" },
