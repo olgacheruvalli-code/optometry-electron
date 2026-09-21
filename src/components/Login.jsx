@@ -273,9 +273,6 @@ export default function Login({ onLogin, onShowRegister }) {
               />
             </div>
             <div className="text-left">
-              <span className="text-[11px] font-bold text-amber-400 tracking-widest uppercase block">
-                Creator
-              </span>
               <span className="text-lg sm:text-xl font-extrabold text-white tracking-wide block">
                 Pradeep Innovations
               </span>
