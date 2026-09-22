@@ -164,10 +164,14 @@ export default function Login({ onLogin, onShowRegister }) {
       }
 
       if (!res.ok || !data.ok) {
-        const msg =
-          data?.error ||
-          raw ||
-          `HTTP ${res.status} ${res.statusText || ""}`.trim();
+        let msg = data?.error;
+        if (!msg) {
+          if (raw && !raw.trim().startsWith("<")) {
+            msg = raw;
+          } else {
+            msg = `Server temporarily unavailable (${res.status}). Please try again shortly.`;
+          }
+        }
         throw new Error(msg);
       }
 
