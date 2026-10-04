@@ -36,6 +36,16 @@ import TestVisionCenter from "./components/TestVisionCenter";
 import RegistersManager from "./components/Registers/RegistersManager";
 import { DEMO_DISTRICT, DEMO_INSTITUTION, DEMO_INSTITUTIONS, createDemoReport, getDemoDistrictData } from "./data/demoData";
 
+// 📱 Canara Bank ai1 Pure Mobile App Shell & PWA Components
+import CanaraAi1MobileHeader from "./components/CanaraAi1MobileHeader";
+import CanaraAi1BottomNav from "./components/CanaraAi1BottomNav";
+import CanaraAi1Dashboard from "./components/CanaraAi1Dashboard";
+import CanaraAi1SpecialModal from "./components/CanaraAi1SpecialModal";
+import CanaraAi1ProfileModal from "./components/CanaraAi1ProfileModal";
+import CanaraAi1MobileSubHeader from "./components/CanaraAi1MobileSubHeader";
+import usePWAInstall from "./utils/usePWAInstall";
+import IOSInstallGuideModal from "./components/IOSInstallGuideModal";
+
 // Wake up Render backend when app starts
 fetch("https://optometry-backend-iiuk.onrender.com/api/ping").catch(() => {});
 
@@ -58,6 +68,55 @@ const MONTHS = [
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
+
+function getMobileViewTitle(menuKey) {
+  switch (menuKey) {
+    case "entry":
+      return "Monthly Report Entry";
+    case "view":
+      return "View / Export Reports";
+    case "edit":
+      return "Edit Submitted Report";
+    case "search":
+      return "Search Reports";
+    case "print":
+      return "Print Preview";
+    case "district-institutions":
+      return "Institution-wise Analysis";
+    case "district-tables":
+      return "Eye Bank & Vision Center";
+    case "performance-cataract":
+      return "Cataract Surgery Performance";
+    case "op-eye-diseases":
+      return "OP & Eye Diseases";
+    case "seh-spectacles-eyebank":
+      return "SEHP & Spectacles";
+    case "other-diseases":
+      return "Other Eye Diseases";
+    case "identified-cataract":
+      return "Cataract Cases Identified";
+    case "test-vc":
+      return "Test Vision Center Table";
+    case "register-blind":
+      return "Blind Register";
+    case "register-cataract":
+      return "Cataract Backlog Register";
+    case "register-old-aged":
+      return "Old Aged Spectacles Register";
+    case "register-school":
+      return "School Children Spectacles";
+    case "research-amblyopia-entry":
+      return "Amblyopia – Patient Entry";
+    case "research-amblyopia-view":
+      return "Amblyopia – View Records";
+    case "research-amblyopia-analytics":
+      return "Amblyopia – Analytics Dashboard";
+    case "admin-approvals":
+      return "Approvals Portal";
+    default:
+      return "Optometry MIS";
+  }
+}
 
 /** Return an array of question defs from a block that might use `questions` or `rows`. */
 const getQs = (blk) => {
@@ -1225,6 +1284,33 @@ function App() {
   const [showRegister, setShowRegister] = useState(false);
   const [showVideo, setShowVideo] = useState(true);
 
+  // Responsive mobile detection (Pure mobile app mode)
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 768 : false
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Canara ai1 mobile sheet states
+  const [isSpecialOpen, setIsSpecialOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  // 📲 PWA Installation Hook for pure mobile app experience
+  const { isInstalled, canInstall, showIOSGuide, setShowIOSGuide, installApp } =
+    usePWAInstall();
+
+  const currentMonthName = useMemo(() => {
+    const d = new Date();
+    return d.toLocaleString("en-US", { month: "long" });
+  }, []);
+  const currentFullYear = useMemo(() => new Date().getFullYear(), []);
+
   const [currentReport, setCurrent] = useState(null);
 
   const [answers, setAnswers] = useState({});
@@ -1939,6 +2025,8 @@ const qDefs = useMemo(() => {
               loggedInUser?.district === "All");
           if (isGlobalAdmin) {
             setMenu("admin-approvals");
+          } else if (isMobile) {
+            setMenu("home");
           } else {
             setMenu("entry");
           }
@@ -1975,8 +2063,13 @@ const qDefs = useMemo(() => {
   window.DEBUG_MENU = menu;
 
   return (
-    <div className="min-h-screen bg-gray-100 pt-[80px]">
-      <div className="no-print">
+    <div
+      className={`min-h-screen ${
+        isMobile ? "bg-[#070b14] text-slate-100" : "bg-gray-100 pt-[80px]"
+      }`}
+    >
+      {/* 🖥️ DESKTOP NAVBAR: Keep desktop design 100% as it is */}
+      <div className="no-print hidden md:block">
         <MenuBar
           user={user}
           userRole={userRole}
@@ -1993,14 +2086,73 @@ const qDefs = useMemo(() => {
         />
       </div>
 
+      {/* 📱 MOBILE CANARA AI1 APP BAR */}
+      <div className="no-print md:hidden">
+        <CanaraAi1MobileHeader
+          user={user}
+          userRole={userRole}
+          onLogout={() => {
+            setUser(null);
+            setMenu("");
+            setCurrent(null);
+          }}
+          onInstallClick={installApp}
+          canInstall={canInstall}
+          isInstalled={isInstalled}
+        />
+      </div>
+
       {user?.isGuest && (
         <div className="bg-amber-950/40 border-b border-amber-500/20 text-amber-200 text-center py-2 px-4 text-xs font-semibold tracking-wide flex items-center justify-center gap-2">
           <span>🕶️</span>
-          <span><b>Guest Demo Mode</b>: Viewing sample simulated data. No real patient or institution data is accessible, and saving is disabled.</span>
+          <span>
+            <b>Guest Demo Mode</b>: Viewing sample simulated data. No real
+            patient or institution data is accessible, and saving is disabled.
+          </span>
         </div>
       )}
 
-      <div className="p-4 font-serif text-[12pt]">
+      {/* 📱 MOBILE CANARA AI1 HOME / DASHBOARD */}
+      {isMobile && (menu === "home" || !menu) && (
+        <CanaraAi1Dashboard
+          user={user}
+          userRole={userRole}
+          month={month || currentMonthName}
+          setMonth={setMonth}
+          year={year || currentFullYear}
+          setYear={setYear}
+          monthsList={MONTHS}
+          onMenu={(key) => {
+            setMenu(key);
+            if (!key.startsWith("view")) setCurrent(null);
+          }}
+          onInstallClick={installApp}
+          canInstall={canInstall}
+          isInstalled={isInstalled}
+        />
+      )}
+
+      {/* 📱 MOBILE SUB-VIEW HEADER (with Back to Dashboard) */}
+      {isMobile && menu !== "home" && menu !== "" && (
+        <div className="no-print md:hidden pt-[54px]">
+          <CanaraAi1MobileSubHeader
+            title={getMobileViewTitle(menu)}
+            month={month || currentMonthName}
+            year={year || currentFullYear}
+            onBackToHome={() => setMenu("home")}
+          />
+        </div>
+      )}
+
+      <div
+        className={`font-serif text-[12pt] ${
+          isMobile
+            ? menu === "home" || !menu
+              ? "hidden"
+              : "p-3 pb-24 bg-white text-gray-900 rounded-2xl max-w-lg mx-auto shadow-xl overflow-x-auto my-3"
+            : "p-4"
+        }`}
+      >
         {/* Admin Approvals Portal */}
         {menu === "admin-approvals" && (
           <AdminApprovals user={user} onClose={() => setMenu("entry")} />
@@ -2321,12 +2473,55 @@ const qDefs = useMemo(() => {
         )}
 
         {/* Default home message */}
-        {menu === "" && (
+        {menu === "" && !isMobile && (
           <div className="text-center text-gray-500 mt-10 text-lg italic">
             🔹 Please select a menu option to begin.
           </div>
         )}
       </div>
+
+      {/* 📱 MOBILE BOTTOM NAVIGATION (Canara ai1 Signature) */}
+      <div className="no-print md:hidden">
+        <CanaraAi1BottomNav
+          activeMenu={menu}
+          onMenu={(key) => {
+            setMenu(key);
+            if (!key.startsWith("view")) setCurrent(null);
+          }}
+          onOpenSpecial={() => setIsSpecialOpen(true)}
+          onOpenProfile={() => setIsProfileOpen(true)}
+        />
+      </div>
+
+      {/* 📱 MOBILE CANARA AI1 MODALS */}
+      <CanaraAi1SpecialModal
+        isOpen={isSpecialOpen}
+        onClose={() => setIsSpecialOpen(false)}
+        onSelectMenu={(key) => {
+          setMenu(key);
+          if (!key.startsWith("view")) setCurrent(null);
+        }}
+      />
+
+      <CanaraAi1ProfileModal
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        user={user}
+        userRole={userRole}
+        onLogout={() => {
+          setUser(null);
+          setMenu("");
+          setCurrent(null);
+        }}
+        onInstallClick={installApp}
+        canInstall={canInstall}
+        isInstalled={isInstalled}
+      />
+
+      <IOSInstallGuideModal
+        isOpen={showIOSGuide}
+        onClose={() => setShowIOSGuide(false)}
+      />
     </div>
   );
 }

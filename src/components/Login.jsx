@@ -4,6 +4,9 @@ import { districtInstitutions } from "../data/districtInstitutions";
 import crystalImg from "../assets/crystal_transparent.png";
 import pradeepProfileImg from "../assets/pradeep_profile.jpg";
 import ForgotPasswordModal from "./ForgotPasswordModal";
+import { Download } from "lucide-react";
+import usePWAInstall from "../utils/usePWAInstall";
+import IOSInstallGuideModal from "./IOSInstallGuideModal";
 
 // ⚡ Universal fetch with timeout
 async function fetchWithTimeout(url, options = {}, timeout = 20000) {
@@ -50,6 +53,10 @@ export default function Login({ onLogin, onShowRegister }) {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+
+  // 📲 PWA Installation Hook for pure mobile app experience
+  const { isInstalled, canInstall, showIOSGuide, setShowIOSGuide, installApp } =
+    usePWAInstall();
 
   // Hidden Secret Admin Modal state
   const [isSecretAdminOpen, setIsSecretAdminOpen] = useState(false);
@@ -255,11 +262,33 @@ export default function Login({ onLogin, onShowRegister }) {
     isLoading || !district || !institution || !email.trim() || !password;
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-slate-100 flex items-center justify-center font-sans p-4 sm:p-6 lg:p-12 relative overflow-hidden">
+    <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col items-center justify-center font-sans p-4 sm:p-6 lg:p-12 relative overflow-hidden">
       {/* Ambient atmospheric glows (Wynpro style) */}
       <div className="absolute top-0 right-0 w-[550px] h-[550px] bg-amber-500/[0.08] rounded-full blur-[110px] pointer-events-none"></div>
       <div className="absolute -bottom-24 -left-24 w-[500px] h-[500px] bg-sky-500/[0.06] rounded-full blur-[100px] pointer-events-none"></div>
       <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-20 pointer-events-none"></div>
+
+      {/* 📲 Canara ai1 Mobile PWA Install Banner */}
+      {canInstall && !isInstalled && (
+        <div className="w-full max-w-md mx-auto mb-4 p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-500/20 border border-amber-400/40 flex items-center justify-between gap-3 text-left shadow-lg relative z-20 animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center text-slate-950 font-bold flex-shrink-0 shadow">
+              <Download className="w-4 h-4 animate-bounce" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-white">Install Optometry App</div>
+              <div className="text-[10px] text-amber-200">Pure mobile app experience</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={installApp}
+            className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs rounded-xl shadow active:scale-95 transition flex-shrink-0"
+          >
+            Install
+          </button>
+        </div>
+      )}
 
       <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-center relative z-10">
         
@@ -656,6 +685,12 @@ export default function Login({ onLogin, onShowRegister }) {
           </div>
         </div>
       )}
+
+      {/* IOS INSTALL GUIDE MODAL */}
+      <IOSInstallGuideModal
+        isOpen={showIOSGuide}
+        onClose={() => setShowIOSGuide(false)}
+      />
     </div>
   );
 }
