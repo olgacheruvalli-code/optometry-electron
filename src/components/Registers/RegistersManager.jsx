@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import * as XLSX from "xlsx";
 import API_BASE from "../../apiBase";
-import { Plus, Table, Download, Search, X, Check } from "lucide-react";
-import { districtInstitutions } from "../../data/districtInstitutions";
+import { Plus, Table, Download, Search, X, Check, ShieldCheck } from "lucide-react";
+import { districts, districtInstitutions } from "../../data/districtInstitutions";
 
 const buildRange = (start, end, step, precision = 2) => {
   const arr = [];
@@ -222,30 +222,71 @@ export default function RegistersManager({ user, activeRegister }) {
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
 
-  // DOC role detection and institution filtering
+  // DOC & Admin role detection and institution/district filtering
   const instStr = String(user?.institution || "").trim().toLowerCase();
   const roleStr = String(user?.role || "").trim().toLowerCase();
+  const isSuperAdmin = !!(
+    user?.isAdmin ||
+    user?.isSuperAdmin ||
+    user?.role === "ADMIN" ||
+    roleStr === "admin" ||
+    String(user?.email || "").toLowerCase() === "cpc.amma@gmail.com"
+  );
+
   const userRole =
-    user?.isDoc ||
-    roleStr === "doc" ||
-    roleStr === "dc" ||
-    /^doc/i.test(instStr) ||
-    /^dc/i.test(instStr) ||
-    /^doc/i.test(user?.username || "") ||
-    /^dc/i.test(user?.username || "") ||
-    user?.role === "DOC"
+    isSuperAdmin
+      ? "ADMIN"
+      : user?.isDoc ||
+        roleStr === "doc" ||
+        roleStr === "dc" ||
+        /^doc/i.test(instStr) ||
+        /^dc/i.test(instStr) ||
+        /^doc/i.test(user?.username || "") ||
+        /^dc/i.test(user?.username || "") ||
+        user?.role === "DOC"
       ? "DOC"
       : user?.role || "USER";
 
   const showActions = userRole !== "DOC" && !user?.isGuest;
 
+  const [selectedDistrictFilter, setSelectedDistrictFilter] = useState(
+    isSuperAdmin
+      ? user?.district && user?.district !== "All"
+        ? user?.district
+        : "all"
+      : user?.isGuest
+      ? "Kozhikode"
+      : user?.district || "all"
+  );
+
   const [selectedInstitutionFilter, setSelectedInstitutionFilter] = useState("all");
 
   const instList = useMemo(() => {
-    const district = user?.isGuest ? "Kozhikode" : user?.district || "";
-    const arr = Array.isArray(districtInstitutions[district]) ? districtInstitutions[district] : [];
+    const targetDistrict = isSuperAdmin
+      ? selectedDistrictFilter !== "all"
+        ? selectedDistrictFilter
+        : null
+      : user?.isGuest
+      ? "Kozhikode"
+      : user?.district || "";
+
+    if (!targetDistrict) {
+      const all = [];
+      Object.keys(districtInstitutions).forEach((d) => {
+        (districtInstitutions[d] || []).forEach((inst) => {
+          if (inst && !/^doc/i.test(inst) && !all.includes(inst)) {
+            all.push(inst);
+          }
+        });
+      });
+      return all.sort();
+    }
+
+    const arr = Array.isArray(districtInstitutions[targetDistrict])
+      ? districtInstitutions[targetDistrict]
+      : [];
     return arr.filter((n) => n && !/^doc/i.test(n) && !/^dc/i.test(n));
-  }, [user?.district, user?.isGuest]);
+  }, [isSuperAdmin, selectedDistrictFilter, user?.district, user?.isGuest]);
 
   // Form State
   const initialFormState = {
@@ -321,9 +362,13 @@ export default function RegistersManager({ user, activeRegister }) {
   const fetchRecords = async () => {
     setLoading(true);
     try {
-      const dist = user?.isGuest ? "Kozhikode" : user?.district || "";
+      const dist = isSuperAdmin
+        ? selectedDistrictFilter
+        : user?.isGuest
+        ? "Kozhikode"
+        : user?.district || "";
       let q = `district=${encodeURIComponent(dist)}`;
-      if (userRole === "DOC" || user?.isGuest) {
+      if (isSuperAdmin || userRole === "DOC" || user?.isGuest) {
         if (selectedInstitutionFilter && selectedInstitutionFilter !== "all") {
           q += `&institution=${encodeURIComponent(selectedInstitutionFilter)}`;
         }
@@ -346,10 +391,8 @@ export default function RegistersManager({ user, activeRegister }) {
   };
 
   useEffect(() => {
-    if (user?.district) {
-      fetchRecords();
-    }
-  }, [activeTab, user, selectedInstitutionFilter]);
+    fetchRecords();
+  }, [activeTab, user, selectedDistrictFilter, selectedInstitutionFilter]);
 
   // Handle Form Change
   const handleChange = (e) => {
@@ -857,8 +900,8 @@ export default function RegistersManager({ user, activeRegister }) {
             Optometry Registers
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            District: <span className="font-semibold text-[#016eaa]">{user?.district}</span> &nbsp;|&nbsp; 
-            Institution: <span className="font-semibold text-[#016eaa]">{user?.institution}</span>
+            District: <span className="font-semibold text-[#016eaa]">{isSuperAdmin ? (selectedDistrictFilter === "all" ? "All Districts" : selectedDistrictFilter) : user?.district}</span> &nbsp;|&nbsp; 
+            Institution: <span className="font-semibold text-[#016eaa]">{isSuperAdmin ? (selectedInstitutionFilter === "all" ? "All Institutions" : selectedInstitutionFilter) : user?.institution}</span>
           </p>
         </div>
 
@@ -1017,9 +1060,32 @@ export default function RegistersManager({ user, activeRegister }) {
               />
             </div>
 
-            {/* Period Filter Selector & Institution Selector (for DOC) */}
+            {/* Period Filter Selector & Institution/District Selector (for Super Admin & DOC) */}
             <div className="flex flex-wrap items-center gap-4">
-              {userRole === "DOC" && (
+              {isSuperAdmin && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-purple-700 uppercase tracking-wide flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5" /> District:
+                  </span>
+                  <select
+                    value={selectedDistrictFilter}
+                    onChange={(e) => {
+                      setSelectedDistrictFilter(e.target.value);
+                      setSelectedInstitutionFilter("all");
+                    }}
+                    className="px-3 py-1.5 border border-purple-300 rounded-lg text-xs bg-purple-50 text-purple-900 focus:outline-none focus:border-purple-600 font-bold cursor-pointer"
+                  >
+                    <option value="all">All Districts (Kerala)</option>
+                    {districts.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {(isSuperAdmin || userRole === "DOC") && (
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Institution:</span>
                   <select

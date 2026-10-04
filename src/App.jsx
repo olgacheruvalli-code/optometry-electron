@@ -34,6 +34,7 @@ import AmblyopiaView from "./components/Amblyopia/AmblyopiaView";
 import AmblyopiaAnalytics from "./components/Amblyopia/AmblyopiaAnalytics";
 import TestVisionCenter from "./components/TestVisionCenter";
 import RegistersManager from "./components/Registers/RegistersManager";
+import SpecsSupplierOrders from "./components/SpecsSupplierOrders";
 import { DEMO_DISTRICT, DEMO_INSTITUTION, DEMO_INSTITUTIONS, createDemoReport, getDemoDistrictData } from "./data/demoData";
 
 // 📱 Canara Bank ai1 Pure Mobile App Shell & PWA Components
@@ -2463,6 +2464,20 @@ const qDefs = useMemo(() => {
 
         {/* Vision Center test */}
         {menu === "test-vc" && <TestVisionCenter />}
+
+        {/* Spectacles Supplier Orders (District Report) */}
+        {menu === "district-specs-old-aged" && (
+          <SpecsSupplierOrders
+            user={user}
+            initialTab="old-aged-spectacles"
+          />
+        )}
+        {menu === "district-specs-school" && (
+          <SpecsSupplierOrders
+            user={user}
+            initialTab="school-spectacles"
+          />
+        )}
 
         {/* PWA Registers Data Entry */}
         {menu && menu.startsWith("register-") && (

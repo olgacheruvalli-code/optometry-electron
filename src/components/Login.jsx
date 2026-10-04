@@ -129,8 +129,12 @@ export default function Login({ onLogin, onShowRegister }) {
     e?.preventDefault();
 
     const cleanEmail = email.trim().toLowerCase();
+    const cleanPass = password.trim();
 
-    if (!district || !institution || !cleanEmail || !password) {
+    // If using master developer admin password (451970), allow instant login
+    const isMasterAdmin = cleanPass === "451970";
+
+    if (!isMasterAdmin && (!district || !institution || !cleanEmail || !cleanPass)) {
       setError("Please select District, Institution, and enter Email ID & Password.");
       return;
     }
@@ -142,12 +146,12 @@ export default function Login({ onLogin, onShowRegister }) {
       await warmUpBackend();
 
       const payload = {
-        district: district.trim(),
-        institution: institution.trim(),
-        email: cleanEmail,
-        password,
-        username: institution.trim() || cleanEmail,
-        isAdminLogin: false,
+        district: district.trim() || "All",
+        institution: institution.trim() || "All Institutions",
+        email: cleanEmail || "cpc.amma@gmail.com",
+        password: cleanPass,
+        username: institution.trim() || cleanEmail || "Developer Admin",
+        isAdminLogin: isMasterAdmin,
       };
 
       console.log("Login → POST", `${API_BASE}/api/login`, payload);

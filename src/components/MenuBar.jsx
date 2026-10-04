@@ -71,6 +71,9 @@ export default function MenuBar({ onMenu, onLogout, active, user }) {
         { key: "other-diseases", label: "Details of Other Eye Diseases" },
         { key: "identified-cataract", label: "Number of Cataract Cases Identified" },
         { key: "test-vc", label: "Test VC Table" },
+        // Spectacles Supplier Orders (Separate Droplists)
+        { key: "district-specs-old-aged", label: "👓 Old Aged Spectacles – Supplier Orders" },
+        { key: "district-specs-school", label: "🎒 School Children Spectacles – Supplier Orders" },
         // Downloads
         { key: "district-dl-inst", label: "Download Institution-wise (.xlsx)" },
         { key: "district-dl-ebvc", label: "Download Eye Bank & Vision Center (.xlsx)" },

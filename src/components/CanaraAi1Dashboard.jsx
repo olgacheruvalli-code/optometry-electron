@@ -13,6 +13,7 @@ import {
   Download,
   Sparkles,
   ArrowRight,
+  FileSpreadsheet,
 } from "lucide-react";
 
 export default function CanaraAi1Dashboard({
@@ -116,6 +117,30 @@ export default function CanaraAi1Dashboard({
       border: "border-yellow-500/30",
       action: () => onMenu("register-blind"),
     },
+    ...(isSuperAdmin || user?.isDoc || String(userRole || "").toLowerCase() === "doc"
+      ? [
+          {
+            id: "specs-old-aged-supplier",
+            title: "Old Aged Specs Orders",
+            subtitle: "Supplier Orders & Excel",
+            icon: FileSpreadsheet,
+            gradient: "from-blue-600 to-indigo-700",
+            accent: "text-blue-300",
+            border: "border-blue-500/30",
+            action: () => onMenu("district-specs-old-aged"),
+          },
+          {
+            id: "specs-school-supplier",
+            title: "School Specs Orders",
+            subtitle: "Supplier Orders & Excel",
+            icon: FileSpreadsheet,
+            gradient: "from-teal-600 to-emerald-700",
+            accent: "text-emerald-300",
+            border: "border-teal-500/30",
+            action: () => onMenu("district-specs-school"),
+          },
+        ]
+      : []),
     ...(isSuperAdmin
       ? [
           {
