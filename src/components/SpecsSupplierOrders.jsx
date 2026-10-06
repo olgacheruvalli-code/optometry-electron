@@ -108,29 +108,28 @@ export default function SpecsSupplierOrders({ user, initialTab = "old-aged-spect
     try {
       const params = new URLSearchParams();
 
-      if (selectedDistrict && selectedDistrict !== "All") {
+      // Only send district filter if a specific district is chosen (NOT "All")
+      if (
+        selectedDistrict &&
+        selectedDistrict !== "All" &&
+        selectedDistrict !== "all" &&
+        selectedDistrict !== "All Districts"
+      ) {
         params.append("district", selectedDistrict);
-      } else {
-        params.append("district", "all");
       }
 
-      if (selectedInstitution && selectedInstitution !== "All") {
+      // Only send institution filter if a specific institution is chosen (NOT "All")
+      if (
+        selectedInstitution &&
+        selectedInstitution !== "All" &&
+        selectedInstitution !== "all" &&
+        selectedInstitution !== "All Institutions"
+      ) {
         params.append("institution", selectedInstitution);
-      } else {
-        params.append("institution", "all");
       }
 
-      if (exportStatusFilter && exportStatusFilter !== "All") {
-        params.append("supplierExportStatus", exportStatusFilter);
-      } else {
-        params.append("supplierExportStatus", "all");
-      }
-
-      if (exportStatusFilter === "Exported" && selectedBatchId && selectedBatchId !== "All") {
-        params.append("batchId", selectedBatchId);
-      }
-
-      const res = await fetch(`${API_BASE}/api/${activeTab}?${params.toString()}`);
+      const queryString = params.toString() ? `?${params.toString()}` : "";
+      const res = await fetch(`${API_BASE}/api/${activeTab}${queryString}`);
       const data = await res.json();
       if (res.ok && data.ok) {
         setRecords(data.docs || []);
@@ -148,7 +147,7 @@ export default function SpecsSupplierOrders({ user, initialTab = "old-aged-spect
 
   useEffect(() => {
     fetchRecords();
-  }, [activeTab, selectedDistrict, selectedInstitution, exportStatusFilter, selectedBatchId]);
+  }, [activeTab, selectedDistrict, selectedInstitution]);
 
   // Extract distinct batches from loaded records
   const existingBatches = useMemo(() => {
@@ -159,9 +158,26 @@ export default function SpecsSupplierOrders({ user, initialTab = "old-aged-spect
     return Array.from(batches);
   }, [records]);
 
-  // Filter records by search query
+  // Filter records by export status, batch, and search query
   const filteredRecords = useMemo(() => {
     let list = records;
+
+    // Filter by export status
+    if (exportStatusFilter === "Pending") {
+      list = list.filter(
+        (r) =>
+          !r.supplierExportStatus ||
+          r.supplierExportStatus === "Pending" ||
+          r.supplierExportStatus === ""
+      );
+    } else if (exportStatusFilter === "Exported") {
+      list = list.filter((r) => r.supplierExportStatus === "Exported");
+      if (selectedBatchId && selectedBatchId !== "All") {
+        list = list.filter((r) => r.supplierBatchId === selectedBatchId);
+      }
+    }
+
+    // Filter by search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter((r) => {
@@ -182,7 +198,7 @@ export default function SpecsSupplierOrders({ user, initialTab = "old-aged-spect
       });
     }
     return list;
-  }, [records, searchQuery]);
+  }, [records, exportStatusFilter, selectedBatchId, searchQuery]);
 
   // Group records by institution
   const groupedByInstitution = useMemo(() => {

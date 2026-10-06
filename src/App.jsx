@@ -1518,10 +1518,18 @@ const qDefs = useMemo(() => {
           menu === "other-diseases" ||
           menu === "identified-cataract";
 
+        const distQueryParam =
+          selectedDistrict &&
+          selectedDistrict.toLowerCase() !== "all" &&
+          selectedDistrict.toLowerCase() !== "all districts"
+            ? `district=${encodeURIComponent(selectedDistrict)}`
+            : "";
+        const distPrefix = distQueryParam ? `?${distQueryParam}` : "";
+
         // Query only the required months of the fiscal window in parallel
         const reportFetches = fiscalPairs.map((p) =>
           fetchList(
-            `${API_BASE}/api/reports?district=${encodeURIComponent(selectedDistrict)}&month=${encodeURIComponent(p.month)}&year=${encodeURIComponent(p.year)}`
+            `${API_BASE}/api/reports?${distQueryParam ? `${distQueryParam}&` : ""}month=${encodeURIComponent(p.month)}&year=${encodeURIComponent(p.year)}`
           )
         );
 
@@ -1531,10 +1539,10 @@ const qDefs = useMemo(() => {
 
         if (isRegisterSubmenu) {
           fetches.push(
-            fetchList(`${API_BASE}/api/blind-register?district=${encodeURIComponent(selectedDistrict)}`),
-            fetchList(`${API_BASE}/api/cataract-backlog?district=${encodeURIComponent(selectedDistrict)}`),
-            fetchList(`${API_BASE}/api/old-aged-spectacles?district=${encodeURIComponent(selectedDistrict)}`),
-            fetchList(`${API_BASE}/api/school-spectacles?district=${encodeURIComponent(selectedDistrict)}`)
+            fetchList(`${API_BASE}/api/blind-register${distPrefix}`),
+            fetchList(`${API_BASE}/api/cataract-backlog${distPrefix}`),
+            fetchList(`${API_BASE}/api/old-aged-spectacles${distPrefix}`),
+            fetchList(`${API_BASE}/api/school-spectacles${distPrefix}`)
           );
         }
 

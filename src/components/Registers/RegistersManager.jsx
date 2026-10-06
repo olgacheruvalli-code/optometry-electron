@@ -367,15 +367,33 @@ export default function RegistersManager({ user, activeRegister }) {
         : user?.isGuest
         ? "Kozhikode"
         : user?.district || "";
-      let q = `district=${encodeURIComponent(dist)}`;
-      if (isSuperAdmin || userRole === "DOC" || user?.isGuest) {
-        if (selectedInstitutionFilter && selectedInstitutionFilter !== "all") {
-          q += `&institution=${encodeURIComponent(selectedInstitutionFilter)}`;
-        }
-      } else {
-        q += `&institution=${encodeURIComponent(user?.institution || "")}`;
+
+      const params = new URLSearchParams();
+      if (
+        dist &&
+        dist.toLowerCase() !== "all" &&
+        dist.toLowerCase() !== "all districts"
+      ) {
+        params.append("district", dist);
       }
-      const res = await fetch(`${API_BASE}/api/${activeTab}?${q}`);
+
+      if (isSuperAdmin || userRole === "DOC" || user?.isGuest) {
+        if (
+          selectedInstitutionFilter &&
+          selectedInstitutionFilter.toLowerCase() !== "all" &&
+          selectedInstitutionFilter.toLowerCase() !== "all institutions"
+        ) {
+          params.append("institution", selectedInstitutionFilter);
+        }
+      } else if (
+        user?.institution &&
+        user?.institution.toLowerCase() !== "all institutions"
+      ) {
+        params.append("institution", user?.institution);
+      }
+
+      const q = params.toString() ? `?${params.toString()}` : "";
+      const res = await fetch(`${API_BASE}/api/${activeTab}${q}`);
       const data = await res.json();
       if (res.ok && data.ok) {
         setRecords(data.docs || []);

@@ -110,18 +110,18 @@ export default function Login({ onLogin, onShowRegister }) {
     return out;
   }, [district]);
 
-  // Secret Header Click: Clicking "Optometry" 3 times in 2 seconds triggers secret admin popup
+  // Secret Header Click: Double clicking/tapping "Optometry" triggers secret admin popup
   const handleHeaderClick = () => {
     clickCountRef.current += 1;
     if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
 
-    if (clickCountRef.current >= 3) {
+    if (clickCountRef.current >= 2) {
       clickCountRef.current = 0;
       setIsSecretAdminOpen(true);
     } else {
       clickTimerRef.current = setTimeout(() => {
         clickCountRef.current = 0;
-      }, 2000);
+      }, 1500);
     }
   };
 
@@ -131,10 +131,7 @@ export default function Login({ onLogin, onShowRegister }) {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPass = password.trim();
 
-    // If using master developer admin password (451970), allow instant login
-    const isMasterAdmin = cleanPass === "451970";
-
-    if (!isMasterAdmin && (!district || !institution || !cleanEmail || !cleanPass)) {
+    if (!district || !institution || !cleanEmail || !cleanPass) {
       setError("Please select District, Institution, and enter Email ID & Password.");
       return;
     }
@@ -146,12 +143,12 @@ export default function Login({ onLogin, onShowRegister }) {
       await warmUpBackend();
 
       const payload = {
-        district: district.trim() || "All",
-        institution: institution.trim() || "All Institutions",
-        email: cleanEmail || "cpc.amma@gmail.com",
+        district: district.trim(),
+        institution: institution.trim(),
+        email: cleanEmail,
         password: cleanPass,
-        username: institution.trim() || cleanEmail || "Developer Admin",
-        isAdminLogin: isMasterAdmin,
+        username: institution.trim() || cleanEmail,
+        isAdminLogin: false,
       };
 
       console.log("Login → POST", `${API_BASE}/api/login`, payload);
@@ -355,7 +352,12 @@ export default function Login({ onLogin, onShowRegister }) {
             {/* Card Header */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-slate-800 to-slate-700 border border-slate-600/50 flex items-center justify-center shadow-inner">
+                <div
+                  onClick={handleHeaderClick}
+                  onDoubleClick={() => setIsSecretAdminOpen(true)}
+                  className="w-10 h-10 rounded-xl bg-gradient-to-tr from-slate-800 to-slate-700 border border-slate-600/50 flex items-center justify-center shadow-inner cursor-pointer"
+                  title="Double click for developer login"
+                >
                   <svg
                     className="w-5 h-5 text-amber-400"
                     fill="none"
@@ -377,7 +379,8 @@ export default function Login({ onLogin, onShowRegister }) {
                 </div>
                 <span
                   onClick={handleHeaderClick}
-                  title="Optometry Reporting"
+                  onDoubleClick={() => setIsSecretAdminOpen(true)}
+                  title="Double click for developer login"
                   className="text-2xl font-bold tracking-tight text-white cursor-pointer select-none hover:text-amber-200 transition"
                 >
                   Optometry

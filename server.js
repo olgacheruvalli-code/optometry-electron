@@ -460,32 +460,32 @@ app.post("/api/login", async (req, res) => {
     const cleanDistrict = sanitize(district || "");
     const cleanInst = sanitize(institution || "");
 
-    // 1️⃣ DEVELOPER / SUPER ADMIN LOGIN (Instant access with admin password 451970 or explicit admin mode)
-    const isMasterAdminPass = cleanPass === ADMIN_PASS || cleanPass === "451970";
-    if (isMasterAdminPass) {
-      return res.json({
-        ok: true,
-        user: {
-          id: "admin-dev-01",
-          username: "Developer Admin",
-          name: "Developer Admin",
-          email: cleanEmail || "cpc.amma@gmail.com",
-          district: cleanDistrict && cleanDistrict.toLowerCase() !== "all" ? cleanDistrict : "All",
-          institution: cleanInst && cleanInst.toLowerCase() !== "all institutions" ? cleanInst : "All Institutions",
-          role: "ADMIN",
-          isAdmin: true,
-          isSuperAdmin: true,
-          isDoc: true,
-          isGuest: false,
-        },
-      });
-    }
-
+    // 1️⃣ DEVELOPER / SUPER ADMIN LOGIN (STRICT: ONLY via Secret Admin Modal when isAdminLogin is true)
     if (isAdminLogin) {
-      return res.status(401).json({
-        ok: false,
-        error: "Incorrect Admin / Developer password.",
-      });
+      const isAuthorized = cleanPass === "451970" || cleanPass === ADMIN_PASS;
+      if (isAuthorized) {
+        return res.json({
+          ok: true,
+          user: {
+            id: "admin-dev-01",
+            username: "Developer Admin",
+            name: "Developer Admin",
+            email: "cpc.amma@gmail.com",
+            district: "All",
+            institution: "All Institutions",
+            role: "ADMIN",
+            isAdmin: true,
+            isSuperAdmin: true,
+            isDoc: true,
+            isGuest: false,
+          },
+        });
+      } else {
+        return res.status(401).json({
+          ok: false,
+          error: "Incorrect Developer / Admin password.",
+        });
+      }
     }
 
     // 2️⃣ REGULAR OPTOMETRIST / DOC LOGIN
@@ -509,26 +509,7 @@ app.post("/api/login", async (req, res) => {
     const user = await User.findOne({ email: cleanEmail });
 
     if (!user) {
-      // 1) Fallback for Developer Email with developer password
-      if (isDev && (cleanPass === ADMIN_PASS || cleanPass === "451970")) {
-        return res.json({
-          ok: true,
-          user: {
-            username: "Developer Admin",
-            name: "Developer Admin",
-            email: cleanEmail,
-            district: cleanDistrict || "All",
-            institution: cleanInst || "All Institutions",
-            role: "ADMIN",
-            isAdmin: true,
-            isSuperAdmin: true,
-            isDoc: true,
-            isGuest: false,
-          },
-        });
-      }
-
-      // 2) Legacy fallback for DOC user with common password 123 if not yet registered in DB
+      // 1) Legacy fallback for DOC user with common password 123 if not yet registered in DB
       const isDocInst =
         cleanInst.toUpperCase().startsWith("DOC ") || cleanEmail.startsWith("doc");
       if (isDocInst && cleanPass === "123") {
@@ -554,11 +535,10 @@ app.post("/api/login", async (req, res) => {
       });
     }
 
-    // Verify Password (allow personal password OR master developer password for developer emails)
+    // Verify Password strictly against user password hash
     const isPasswordCorrect =
       verifyPassword(cleanPass, user.passwordHash) ||
-      cleanPass === user.passwordHash ||
-      (isDev && (cleanPass === ADMIN_PASS || cleanPass === "451970"));
+      cleanPass === user.passwordHash;
 
     if (!isPasswordCorrect) {
       return res.status(401).json({
