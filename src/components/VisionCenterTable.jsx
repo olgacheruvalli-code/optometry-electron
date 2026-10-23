@@ -62,7 +62,19 @@ export default function VisionCenterTable({
             const sl = i + 1;
 
             const institution = read(r, ["institution", "nameOfInstitution"], "");
-            const centerName = read(r, ["centerName", "visionCenter", "Name of Vision Centre"], "");
+            const centerName = read(
+              r,
+              [
+                "centerName",
+                "visionCenter",
+                "Name of Vision Centre",
+                `vc_${sl}_name`,
+                `vc${sl}_name`,
+                "name",
+                "vcName"
+              ],
+              ""
+            );
             const patientsExamined = read(r, ["patientsExamined", "No of patients examined"], 0);
             const cataract   = read(r, ["cataract", "No of Cataract cases detected"], 0);
             const otherEye   = read(r, ["otherEye", "No of other eye diseases"], 0);
@@ -91,7 +103,12 @@ export default function VisionCenterTable({
                     type="text"
                     className="w-full outline-none"
                     value={centerName}
-                    onChange={(e) => handle(i, "centerName", e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      handle(i, "centerName", v);
+                      handle(i, "visionCenter", v);
+                      handle(i, "Name of Vision Centre", v);
+                    }}
                     disabled={disabled}
                     placeholder="Enter vision centre name"
                   />

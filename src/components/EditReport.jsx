@@ -5,6 +5,7 @@ import sections from "../data/questions";
 import EyeBankTable from "./EyeBankTable";
 import VisionCenterTable from "./VisionCenterTable";
 import { DEMO_DISTRICT, DEMO_INSTITUTION, createDemoReport } from "../data/demoData";
+import { getDefaultVisionCentersForInstitution } from "../data/districtInstitutions";
 
 /* ------------------------------ Config ------------------------------ */
 // Change this to your real admin password (kept on frontend by request).
@@ -403,6 +404,25 @@ export default function EditReport({ user }) {
       setVisionCenter(() => {
         const base = vcNorm.slice(0, 10);
         while (base.length < 10) base.push({});
+        const defaultVCs = getDefaultVisionCentersForInstitution(institution);
+        if (defaultVCs && defaultVCs.length) {
+          defaultVCs.forEach((vcName, idx) => {
+            if (base[idx]) {
+              const curName =
+                base[idx].visionCenter ||
+                base[idx].centerName ||
+                base[idx]["Name of Vision Centre"];
+              if (!curName || !String(curName).trim()) {
+                base[idx] = {
+                  ...base[idx],
+                  centerName: vcName,
+                  visionCenter: vcName,
+                  "Name of Vision Centre": vcName,
+                };
+              }
+            }
+          });
+        }
         return base;
       });
     } catch (e) {
@@ -410,7 +430,18 @@ export default function EditReport({ user }) {
       alert("Could not fetch the selected report.");
       setDoc(null);
       setEyeBank([{}, {}]);
-      setVisionCenter(Array.from({ length: 10 }, () => ({})));
+      const defaultVCs = getDefaultVisionCentersForInstitution(institution);
+      const emptyBase = Array.from({ length: 10 }, () => ({}));
+      if (defaultVCs && defaultVCs.length) {
+        defaultVCs.forEach((vcName, idx) => {
+          emptyBase[idx] = {
+            centerName: vcName,
+            visionCenter: vcName,
+            "Name of Vision Centre": vcName,
+          };
+        });
+      }
+      setVisionCenter(emptyBase);
     } finally {
       setLoading(false);
     }
@@ -420,6 +451,31 @@ export default function EditReport({ user }) {
     fetchSelected();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [district, institution, month, year]);
+
+  useEffect(() => {
+    const defaultVCs = getDefaultVisionCentersForInstitution(institution);
+    if (!defaultVCs || !defaultVCs.length) return;
+    setVisionCenter((prev) => {
+      let changed = false;
+      const next = [...prev];
+      defaultVCs.forEach((vcName, idx) => {
+        const curName =
+          next[idx]?.visionCenter ||
+          next[idx]?.centerName ||
+          next[idx]?.["Name of Vision Centre"];
+        if (!curName || !String(curName).trim()) {
+          next[idx] = {
+            ...(next[idx] || {}),
+            centerName: vcName,
+            visionCenter: vcName,
+            "Name of Vision Centre": vcName,
+          };
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [institution]);
 
   const handleChange = (key, val, setter) => {
     const n = Number(val);

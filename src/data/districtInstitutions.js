@@ -37,7 +37,7 @@ const baseInstitutions = {
     "CHC Katampazhipuram", "CHC Chalissery", "District Hospital Palakkad"
   ],
   Malappuram: [
-    "CHC Chungathara", "CHC Edapal", "CHC Kalikavu", "District Hospital Nilambur", "THQH Tirurangadi"
+    "CHC Chungathara", "CHC Edapal", "CHC Kalikavu", "CHC URANGATTIRI", "District Hospital Nilambur", "THQH Tirurangadi"
   ],
   Kozhikode: [
   "CHC Mukkam", "CHC orkkattery", "CHC Narikkuni", "District Hospital Vadakara",
@@ -92,3 +92,19 @@ export const districtInstitutions = Object.fromEntries(
     [...insts, `DOC ${district}`]  // DOC only; no DC anywhere
   ])
 );
+
+export const defaultVisionCenters = {
+  "CHC URANGATTIRI": ["TH AREEKKOD"],
+  "CHC Urangattiri": ["TH AREEKKOD"],
+};
+
+export const getDefaultVisionCentersForInstitution = (institution) => {
+  if (!institution) return [];
+  const cleanInst = String(institution).trim().toLowerCase();
+  for (const [key, vcs] of Object.entries(defaultVisionCenters)) {
+    if (key.trim().toLowerCase() === cleanInst) {
+      return vcs;
+    }
+  }
+  return [];
+};

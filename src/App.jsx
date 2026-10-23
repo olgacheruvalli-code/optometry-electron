@@ -10,7 +10,7 @@ import React, {
 } from "react";
 import API_BASE from "./apiBase";
 import sections from "./data/questions";
-import { districts, districtInstitutions } from "./data/districtInstitutions";
+import { districts, districtInstitutions, getDefaultVisionCentersForInstitution } from "./data/districtInstitutions";
 import "./index.css";
 
 import MonthYearSelector from "./components/MonthYearSelector";
@@ -844,9 +844,10 @@ function ReportEntry({
   const visionRowsDef = Array.isArray(visionSection?.rows)
     ? visionSection.rows
     : [];
-  const [visionCenter, setVisionCenter] = React.useState(
-    initialVisionCenter.length
-      ? initialVisionCenter
+  const [visionCenter, setVisionCenter] = React.useState(() => {
+    const defaultVCs = getDefaultVisionCentersForInstitution(user?.institution);
+    let base = initialVisionCenter.length
+      ? initialVisionCenter.map((r) => ({ ...r }))
       : visionRowsDef.length
       ? visionRowsDef.map((row) =>
           Object.fromEntries(
@@ -858,8 +859,58 @@ function ReportEntry({
       : [
           { centerName: "", patientsExamined: "" },
           { centerName: "", patientsExamined: "" },
-        ]
-  );
+        ];
+
+    if (defaultVCs && defaultVCs.length > 0) {
+      defaultVCs.forEach((vcName, idx) => {
+        if (base[idx]) {
+          const curName =
+            base[idx].centerName ||
+            base[idx].visionCenter ||
+            base[idx]["Name of Vision Centre"] ||
+            base[idx][`vc_${idx + 1}_name`];
+          if (!curName || !String(curName).trim()) {
+            base[idx] = {
+              ...base[idx],
+              centerName: vcName,
+              visionCenter: vcName,
+              "Name of Vision Centre": vcName,
+              [`vc_${idx + 1}_name`]: vcName,
+            };
+          }
+        }
+      });
+    }
+    return base;
+  });
+
+  React.useEffect(() => {
+    const defaultVCs = getDefaultVisionCentersForInstitution(user?.institution);
+    if (!defaultVCs || !defaultVCs.length) return;
+    setVisionCenter((prev) => {
+      let changed = false;
+      const next = [...prev];
+      defaultVCs.forEach((vcName, idx) => {
+        const row = next[idx] || {};
+        const curName =
+          row.centerName ||
+          row.visionCenter ||
+          row["Name of Vision Centre"] ||
+          row[`vc_${idx + 1}_name`];
+        if (!curName || !String(curName).trim()) {
+          next[idx] = {
+            ...row,
+            centerName: vcName,
+            visionCenter: vcName,
+            "Name of Vision Centre": vcName,
+            [`vc_${idx + 1}_name`]: vcName,
+          };
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [user?.institution]);
 
   const [month, setMonth] = React.useState(initialMonth);
   const [year, setYear] = React.useState(initialYear);
@@ -989,7 +1040,14 @@ function ReportEntry({
     (rowIdx, key, value) => {
       setFn((prev) => {
         const next = [...prev];
-        next[rowIdx] = { ...next[rowIdx], [key]: value };
+        const updated = { ...next[rowIdx], [key]: value };
+        if (key === "centerName" || key === "visionCenter" || key === "Name of Vision Centre") {
+          updated.centerName = value;
+          updated.visionCenter = value;
+          updated["Name of Vision Centre"] = value;
+          updated[`vc_${rowIdx + 1}_name`] = value;
+        }
+        next[rowIdx] = updated;
         return next;
       });
     };
