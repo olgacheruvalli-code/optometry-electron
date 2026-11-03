@@ -104,10 +104,13 @@ th.sticky.top-40 {
     color: black !important;
   }
 
-  /* A4 portrait for individual reports */
+  /* A4 portrait for individual reports.
+     NOTE: the page already has a 10mm margin on each side, so the report must NOT be
+     forced to 210mm wide (that pushed the "Cumulative" column off the paper). */
   .a4-wrapper {
-    width: 210mm !important;
-    min-height: 297mm !important;
+    width: auto !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
     max-width: none !important;
     box-shadow: none !important;
     margin: 0 !important;
@@ -117,6 +120,57 @@ th.sticky.top-40 {
     size: A4 portrait;
     page-break-after: avoid;
   }
+
+  /* Keep every table inside the printable width */
+  .a4-wrapper .overflow-x-auto,
+  .a4-wrapper .overflow-auto {
+    overflow: visible !important;
+  }
+  .a4-wrapper table {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    border-collapse: collapse !important;
+  }
+  /* Main report table: Description | During the Month | Cumulative */
+  .a4-wrapper > table {
+    table-layout: fixed !important;
+    font-size: 10.5pt !important;
+  }
+  .a4-wrapper > table > thead > tr > th:nth-child(1) { width: 66% !important; }
+  .a4-wrapper > table > thead > tr > th:nth-child(2),
+  .a4-wrapper > table > thead > tr > th:nth-child(3) { width: 17% !important; }
+  .a4-wrapper th,
+  .a4-wrapper td {
+    padding: 2px 4px !important;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  /* Eye Bank / Vision Centre tables printed inside the report: smaller so all columns fit */
+  .a4-wrapper table table {
+    table-layout: fixed !important;
+    font-size: 8pt !important;
+  }
+  .a4-wrapper table table th,
+  .a4-wrapper table table td {
+    padding: 1px 2px !important;
+    font-size: 8pt !important;
+    line-height: 1.15 !important;
+  }
+  .a4-wrapper input,
+  .a4-wrapper select,
+  .a4-wrapper textarea {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    font-size: 8pt !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+  }
+  /* Repeat table headings on every page, never split a row across pages */
+  .a4-wrapper thead { display: table-header-group; }
+  .a4-wrapper tr { break-inside: avoid; page-break-inside: avoid; }
 
   /* Legal landscape for district/eye bank reports */
   .legal-landscape {
