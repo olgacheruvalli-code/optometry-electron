@@ -193,7 +193,8 @@ th.sticky.top-40 {
   }
 }
 
-@media (max-width: 768px) {
+/* Phone screens only — must NOT apply while printing (an A4 page is ~718px wide) */
+@media screen and (max-width: 768px) {
   .a4-wrapper {
     width: 100% !important;
     max-width: 100% !important;

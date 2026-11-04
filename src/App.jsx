@@ -8,6 +8,7 @@ import React, {
   useRef, // ok even if unused in this file
   useState,
 } from "react";
+import { shareReportPdf } from "./utils/sharePdf";
 import API_BASE from "./apiBase";
 import sections from "./data/questions";
 import { districts, districtInstitutions, getDefaultVisionCentersForInstitution } from "./data/districtInstitutions";
@@ -1512,6 +1513,22 @@ const qDefs = useMemo(() => {
     }, 40);
   };
   const handlePrintA4 = () => printWithPageSize("A4 portrait", "10mm");
+  const [sharingPdf, setSharingPdf] = useState(false);
+  const handleSharePdf = async () => {
+    const el = document.querySelector("#__print-report-area .a4-wrapper");
+    if (!el) return alert("Report not loaded yet.");
+    const safe = (v) => String(v || "").replace(/[^a-z0-9]+/gi, "_");
+    const name = `NPCB_Report_${safe(currentReport?.institution || user?.institution)}_${safe(currentReport?.month)}_${safe(currentReport?.year)}.pdf`;
+    setSharingPdf(true);
+    try {
+      await shareReportPdf(el, name, "NPCB Monthly Report");
+    } catch (e) {
+      console.error(e);
+      alert("Could not create PDF: " + (e?.message || e) + "\nPlease check your internet connection.");
+    } finally {
+      setSharingPdf(false);
+    }
+  };
 
   /* ------------------------ Build district institution-wise ------------------------ */
   useEffect(() => {
@@ -2475,11 +2492,20 @@ const qDefs = useMemo(() => {
                 >
                   🖨️ Print (A4 portrait)
                 </button>
-                <ViewReports
-                  reportData={currentReport}
-                  month={currentReport.month}
-                  year={currentReport.year}
-                />
+                <button
+                  className="no-print mb-4 ml-3 px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-60"
+                  onClick={handleSharePdf}
+                  disabled={sharingPdf}
+                >
+                  {sharingPdf ? "Preparing PDF…" : "📤 Share PDF (WhatsApp)"}
+                </button>
+                <div id="__print-report-area">
+                  <ViewReports
+                    reportData={currentReport}
+                    month={currentReport.month}
+                    year={currentReport.year}
+                  />
+                </div>
               </>
             )}
 

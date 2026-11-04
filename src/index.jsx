@@ -2,6 +2,7 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import App from "./App";
+import UpdateBanner from "./components/UpdateBanner";
 import "./index.css";
 import API_BASE from "./apiBase";
 
@@ -22,6 +23,7 @@ console.log("Boot — API_BASE =", API_BASE);
 ReactDOM.render(
   <React.StrictMode>
     <App />
+    <UpdateBanner />
   </React.StrictMode>,
   document.getElementById("root")
 );
