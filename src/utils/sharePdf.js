@@ -40,7 +40,7 @@ const CLONE_CSS = `
   .__pdf-root, .__pdf-root * { box-sizing: border-box; }
   .__pdf-root {
     width: ${CONTENT_W_PX}px !important; max-width: none !important; min-width: 0 !important;
-    margin: 0 !important; padding: 0 !important; box-shadow: none !important;
+    margin: 0 !important; padding: 16px !important; box-shadow: none !important;
     background: #fff !important; color: #000 !important;
     font-family: "Times New Roman", Times, serif !important; font-size: 12pt;
   }
@@ -142,6 +142,17 @@ export async function buildReportPdf(element, filename = "report.pdf") {
       if (i > 0) pdf.addPage();
       const hMm = (h / scale) / PX_PER_MM;
       pdf.addImage(slice.toDataURL("image/jpeg", 0.92), "JPEG", MARGIN, MARGIN, CONTENT_W_MM, hMm);
+    }
+
+    // Page numbers, like the browser print ("Page 1 of 4")
+    const n = pdf.getNumberOfPages();
+    const stamp = new Date().toLocaleDateString("en-GB");
+    for (let p = 1; p <= n; p++) {
+      pdf.setPage(p);
+      pdf.setFontSize(8);
+      pdf.setTextColor(90);
+      pdf.text(`Optometry MIS   ${stamp}`, MARGIN, PAGE_H - 4);
+      pdf.text(`Page ${p} of ${n}`, PAGE_W - MARGIN, PAGE_H - 4, { align: "right" });
     }
 
     const blob = pdf.output("blob");
