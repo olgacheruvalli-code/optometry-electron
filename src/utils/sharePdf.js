@@ -1,11 +1,12 @@
-// Builds a true A4 portrait PDF of a report element, identical on every device
-// (phone, tablet, desktop), then shares it (WhatsApp etc.) or downloads it.
-// Libraries are loaded on demand from cdnjs so no npm install is needed.
+// Builds a true A4 portrait PDF of the NPCB report, identical on every device,
+// drawn as real text with thin table lines (no screenshots), then shares it
+// (WhatsApp etc.) on phones or downloads it on computers.
+// Libraries load on demand from cdnjs, so no npm install is needed.
 
 const CDN = {
-  html2canvas:
-    "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
   jspdf: "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+  autotable:
+    "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js",
 };
 
 function loadScript(src) {
@@ -13,7 +14,7 @@ function loadScript(src) {
     if (document.querySelector(`script[data-src="${src}"]`)) return resolve();
     const s = document.createElement("script");
     s.src = src;
-    s.async = true;
+    s.async = false;
     s.dataset.src = src;
     s.onload = () => resolve();
     s.onerror = () => reject(new Error("Could not load " + src));
@@ -22,144 +23,244 @@ function loadScript(src) {
 }
 
 async function loadLibs() {
-  if (!window.html2canvas) await loadScript(CDN.html2canvas);
   if (!(window.jspdf && window.jspdf.jsPDF)) await loadScript(CDN.jspdf);
-  return { html2canvas: window.html2canvas, jsPDF: window.jspdf.jsPDF };
+  const probe = new window.jspdf.jsPDF();
+  if (typeof probe.autoTable !== "function") await loadScript(CDN.autotable);
+  return window.jspdf.jsPDF;
 }
 
-// A4 in mm, 10 mm margin on every side → 190 x 277 mm printable area
 const PAGE_W = 210;
 const PAGE_H = 297;
-const MARGIN = 10;
-const CONTENT_W_MM = PAGE_W - MARGIN * 2;
-const CONTENT_H_MM = PAGE_H - MARGIN * 2;
-const PX_PER_MM = 96 / 25.4;
-const CONTENT_W_PX = Math.round(CONTENT_W_MM * PX_PER_MM); // ≈ 718 px
+const M = 10; // side margin (mm)
+const TOP = 12;
+const BOTTOM = 14;
+const FULL_W = PAGE_W - M * 2; // 190 mm
+const LINE = 0.15; // table line thickness (mm) — thin like browser print
+const FONT = "times";
 
-const CLONE_CSS = `
-  .__pdf-root, .__pdf-root * { box-sizing: border-box; }
-  .__pdf-root {
-    width: ${CONTENT_W_PX}px !important; max-width: none !important; min-width: 0 !important;
-    margin: 0 !important; padding: 16px !important; box-shadow: none !important;
-    background: #fff !important; color: #000 !important;
-    font-family: "Times New Roman", Times, serif !important; font-size: 12pt;
+// Standard PDF fonts can't draw some symbols; replace them
+const clean = (t) =>
+  String(t ?? "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[↳└]/g, "")
+    .replace(/[≤]/g, "<=")
+    .replace(/[≥]/g, ">=")
+    .replace(/\s+/g, " ")
+    .trim();
+
+// Visible text of a node, skipping no-print bits; form fields → their value
+function textOf(node) {
+  if (!node) return "";
+  if (node.nodeType === 3) return node.textContent;
+  if (node.nodeType !== 1) return "";
+  if (node.classList && (node.classList.contains("no-print") || node.classList.contains("non-print"))) return "";
+  const tag = node.tagName;
+  if (tag === "INPUT") {
+    if (node.type === "checkbox" || node.type === "radio") return node.checked ? "Yes" : "";
+    return node.value || "";
   }
-  .__pdf-root .no-print, .__pdf-root .non-print { display: none !important; }
-  .__pdf-root .overflow-x-auto, .__pdf-root .overflow-auto { overflow: visible !important; }
-  .__pdf-root table { width: 100% !important; max-width: 100% !important; min-width: 0 !important; border-collapse: collapse !important; }
-  .__pdf-root > table { table-layout: fixed !important; font-size: 10.5pt !important; }
-  .__pdf-root > table > thead > tr > th:nth-child(1) { width: 66% !important; }
-  .__pdf-root > table > thead > tr > th:nth-child(2),
-  .__pdf-root > table > thead > tr > th:nth-child(3) { width: 17% !important; }
-  .__pdf-root th, .__pdf-root td { padding: 2px 4px !important; border: 1px solid #000 !important; overflow-wrap: anywhere; word-break: break-word; }
-  .__pdf-root table table { table-layout: fixed !important; font-size: 8pt !important; }
-  .__pdf-root table table th, .__pdf-root table table td { padding: 1px 2px !important; font-size: 8pt !important; line-height: 1.15 !important; }
-  .__pdf-root .__pdf-val { display: block; width: 100%; font-size: 8pt; min-height: 1em; }
-`;
-
-// Replace form fields with plain text so values print cleanly
-function flattenInputs(src, clone) {
-  const a = src.querySelectorAll("input, select, textarea");
-  const b = clone.querySelectorAll("input, select, textarea");
-  b.forEach((el, i) => {
-    const orig = a[i];
-    let v = orig ? orig.value : el.value;
-    if (el.tagName === "SELECT" && orig && orig.selectedIndex >= 0) {
-      v = orig.options[orig.selectedIndex]?.text ?? v;
-    }
-    if (el.type === "checkbox" || el.type === "radio") v = orig?.checked ? "✓" : "";
-    const span = document.createElement("span");
-    span.className = "__pdf-val";
-    span.textContent = v ?? "";
-    el.replaceWith(span);
-  });
+  if (tag === "SELECT") return node.selectedIndex >= 0 ? node.options[node.selectedIndex].text : "";
+  if (tag === "TEXTAREA") return node.value || "";
+  if (tag === "BR") return " ";
+  return Array.from(node.childNodes).map(textOf).join("");
 }
 
-// Break points (px from top) so no table row is cut across pages
-function pageBreaks(root, pageHpx) {
-  const top0 = root.getBoundingClientRect().top;
-  const rowEnds = Array.from(root.querySelectorAll(":scope > * , :scope > table > tbody > tr, :scope > table > thead > tr"))
-    .map((el) => el.getBoundingClientRect().bottom - top0)
-    .sort((x, y) => x - y);
-  const total = root.scrollHeight;
-  const breaks = [0];
-  let start = 0;
-  while (total - start > pageHpx) {
-    let cut = start + pageHpx;
-    const fit = rowEnds.filter((y) => y > start + 20 && y <= start + pageHpx);
-    if (fit.length) cut = fit[fit.length - 1];
-    breaks.push(cut);
-    start = cut;
+const baseStyles = {
+  font: FONT,
+  fontSize: 10,
+  textColor: 0,
+  lineColor: 0,
+  lineWidth: LINE,
+  cellPadding: { top: 1.3, bottom: 1.3, left: 1.6, right: 1.6 },
+  valign: "middle",
+  overflow: "linebreak",
+};
+
+function drawHeader(doc, wrapper) {
+  let y = TOP;
+  const kids = Array.from(wrapper.children);
+  const titles = kids.filter((el) => el.classList.contains("text-center"));
+  titles.forEach((el, i) => {
+    const size = i === 0 ? 15 : 13;
+    doc.setFont(FONT, "bold");
+    doc.setFontSize(size);
+    const lines = doc.splitTextToSize(clean(textOf(el)), FULL_W);
+    lines.forEach((ln) => {
+      y += size * 0.42;
+      doc.text(ln, PAGE_W / 2, y, { align: "center" });
+    });
+    y += i === 0 ? 1.5 : 4;
+  });
+
+  // District / Institution / Month lines: bold label + normal value
+  const info = kids.find((el) => el.tagName === "DIV" && el.querySelector("p strong"));
+  if (info) {
+    doc.setFontSize(11.5);
+    info.querySelectorAll("p").forEach((p) => {
+      const strong = p.querySelector("strong");
+      const label = clean(textOf(strong));
+      let value = "";
+      p.childNodes.forEach((n) => { if (n !== strong) value += textOf(n); });
+      y += 5.6;
+      doc.setFont(FONT, "bold");
+      doc.text(label, M, y);
+      doc.setFont(FONT, "normal");
+      doc.text(clean(value), M + doc.getTextWidth(label) + 1.5, y);
+    });
+    y += 4;
   }
-  breaks.push(total);
-  return breaks;
+  return y;
+}
+
+const visible = (el) => {
+  for (let n = el; n && n.classList; n = n.parentElement) {
+    if (n.classList.contains("no-print") || n.classList.contains("non-print")) return false;
+  }
+  return true;
+};
+
+// One of the small inner tables (Eye Bank, Vision Center)
+function drawInnerTable(doc, table, startY) {
+  const rowsOf = (sec) =>
+    sec ? Array.from(sec.rows).filter(visible).map((tr) => Array.from(tr.cells).map((c) => ({
+      content: clean(textOf(c)),
+      colSpan: c.colSpan || 1,
+    }))) : [];
+  const head = rowsOf(table.tHead);
+  const body = [];
+  Array.from(table.tBodies).forEach((tb) => body.push(...rowsOf(tb)));
+  const foot = rowsOf(table.tFoot);
+  const cols = Math.max(1, ...[...head, ...body].map((r) => r.reduce((a, c) => a + c.colSpan, 0)));
+
+  doc.autoTable({
+    startY,
+    margin: { left: M, right: M, top: TOP, bottom: BOTTOM },
+    tableWidth: FULL_W,
+    theme: "grid",
+    head,
+    body,
+    foot,
+    showHead: "everyPage",
+    showFoot: "lastPage",
+    styles: { ...baseStyles, fontSize: 8.5, halign: "center" },
+    headStyles: { fontStyle: "bold", fillColor: 255, textColor: 0 },
+    footStyles: { fontStyle: "bold", fillColor: 255, textColor: 0 },
+    columnStyles: cols >= 7 ? { 0: { cellWidth: 12 }, 1: { cellWidth: 36, halign: "left" } } : { 0: { cellWidth: 30, halign: "left", fontStyle: "bold" } },
+    didParseCell: (d) => {
+      const txt = d.cell.raw && d.cell.raw.content;
+      if (d.section === "body" && /^total$/i.test(txt || "")) d.cell.styles.fontStyle = "bold";
+    },
+  });
+  return doc.lastAutoTable.finalY;
+}
+
+function drawMainTable(doc, table, startY) {
+  const head = [[
+    { content: "Description", styles: { halign: "left" } },
+    { content: "During the Month", styles: { halign: "right" } },
+    { content: "Cumulative", styles: { halign: "right" } },
+  ]];
+  let y = startY;
+  let body = [];
+  let first = true;
+
+  const flush = () => {
+    if (!body.length && !first) return;
+    doc.autoTable({
+      startY: y,
+      margin: { left: M, right: M, top: TOP, bottom: BOTTOM },
+      tableWidth: FULL_W,
+      theme: "grid",
+      head: first ? head : undefined,
+      body,
+      showHead: "firstPage",
+      styles: baseStyles,
+      headStyles: { fontStyle: "bold", fillColor: 255, textColor: 0 },
+      columnStyles: {
+        0: { cellWidth: FULL_W - 60 },
+        1: { cellWidth: 30, halign: "right" },
+        2: { cellWidth: 30, halign: "right" },
+      },
+    });
+    y = doc.lastAutoTable.finalY;
+    body = [];
+    first = false;
+  };
+
+  Array.from(table.tBodies[0]?.rows || []).filter(visible).forEach((tr) => {
+    const cells = Array.from(tr.cells);
+    if (cells.length === 1 && cells[0].colSpan >= 3) {
+      const inner = cells[0].querySelector("table");
+      if (inner) {
+        flush();
+        y = drawInnerTable(doc, inner, y);
+        return;
+      }
+      const bold = /font-bold/.test(cells[0].className);
+      body.push([{
+        content: clean(textOf(cells[0])),
+        colSpan: 3,
+        styles: { fontStyle: "bold", fillColor: bold ? 235 : 245 },
+      }]);
+      return;
+    }
+    const rawLabel = textOf(cells[0]);
+    const sub = /^\s*[↳└]/.test(rawLabel);
+    body.push([
+      { content: (sub ? "- " : "") + clean(rawLabel), styles: sub ? { cellPadding: { top: 1.3, bottom: 1.3, left: 7, right: 1.6 } } : {} },
+      clean(textOf(cells[1])),
+      clean(textOf(cells[2])),
+    ]);
+  });
+  flush();
+  return y;
+}
+
+function drawSignatures(doc, wrapper, y) {
+  const sig = Array.from(wrapper.children).find((el) => /justify-between/.test(el.className));
+  if (!sig) return;
+  const blocks = Array.from(sig.children);
+  if (y + 22 > PAGE_H - BOTTOM) { doc.addPage(); y = TOP; }
+  y += 14;
+  doc.setFont(FONT, "normal");
+  doc.setFontSize(11.5);
+  blocks.forEach((b, i) => {
+    const parts = [];
+    let cur = "";
+    b.childNodes.forEach((n) => {
+      if (n.nodeName === "BR") { parts.push(cur); cur = ""; } else cur += textOf(n);
+    });
+    parts.push(cur);
+    const x = i === 0 ? M : PAGE_W / 2 + 5;
+    parts.map(clean).filter(Boolean).forEach((t, k) => doc.text(t, x, y + k * 7));
+  });
 }
 
 export async function buildReportPdf(element, filename = "report.pdf") {
   if (!element) throw new Error("Report not found on page");
-  const { html2canvas, jsPDF } = await loadLibs();
+  const jsPDF = await loadLibs();
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-  // Off-screen holder at exact A4 content width
-  const holder = document.createElement("div");
-  holder.style.cssText = `position:fixed; left:-10000px; top:0; width:${CONTENT_W_PX}px; background:#fff; z-index:-1;`;
-  const style = document.createElement("style");
-  style.textContent = CLONE_CSS;
-  holder.appendChild(style);
+  let y = drawHeader(doc, element);
+  const main = Array.from(element.children).find((el) => el.tagName === "TABLE");
+  if (main) y = drawMainTable(doc, main, y);
+  drawSignatures(doc, element, y);
 
-  const clone = element.cloneNode(true);
-  clone.classList.add("__pdf-root");
-  flattenInputs(element, clone);
-  holder.appendChild(clone);
-  document.body.appendChild(holder);
-
-  try {
-    await new Promise((r) => setTimeout(r, 50));
-    const scale = 2; // sharp text
-    const canvas = await html2canvas(clone, {
-      scale,
-      backgroundColor: "#ffffff",
-      width: CONTENT_W_PX,
-      windowWidth: CONTENT_W_PX,
-      useCORS: true,
-    });
-
-    const pageHpx = CONTENT_H_MM * PX_PER_MM;
-    const breaks = pageBreaks(clone, pageHpx);
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-
-    for (let i = 0; i < breaks.length - 1; i++) {
-      const y0 = Math.round(breaks[i] * scale);
-      const y1 = Math.min(Math.round(breaks[i + 1] * scale), canvas.height);
-      const h = y1 - y0;
-      if (h <= 0) continue;
-      const slice = document.createElement("canvas");
-      slice.width = canvas.width;
-      slice.height = h;
-      const ctx = slice.getContext("2d");
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, slice.width, h);
-      ctx.drawImage(canvas, 0, y0, canvas.width, h, 0, 0, canvas.width, h);
-      if (i > 0) pdf.addPage();
-      const hMm = (h / scale) / PX_PER_MM;
-      pdf.addImage(slice.toDataURL("image/jpeg", 0.92), "JPEG", MARGIN, MARGIN, CONTENT_W_MM, hMm);
-    }
-
-    // Page numbers, like the browser print ("Page 1 of 4")
-    const n = pdf.getNumberOfPages();
-    const stamp = new Date().toLocaleDateString("en-GB");
-    for (let p = 1; p <= n; p++) {
-      pdf.setPage(p);
-      pdf.setFontSize(8);
-      pdf.setTextColor(90);
-      pdf.text(`Optometry MIS   ${stamp}`, MARGIN, PAGE_H - 4);
-      pdf.text(`Page ${p} of ${n}`, PAGE_W - MARGIN, PAGE_H - 4, { align: "right" });
-    }
-
-    const blob = pdf.output("blob");
-    return new File([blob], filename, { type: "application/pdf" });
-  } finally {
-    holder.remove();
+  // Footer: name, date, page numbers
+  const n = doc.getNumberOfPages();
+  const stamp = new Date().toLocaleDateString("en-GB");
+  for (let p = 1; p <= n; p++) {
+    doc.setPage(p);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(90);
+    doc.text(`Optometry MIS   ${stamp}`, M, PAGE_H - 6);
+    doc.text(`Page ${p} of ${n}`, PAGE_W - M, PAGE_H - 6, { align: "right" });
+    doc.setTextColor(0);
   }
+
+  const blob = doc.output("blob");
+  return new File([blob], filename, { type: "application/pdf" });
 }
 
 // Share via the phone's share sheet (WhatsApp appears there); on desktop, download.
